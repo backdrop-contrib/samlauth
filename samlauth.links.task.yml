@@ -1,0 +1,20 @@
+samlauth.configuration:
+  title: 'Configuration'
+  route_name: samlauth.samlauth_configure_form
+  base_route: samlauth.samlauth_configure_form
+  weight: 0
+samlauth.user:
+  title: 'User'
+  route_name: samlauth.user_settings_form
+  base_route: samlauth.samlauth_configure_form
+  weight: 1
+samlauth.user.settings:
+  title: 'Settings'
+  route_name: samlauth.user_settings_form
+  parent_id: samlauth.user
+  weight: 0
+samlauth.user.mapping:
+  title: 'Mapping'
+  route_name: samlauth.user_mapping_form
+  parent_id: samlauth.user
+  weight: 1

@@ -4,6 +4,11 @@ samlauth.samlauth_configure_form:
   description: 'Configure SAML authentication behaviors'
   weight: -10
   route_name: samlauth.samlauth_configure_form
+samlauth.user_settings_form:
+  title: 'User'
+  description: 'Configure SAML User'
+  parent: samlauth.samlauth_configure_form
+  route_name: samlauth.user_settings_form
 samlauth.saml_controller_logout.logout:
   weight: 10
   menu_name: account
