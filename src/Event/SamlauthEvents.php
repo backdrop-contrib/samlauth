@@ -17,12 +17,12 @@ final class SamlauthEvents {
    * fired when no account is already linked and when no existing account can
    * be found according to the module settings for basic required properties
    * (username, email). The event listener method receives a
-   * Drupal\samlauth\Event\SamlauthUserLinkEvent instance. If it finds an
+   * Drupal\samlauth\Event\SamlAuthUserLinkEvent instance. If it finds an
    * account to link, it should call the event's linkAccount() method.
    *
    * @Event
    *
-   * @see \Drupal\samlauth\Event\SamlauthUserLinkEvent
+   * @see \Drupal\samlauth\Event\SamlAuthUserLinkEvent
    *
    * @var string
    */

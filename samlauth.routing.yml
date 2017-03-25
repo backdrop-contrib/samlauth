@@ -57,17 +57,4 @@ samlauth.samlauth_configure_form:
     _title: 'SAML Authentication'
   requirements:
     _permission: 'configure saml'
-samlauth.user_settings_form:
-  path: '/admin/config/people/saml/user'
-  defaults:
-    _title: 'User Settings'
-    _form: '\Drupal\samlauth\Form\SamlauthUserSettingsForm'
-  requirements:
-    _permission: 'configure saml'
-samlauth.user_mapping_form:
-  path: '/admin/config/people/saml/user/mapping'
-  defaults:
-    _title: 'User Mapping'
-    _form: '\Drupal\samlauth\Form\SamlauthUserMappingForm'
-  requirements:
-    _permission: 'configure saml'
+

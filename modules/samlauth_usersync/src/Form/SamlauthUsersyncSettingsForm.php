@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth\Form;
+namespace Drupal\samlauth_usersync\Form;
 
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -8,7 +8,7 @@ use Drupal\Core\Form\FormStateInterface;
 /**
  * Class \Drupal\samlauth\Form\SamlauthUserSettingsForm.
  */
-class SamlauthUserSettingsForm extends ConfigFormBase {
+class SamlauthUsersyncSettingsForm extends ConfigFormBase {
 
   /**
    * {@inheritdoc}

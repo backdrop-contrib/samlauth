@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth\EventSubscriber;
+namespace Drupal\samlauth_usersync\EventSubscriber;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -18,7 +18,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * @todo after we know what we want with this code, clean up the service's
  *   depencencies (and possibly split over two event subscribers) / rename.
  */
-class SamlauthEventSubscriber implements EventSubscriberInterface {
+class SamlauthUsersyncEventSubscriber implements EventSubscriberInterface {
 
   /**
    * The general samlauth SAML service.

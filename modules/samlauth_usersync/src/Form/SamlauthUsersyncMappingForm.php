@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth\Form;
+namespace Drupal\samlauth_usersync\Form;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
@@ -13,7 +13,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Contains the samlauth user mapping form.
  */
-class SamlauthUserMappingForm extends ConfigFormBase {
+class SamlauthUsersyncMappingForm extends ConfigFormBase {
 
   /**
    * User settings.

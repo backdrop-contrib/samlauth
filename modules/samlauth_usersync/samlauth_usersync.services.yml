@@ -1,0 +1,6 @@
+services:
+  samlauth_usersync.event_subscriber:
+    class: Drupal\samlauth_usersync\EventSubscriber\SamlauthUsersyncEventSubscriber
+    arguments: [ '@samlauth.saml', '@entity_type.manager', '@config.factory' ]
+    tags:
+      - {name: event_subscriber}

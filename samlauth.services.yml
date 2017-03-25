@@ -8,9 +8,6 @@ services:
   samlauth.event_subscriber.user_sync:
     class: Drupal\samlauth\EventSubscriber\UserSyncEventSubscriber
     arguments: ['@config.factory', '@entity_type.manager', '@typed_data_manager', '@email.validator', '@logger.channel.samlauth']
-  samlauth.event_subscriber:
-    class: Drupal\samlauth\EventSubscriber\SamlauthEventSubscriber
-    arguments: [ '@samlauth.saml', '@entity_type.manager', '@config.factory' ]
     tags:
       - { name: event_subscriber }
   samlauth.event_subscriber.user_access_denied:

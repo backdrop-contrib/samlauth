@@ -1,0 +1,5 @@
+samlauth.user_settings_form:
+  title: 'User'
+  description: 'Configure SAML User'
+  parent: samlauth.samlauth_configure_form
+  route_name: samlauth_usersync.user_settings_form
