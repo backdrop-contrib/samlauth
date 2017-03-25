@@ -59,17 +59,17 @@ class SamlauthConfigureForm extends ConfigFormBase {
   /**
    * {@inheritdoc}
    */
-  public function getFormId() {
-    return 'samlauth_configure_form';
+  protected function getEditableConfigNames() {
+    return [
+      'samlauth.authentication'
+    ];
   }
 
   /**
    * {@inheritdoc}
    */
-  protected function getEditableConfigNames() {
-    return [
-      'samlauth.authentication'
-    ];
+  public function getFormId() {
+    return 'samlauth_configure_form';
   }
 
   /**
