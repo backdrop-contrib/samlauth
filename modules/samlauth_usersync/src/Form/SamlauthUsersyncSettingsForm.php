@@ -6,7 +6,7 @@ use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 
 /**
- * Class \Drupal\samlauth\Form\SamlauthUserSettingsForm.
+ * Provides a configuration form for user synchronization settings.
  */
 class SamlauthUsersyncSettingsForm extends ConfigFormBase {
 
@@ -14,23 +14,21 @@ class SamlauthUsersyncSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'samlauth_user_settings';
+    return 'samlauth_usersync_settings';
   }
 
   /**
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    return [
-      'samlauth.user.settings',
-    ];
+    return ['samlauth_usersync.settings'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $config = $this->config('samlauth.user.settings');
+    $config = $this->config('samlauth_usersync.settings');
 
     $form['user_mapping'] = [
       '#type' => 'fieldset',
@@ -40,9 +38,7 @@ class SamlauthUsersyncSettingsForm extends ConfigFormBase {
     $form['user_mapping']['attributes'] = [
       '#type' => 'textarea',
       '#title' => $this->t('IDP Attributes'),
-      '#description' => $this->t('Input available assertion attributes defined
-        by the IDP. <br/> <strong>Note:</strong> Only one IDP attribute
-        per line.'),
+      '#description' => $this->t("Input attribute names that will be available in the assertion message from the IDP. The attribute names must be provided here before they show up in the 'Mapping' form (except for the name and mail attributes that were input elsewhere). Only one attribute name per line."),
       '#default_value' => $config->get('user_mapping.attributes'),
     ];
 
@@ -97,7 +93,7 @@ class SamlauthUsersyncSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $this->config('samlauth.user.settings')
+    $this->config('samlauth_usersync')
       ->setData($form_state->cleanValues()->getValues())
       ->save();
 
@@ -115,7 +111,7 @@ class SamlauthUsersyncSettingsForm extends ConfigFormBase {
    */
   protected function attributesAreInUse($attributes) {
     $original_attributes = $this
-      ->config('samlauth.user.settings')
+      ->config('samlauth_usersync.settings')
       ->get('user_mapping.attributes');
 
     $removed_attributes = array_diff(
@@ -123,7 +119,7 @@ class SamlauthUsersyncSettingsForm extends ConfigFormBase {
     );
     $attribute_in_use = [];
 
-    foreach ($this->config('samlauth.user.mapping')->get('user_mapping') as $field_name => $mapping) {
+    foreach ($this->config('samlauth_usersync.mapping')->get('user_mapping') as $field_name => $mapping) {
       if (!isset($mapping['attribute']) || empty($mapping['attribute'])) {
         continue;
       }

@@ -74,7 +74,7 @@ class SamlService {
   protected $privateTempStore;
 
   /**
-   * Constructor for Drupal\samlauth\SamlService.
+   * Constructs a new SamlService.
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
    *   The ExternalAuth service.

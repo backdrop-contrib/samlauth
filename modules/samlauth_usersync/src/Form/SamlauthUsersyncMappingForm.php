@@ -16,11 +16,18 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class SamlauthUsersyncMappingForm extends ConfigFormBase {
 
   /**
-   * User settings.
+   * Samlauth main configuration settings.
    *
    * @var \Drupal\Core\Config\ImmutableConfig
    */
-  protected $userSettings;
+  protected $samlauthSettings;
+
+  /**
+   * User sync settings.
+   *
+   * @var \Drupal\Core\Config\ImmutableConfig
+   */
+  protected $userSyncSettings;
 
   /**
    * Entity field manager.
@@ -45,7 +52,8 @@ class SamlauthUsersyncMappingForm extends ConfigFormBase {
    *   An entity field manager.
    */
   public function __construct(ConfigFactoryInterface $config, EntityTypeManagerInterface $entity_type_manager, EntityFieldManagerInterface $entity_field_manager) {
-    $this->userSettings = $config->get('samlauth.user.settings');
+    $this->samlauthSettings = $config->get('samlauth.authentication');
+    $this->userSyncSettings = $config->get('samlauth_usersync.settings');
     $this->entityTypeManager = $entity_type_manager;
     $this->entityFieldManager = $entity_field_manager;
   }
@@ -65,16 +73,14 @@ class SamlauthUsersyncMappingForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'samlauth_user_mapping';
+    return 'samlauth_usersync_mapping';
   }
 
   /**
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    return [
-      'samlauth.user.mapping',
-    ];
+    return ['samlauth_usersync.mapping'];
   }
 
   /**
@@ -90,7 +96,7 @@ class SamlauthUsersyncMappingForm extends ConfigFormBase {
       ],
       '#empty' => $this->t('Currently there are no user mapping properties.'),
     ];
-    $config = $this->config('samlauth.user.mapping');
+    $config = $this->config('samlauth_usersync.mapping');
     $attribute_options = $this->getAttributeOptions();
 
     foreach ($this->getUserEntityInputFields() as $field_name => $definition) {
@@ -120,7 +126,8 @@ class SamlauthUsersyncMappingForm extends ConfigFormBase {
     }
     $form['user_roles'] = [
       '#type' => 'details',
-      '#title' => $this->t('User Role'),
+      '#title' => $this->t('Permanent user roles'),
+      '#description' => $this->t('Accounts selected here will always be assigned to users who are logged in, regardless whether they are passed in an attribute.'),
       '#open' => TRUE,
       '#tree' => TRUE,
     ];
@@ -138,7 +145,7 @@ class SamlauthUsersyncMappingForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $this->config('samlauth.user.mapping')
+    $this->config('samlauth_usersync.mapping')
       ->setData($form_state->cleanValues()->getValues())
       ->save();
 
@@ -214,7 +221,19 @@ class SamlauthUsersyncMappingForm extends ConfigFormBase {
    *   An array of user mapping attributes.
    */
   protected function getUserAttributes() {
-    return array_map('trim', explode("\r\n", $this->userSettings->get('user_mapping.attributes')));
+    $attributes = array_map('trim', explode("\r\n", $this->userSyncSettings->get('user_mapping.attributes')));
+    // Since we have user name and e-mail attributes configured in the main
+    // settings, add them here.
+    $value = $this->samlauthSettings->get('user_mail_attribute');
+    if ($value && !in_array($value, $attributes)) {
+      array_unshift($attributes, $value);
+    }
+    $value = $this->samlauthSettings->get('user_name_attribute');
+    if ($value && !in_array($value, $attributes)) {
+      array_unshift($attributes, $value);
+    }
+
+    return $attributes;
   }
 
   /**

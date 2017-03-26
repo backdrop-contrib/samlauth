@@ -59,7 +59,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
   protected $config;
 
   /**
-   * Construct a new SamlauthUserSyncSubscriber.
+   * Constructs a new SamlauthUserSyncSubscriber.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
