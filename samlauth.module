@@ -1,0 +1,377 @@
+<?php
+
+/**
+ * @file
+ * Provides SAML authentication capabilities.
+ */
+
+function samlauth_menu() {
+  $items = array();
+
+  $items['admin/config/people/saml'] = array(
+    'title' => 'SAML Authentication',
+    'description' => 'Configure SAML authentication behaviors.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('samlauth_configure_form'),
+    'access arguments' => array('configure saml'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'samlauth.admin.inc',
+  );
+
+  $items['saml/metadata'] = array(
+    'title' => 'SAML Metadata',
+    'page callback' => 'samlauth_metadata',
+    'access arguments' => array('view sp metadata'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['saml/login'] = array(
+    'title' => 'SAML Login',
+    'page callback' => 'samlauth_login',
+    'access callback' => 'user_is_anonymous',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['saml/logout'] = array(
+    'title' => 'SAML Logout',
+    'page callback' => 'samlauth_logout',
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['saml/acs'] = array(
+    'title' => 'SAML ACS',
+    'page callback' => 'samlauth_acs',
+    'access callback' => 'user_is_anonymous',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['saml/changepw'] = array(
+    'title' => 'SAML Change Password',
+    'page callback' => 'samlauth_changepw',
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function samlauth_permission() {
+  return array(
+    'view sp metadata' => array(
+      'title' => t('View SP metadata'),
+      'description' => t('View the SP metadata XML at /saml/metadata'),
+    ),
+    'configure saml' => array(
+      'title' => t('Configure SAML'),
+      'description' => t('Configure SAML authentication behaviors'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter for user_login.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function samlauth_form_user_login_alter(&$form, $form_state) {
+  samlauth_login_form_alter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter for user_login_block.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function samlauth_form_user_login_block_alter(&$form, $form_state) {
+  samlauth_login_form_alter($form, $form_state);
+}
+
+/**
+ * Common callback for user_login_block and user_login.
+ */
+function samlauth_login_form_alter(&$form, $form_state) {
+  $form['#validate'][] = 'samlauth_check_saml_user';
+}
+
+/**
+ * Validation callback for SAML users logging in through the normal login form.
+ */
+function samlauth_check_saml_user($form, $form_state) {
+  if (variable_get('samlauth_drupal_saml_login', FALSE)) {
+    if (form_get_errors()) {
+      // If previous validation functions have already failed (name/pw incorrect
+      // or blocked), bail out so we don't disclose any details about a user that
+      // otherwise wouldn't be authenticated.
+      return;
+    }
+
+    if ($account = user_load_by_name($form_state['values']['name'])) {
+      $saml_id = samlauth_find_unique_id_by_user_id($account->uid);
+      if (!is_null($saml_id)) {
+        form_set_error('name', t('SAML users must sign in with SSO.'));
+      }
+    }
+  }
+}
+
+/**
+ * Returns configuration array for SAML SP.
+ *
+ * @return array
+ */
+function samlauth_get_config() {
+  return array(
+    'sp' => array(
+      'entityId' => variable_get('samlauth_sp_entity_id'),
+      'assertionConsumerService' => array(
+        'url' => url('saml/acs', array('absolute' => TRUE)),
+      ),
+      'singleLogoutService' => array(
+        'url' => url('saml/sls', array('absolute' => TRUE)),
+      ),
+      'NameIDFormat' => variable_get('samlauth_sp_name_id_format'),
+      'x509cert' => variable_get('samlauth_sp_x509_certificate'),
+      'privateKey' => variable_get('samlauth_sp_private_key'),
+    ),
+    'idp' => array (
+      'entityId' => variable_get('samlauth_idp_entity_id'),
+      'singleSignOnService' => array (
+        'url' => variable_get('samlauth_idp_single_sign_on_service'),
+      ),
+      'singleLogoutService' => array (
+        'url' => variable_get('samlauth_idp_single_log_out_service'),
+      ),
+      'x509cert' => variable_get('samlauth_idp_x509_certificate'),
+    ),
+    'security' => array(
+      'authnRequestsSigned' => variable_get('samlauth_security_authn_requests_sign') ? TRUE : FALSE,
+      'wantMessagesSigned' => variable_get('samlauth_security_messages_sign') ? TRUE : FALSE,
+      'wantNameIdSigned' => variable_get('samlauth_security_name_id_sign') ? TRUE : FALSE,
+      'requestedAuthnContext' => variable_get('samlauth_security_request_authn_context') ? TRUE : FALSE,
+    ),
+  );
+}
+
+/**
+ * Get an instance of the OneLogin_Saml2_Auth class.
+ */
+function samlauth_get_saml2_auth() {
+  return new OneLogin_Saml2_Auth(samlauth_get_config());
+}
+
+/**
+ * Menu callback for /saml/metadata.
+ */
+function samlauth_metadata() {
+  $auth = samlauth_get_saml2_auth();
+  $settings = $auth->getSettings();
+  $metadata = $settings->getSPMetadata();
+  $errors = $settings->validateMetadata($metadata);
+
+  if (!empty($errors)) {
+    throw new Exception('Invalid SP metadata: ' . implode(', ', $errors));
+  }
+
+  drupal_add_http_header('Content-Type', 'text/xml');
+
+  // @TODO: This is gross. Investigate using a delivery callback instead.
+  print $metadata;
+  drupal_exit();
+}
+
+/**
+ * Menu callback for /saml/login
+ */
+function samlauth_login() {
+  $auth = samlauth_get_saml2_auth();
+  $auth->login('/');
+}
+
+/**
+ * Menu callback for /saml/logout
+ */
+function samlauth_logout() {
+  user_logout_current_user();
+  $auth = samlauth_get_saml2_auth();
+  $auth->logout('/');
+}
+
+/**
+ * Menu callback for /saml/changepw
+ */
+function samlauth_changepw() {
+  $changepw_service = variable_get('samlauth_changepw_service', FALSE);
+
+  if ($changepw_service === FALSE) {
+    drupal_set_message('The site administrator has not configured a password change service. Please change your password according to the normal processes in your organization.', 'error');
+    drupal_goto('/');
+  }
+
+  drupal_goto(variable_get('samlauth_changepw_service'), array('external' => TRUE));
+}
+
+/**
+ * Menu callback for /saml/acs
+ */
+function samlauth_acs() {
+  $account = FALSE;
+
+  try {
+    $auth = samlauth_get_saml2_auth();
+    $auth->processResponse();
+    $errors = $auth->getErrors();
+
+    if (!empty($errors)) {
+      throw new Exception('ACS error: ' . implode(', ', $errors));
+    }
+
+    if (!$auth->isAuthenticated()) {
+      throw new Exception('SAML user is not authenticated.');
+    }
+
+    // Get the attributes returned by the IdP.
+    $saml_data = $auth->getAttributes();
+
+    // First, let's see if we have a user.
+    $unique_id_attribute = variable_get('samlauth_unique_id_attribute', 'eduPersonTargetedID');
+
+    // If the configured unique id attribute is not present, then bail out early.
+    if (!isset($saml_data[$unique_id_attribute][0])) {
+      throw new Exception('Configured unique ID is not present in the SAML response.');
+    }
+
+    // Try to find the user using the ID that we are given.
+    $unique_id = $saml_data[$unique_id_attribute][0];
+    $uid = samlauth_find_uid_by_unique_id($unique_id);
+
+    if ($uid) {
+      // Load the user that was found.
+      $account = user_load($uid);
+
+      // If the account is blocked, bail out.
+      if ($account->status != 1) {
+        throw new Exception("User account is blocked.");
+      }
+
+    }
+    else {
+      $mail_attribute = variable_get('samlauth_user_mail_attribute', 'email');
+      if (variable_get('samlauth_map_users_email', FALSE) && $account = user_load_by_mail($saml_data[$mail_attribute])) {
+        samlauth_associate_saml_id_with_account($unique_id, $account);
+      }
+      else if (variable_get('samlauth_create_users', FALSE)) {
+        samlauth_create_user_from_saml_data($saml_data);
+      }
+      else {
+        throw new Exception('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
+      }
+    }
+  }
+  catch (Exception $e) {
+    drupal_set_message($e->getMessage(), 'error');
+    drupal_goto();
+  }
+
+  // If we're good to continue, log the user in.
+  global $user;
+  $user = $account;
+
+  user_login_finalize();
+
+  drupal_goto();
+}
+
+/**
+ * Find a user given the unique ID from the SAML IdP.
+ *
+ * @param $id
+ * @return $uid
+ */
+function samlauth_find_uid_by_unique_id($id) {
+  return db_select('authmap', 'a')
+    ->fields('a', array('uid'))
+    ->condition('authname', $id)
+    ->condition('module', 'samlauth')
+    ->execute()
+    ->fetchField();
+}
+
+/**
+ * Find a unique id from a username.
+ */
+function samlauth_find_unique_id_by_user_id($uid) {
+  return db_select('authmap', 'a')
+    ->fields('a', array('authname'))
+    ->condition('module', 'samlauth')
+    ->condition('uid', $uid)
+    ->execute()
+    ->fetchField();
+}
+
+/**
+ * Ensure that a SAML ID is associated with a given user account.
+ *
+ * @param $saml_id
+ * @param \Drupal\Core\Session\AccountInterface $account
+ */
+function samlauth_associate_saml_id_with_account($saml_id, $account) {
+  $uid = samlauth_find_uid_by_unique_id($saml_id);
+  if ($uid == NULL) {
+    db_insert('authmap')
+      ->fields(array(
+        'uid' => $account->uid,
+        'authname' => $saml_id,
+        'module' => 'samlauth',
+      ))
+      ->execute();
+  }
+  else {
+    db_update('authmap')
+      ->fields(array(
+        'uid' => $account->uid,
+        'authname' => $saml_id,
+        'module' => 'samlauth',
+      ))
+      ->condition('uid', $account->uid)
+      ->condition('module', 'samlauth')
+      ->execute();
+  }
+}
+
+/**
+ * Create a new user from SAML response data.
+ *
+ * @param $saml_data
+ */
+function samlauth_create_user_from_saml_data($saml_data) {
+  $user_unique_attribute = variable_get('samlauth_unique_id_attribute');
+  $user_name_attribute = variable_get('samlauth_user_name_attribute');
+  $user_mail_attribute = variable_get('samlauth_user_mail_attribute');
+  if (!isset($saml_data[$user_name_attribute][0])) {
+    throw new Exception('Missing name attribute in SAML response.');
+  }
+  if (!isset($saml_data[$user_mail_attribute][0])) {
+    throw new Exception('Missing mail attribute in SAML response.');
+  }
+
+  $account = new stdClass();
+  $account->name = $saml_data[$user_name_attribute][0];
+  $account->pass = user_password(50);
+  $account->mail = $saml_data[$user_mail_attribute][0];
+  $account->status = 1;
+
+  // Allow other modules to change/set user properties before saving.
+  drupal_alter('samlauth_new_user', $account, $saml_data);
+
+  user_save($account);
+
+  samlauth_associate_saml_id_with_account($saml_data[$user_unique_attribute][0], $account);
+
+  return $account;
+}

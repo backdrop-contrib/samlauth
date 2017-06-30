@@ -1,0 +1,5 @@
+name = "SAML Authentication"
+description = "Allows users to authenticate against an external SAML identify provider."
+core = 7.x
+package = "User authentication"
+configure = admin/config/people/saml

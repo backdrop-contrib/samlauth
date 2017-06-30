@@ -1,0 +1,45 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, and update functions for the SAML authentication module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function samlauth_uninstall() {
+  // Remove samlauth variables.
+  $variables = array(
+    'samlauth_drupal_saml_login',
+    'samlauth_config_info',
+    'samlauth_sp_entity_id',
+    'samlauth_sp_name_id_format',
+    'samlauth_sp_x509_certificate',
+    'samlauth_sp_private_key',
+    'samlauth_idp_metadata_url',
+    'samlauth_idp_entity_id',
+    'samlauth_idp_single_sign_on_service',
+    'samlauth_idp_single_log_out_service',
+    'samlauth_idp_change_password_service',
+    'samlauth_idp_x509_certificate',
+    'samlauth_unique_id_attribute',
+    'samlauth_map_users',
+    'samlauth_map_users_email',
+    'samlauth_create_users',
+    'samlauth_user_name_attribute',
+    'samlauth_user_mail_attribute',
+    'samlauth_security_authn_requests_sign',
+    'samlauth_security_messages_sign',
+    'samlauth_security_name_id_sign',
+    'samlauth_security_request_authn_context',
+  );
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+
+  // Remove authmap data.
+  db_delete('authmap')
+    ->condition('module', 'samlauth')
+    ->execute();
+}
