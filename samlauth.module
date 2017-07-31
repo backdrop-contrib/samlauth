@@ -266,7 +266,7 @@ function samlauth_acs() {
         samlauth_associate_saml_id_with_account($unique_id, $account);
       }
       else if (variable_get('samlauth_create_users', FALSE)) {
-        samlauth_create_user_from_saml_data($saml_data);
+        $account = samlauth_create_user_from_saml_data($saml_data);
       }
       else {
         throw new Exception('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
