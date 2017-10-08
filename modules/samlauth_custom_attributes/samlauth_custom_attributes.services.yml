@@ -1,0 +1,6 @@
+services:
+  samlauth_custom_attributes.event_subscriber.user_sync:
+    class: Drupal\samlauth_custom_attributes\EventSubscriber\UserSyncEventSubscriber
+    arguments: ['@config.factory', '@event_dispatcher']
+    tags:
+      - {name: event_subscriber}
