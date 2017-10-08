@@ -2,7 +2,7 @@ samlauth.saml_controller_login:
   path: '/saml/login'
   defaults:
     _controller: '\Drupal\samlauth\Controller\SamlController::login'
-    _title: 'SAML Login'
+    _title: 'SAML login'
   requirements:
     _role: 'anonymous'
   options:
@@ -11,7 +11,7 @@ samlauth.saml_controller_logout:
   path: '/saml/logout'
   defaults:
     _controller: '\Drupal\samlauth\Controller\SamlController::logout'
-    _title: 'SAML Logout'
+    _title: 'SAML logout'
   requirements:
     _role: 'authenticated'
   options:
@@ -20,7 +20,7 @@ samlauth.saml_controller_metadata:
   path: '/saml/metadata'
   defaults:
     _controller: '\Drupal\samlauth\Controller\SamlController::metadata'
-    _title: 'SAML Metadata'
+    _title: 'SAML metadata'
   requirements:
     _permission: 'view sp metadata'
 samlauth.saml_controller_acs:
@@ -45,7 +45,7 @@ samlauth.saml_controller_changepw:
   path: '/saml/changepw'
   defaults:
     _controller: '\Drupal\samlauth\Controller\SamlController::changepw'
-    _title: 'SAML Change Password'
+    _title: 'SAML change password'
   requirements:
     _role: 'authenticated'
   options:
@@ -54,7 +54,7 @@ samlauth.samlauth_configure_form:
   path: '/admin/config/people/saml'
   defaults:
     _form: '\Drupal\samlauth\Form\SamlauthConfigureForm'
-    _title: 'SAML Authentication'
+    _title: 'SAML authentication'
   requirements:
     _permission: 'configure saml'
 

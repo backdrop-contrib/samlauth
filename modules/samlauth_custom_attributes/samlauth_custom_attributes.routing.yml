@@ -1,13 +1,13 @@
 samlauth_custom_attributes.list:
-  path: 'admin/config/people/samlauth-custom-attributes'
+  path: 'admin/config/people/saml/custom-attributes'
   defaults:
-    _title: 'SSO User Info Mapping'
+    _title: 'SAML user attribute mapping'
     _controller: '\Drupal\samlauth_custom_attributes\Controller\SamlauthCustomAttributesController::ssoMappings'
   requirements:
     _permission: 'configure saml'
 
 samlauth_custom_attributes.add:
-  path: 'admin/config/people/samlauth-custom-attributes/add'
+  path: 'admin/config/people/saml/custom-attributes/add'
   defaults:
     _title: 'Add'
     _title_context: 'Add a user sso mapping.'
@@ -16,7 +16,7 @@ samlauth_custom_attributes.add:
     _permission: 'configure saml'
 
 samlauth_custom_attributes.edit:
-  path: 'admin/config/people/samlauth-custom-attributes/{mapping}/edit'
+  path: 'admin/config/people/saml/custom-attributes/{mapping}/edit'
   defaults:
     _title: 'Edit'
     _title_context: 'Edit a user sso mapping.'
@@ -25,7 +25,7 @@ samlauth_custom_attributes.edit:
     _permission: 'configure saml'
 
 samlauth_custom_attributes.delete:
-  path: 'admin/config/people/samlauth-custom-attributes/{mapping}/delete'
+  path: 'admin/config/people/saml/custom-attributes/{mapping}/delete'
   defaults:
     _title: 'Delete'
     _title_context: 'Delete a user sso mapping.'

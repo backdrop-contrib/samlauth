@@ -3,6 +3,5 @@ type: module
 description: 'Maps custom SAML SSO attributes to user fields.'
 package: 'User Authentication'
 core: 8.x
-version: 8.x-1.x
 dependencies:
   - samlauth

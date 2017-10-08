@@ -1,6 +1,0 @@
-samlauth_custom_attributes.list:
-  title: 'SAML Auth Attribute Mapping'
-  parent: user.admin_index
-  description: 'Configure SAML attribute mapping.'
-  weight: -10
-  route_name: samlauth_custom_attributes.list

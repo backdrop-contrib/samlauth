@@ -1,5 +1,5 @@
 samlauth_custom_attributes.add:
   route_name: samlauth_custom_attributes.add
-  title: 'Add Mapping'
+  title: 'Add mapping'
   appears_on:
     - samlauth_custom_attributes.list
