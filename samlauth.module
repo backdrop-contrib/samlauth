@@ -197,6 +197,7 @@ function samlauth_login() {
  * Menu callback for /saml/logout
  */
 function samlauth_logout() {
+  module_load_include('pages.inc', 'user');
   user_logout_current_user();
   $auth = samlauth_get_saml2_auth();
   $auth->logout('/');
