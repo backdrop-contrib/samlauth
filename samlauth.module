@@ -5,6 +5,9 @@
  * Provides SAML authentication capabilities.
  */
 
+/**
+ * Implements hook_menu().
+ */
 function samlauth_menu() {
   $items = array();
 
@@ -146,12 +149,12 @@ function samlauth_get_config() {
       'x509cert' => variable_get('samlauth_sp_x509_certificate'),
       'privateKey' => variable_get('samlauth_sp_private_key'),
     ),
-    'idp' => array (
+    'idp' => array(
       'entityId' => variable_get('samlauth_idp_entity_id'),
-      'singleSignOnService' => array (
+      'singleSignOnService' => array(
         'url' => variable_get('samlauth_idp_single_sign_on_service'),
       ),
-      'singleLogoutService' => array (
+      'singleLogoutService' => array(
         'url' => variable_get('samlauth_idp_single_log_out_service'),
       ),
       'x509cert' => variable_get('samlauth_idp_x509_certificate'),
@@ -193,7 +196,7 @@ function samlauth_metadata() {
 }
 
 /**
- * Menu callback for /saml/login
+ * Menu callback for /saml/login.
  */
 function samlauth_login() {
   $auth = samlauth_get_saml2_auth();
@@ -201,7 +204,7 @@ function samlauth_login() {
 }
 
 /**
- * Menu callback for /saml/logout
+ * Menu callback for /saml/logout.
  */
 function samlauth_logout() {
   module_load_include('pages.inc', 'user');
@@ -211,19 +214,20 @@ function samlauth_logout() {
 }
 
 /**
- * Menu callback for /saml/sls
+ * Menu callback for /saml/sls.
  */
 function samlauth_sls() {
   if (isset($_REQUEST['RelayState'])) {
-      $url = $_REQUEST['RelayState'];
-      drupal_goto($url);
-  }else{
-      drupal_goto('/');
+    $url = $_REQUEST['RelayState'];
+    drupal_goto($url);
+  }
+  else {
+    drupal_goto('/');
   }
 }
 
 /**
- * Menu callback for /saml/changepw
+ * Menu callback for /saml/changepw.
  */
 function samlauth_changepw() {
   $changepw_service = variable_get('samlauth_changepw_service', FALSE);
@@ -237,7 +241,7 @@ function samlauth_changepw() {
 }
 
 /**
- * Menu callback for /saml/acs
+ * Menu callback for /saml/acs.
  */
 function samlauth_acs() {
   $account = FALSE;
@@ -285,7 +289,7 @@ function samlauth_acs() {
       if (variable_get('samlauth_map_users_email', FALSE) && $account = user_load_by_mail($saml_data[$mail_attribute])) {
         samlauth_associate_saml_id_with_account($unique_id, $account);
       }
-      else if (variable_get('samlauth_create_users', FALSE)) {
+      elseif (variable_get('samlauth_create_users', FALSE)) {
         $account = samlauth_create_user_from_saml_data($saml_data);
       }
       else {
@@ -311,7 +315,9 @@ function samlauth_acs() {
  * Find a user given the unique ID from the SAML IdP.
  *
  * @param $id
- * @return $uid
+ *
+ * @return int
+ *   Returns the uid of the user with the unique ID.
  */
 function samlauth_find_uid_by_unique_id($id) {
   return db_select('authmap', 'a')
@@ -386,7 +392,7 @@ function samlauth_create_user_from_saml_data($saml_data) {
   $account->mail = $saml_data[$user_mail_attribute][0];
   $account->status = 1;
 
-  //fix timezone warining when creating new user
+  // Fix timezone warning when creating new user.
   $account->timezone = variable_get('date_default_timezone', 0);
 
   // Allow other modules to change/set user properties before saving.
