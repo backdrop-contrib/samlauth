@@ -38,7 +38,8 @@ function samlauth_menu() {
   $items['saml/logout'] = array(
     'title' => 'SAML Logout',
     'page callback' => 'samlauth_logout',
-    'access callback' => 'user_is_logged_in',
+    // The logout process can always be started.
+    'access callback' => TRUE,
     'type' => MENU_CALLBACK,
   );
 
@@ -207,10 +208,28 @@ function samlauth_login() {
  * Menu callback for /saml/logout.
  */
 function samlauth_logout() {
-  module_load_include('pages.inc', 'user');
-  user_logout_current_user();
-  $auth = samlauth_get_saml2_auth();
-  $auth->logout('/');
+  $nameId = isset($_SESSION['samlauth']['nameId']) ? $_SESSION['samlauth']['nameId'] : NULL;
+  $nameIdFormat = isset($_SESSION['samlauth']['nameIdFormat']) ? $_SESSION['samlauth']['nameIdFormat'] : NULL;
+  $nameIdNameQualifier = isset($_SESSION['samlauth']['nameIdNameQualifier']) ? $_SESSION['samlauth']['nameIdNameQualifier'] : NULL;
+  $sessionIndex = isset($_SESSION['samlauth']['sessionIndex']) ? $_SESSION['samlauth']['sessionIndex'] : NULL;
+
+  if (user_is_logged_in()) {
+    module_load_include('pages.inc', 'user');
+    user_logout_current_user();
+  }
+
+  // Check if there is a SAML response already. We have no way of verifying the
+  // response because SAML PHP processResponse() does not support logout
+  // responses and processSlo() only looks at GET parameters.
+  if (isset($_POST['SAMLResponse'])) {
+    // Just assume everything went well and go to the frontpage.
+    drupal_goto();
+  }
+  else {
+    // Redirect to the auth server for logout.
+    $auth = samlauth_get_saml2_auth();
+    $auth->logout('/', array(), $nameId, $sessionIndex, FALSE, $nameIdFormat, $nameIdNameQualifier);
+  }
 }
 
 /**
@@ -307,6 +326,13 @@ function samlauth_acs() {
   $user = $account;
 
   user_login_finalize();
+
+  // Store the authentication details in the user's session, we need it later
+  // when logging out.
+  $_SESSION['samlauth']['nameId'] = $auth->getNameId();
+  $_SESSION['samlauth']['nameIdFormat'] = $auth->getNameIdFormat();
+  $_SESSION['samlauth']['nameIdNameQualifier'] = $auth->getNameIdNameQualifier();
+  $_SESSION['samlauth']['sessionIndex'] = $auth->getSessionIndex();
 
   drupal_goto();
 }
