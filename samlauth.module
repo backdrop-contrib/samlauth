@@ -170,10 +170,13 @@ function samlauth_get_config() {
 }
 
 /**
- * Get an instance of the OneLogin_Saml2_Auth class.
+ * Get an instance of the SAML Auth class.
+ *
+ * @return \OneLogin\Saml2\Auth
+ *   The SAML Auth library object.
  */
 function samlauth_get_saml2_auth() {
-  return new OneLogin_Saml2_Auth(samlauth_get_config());
+  return new OneLogin\Saml2\Auth(samlauth_get_config());
 }
 
 /**

@@ -9,7 +9,7 @@
  * Form builder for samlauth_configure_form.
  */
 function samlauth_configure_form() {
-  if (!class_exists('OneLogin_Saml2_Auth')) {
+  if (!class_exists('\OneLogin\Saml2\Auth')) {
     drupal_set_message('The SAML PHP Toolkit does not appear to be installed and this module will not work without it. Please consult the README for information on installation.', 'error');
   }
 

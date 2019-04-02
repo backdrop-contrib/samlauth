@@ -11,6 +11,6 @@
     "source": "http://cgit.drupalcode.org/samlauth"
   },
   "require": {
-    "onelogin/php-saml": "~2.5"
+    "onelogin/php-saml": "~3"
   }
 }
