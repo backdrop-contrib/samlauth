@@ -13,8 +13,8 @@ use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\user\PrivateTempStoreFactory;
 use Drupal\user\UserInterface;
 use Exception;
-use OneLogin_Saml2_Auth;
-use OneLogin_Saml2_Error;
+use OneLogin\Saml2\Auth;
+use OneLogin\Saml2\Error;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -25,9 +25,9 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 class SamlService {
 
   /**
-   * A OneLogin_Saml2_Auth object representing the current request state.
+   * An Auth object representing the current request state.
    *
-   * @var \OneLogin_Saml2_Auth
+   * @var \OneLogin\Saml2\Auth
    */
   protected $samlAuth;
 
@@ -102,7 +102,7 @@ class SamlService {
    * Show metadata about the local sp. Use this to configure your saml2 IDP
    *
    * @return mixed xml string representing metadata
-   * @throws OneLogin_Saml2_Error
+   * @throws \OneLogin\Saml2\Error
    */
   public function getMetadata() {
     $settings = $this->getSamlAuth()->getSettings();
@@ -113,7 +113,7 @@ class SamlService {
       return $metadata;
     }
     else {
-      throw new OneLogin_Saml2_Error('Invalid SP metadata: ' . implode(', ', $errors), OneLogin_Saml2_Error::METADATA_SP_INVALID);
+      throw new Error('Invalid SP metadata: ' . implode(', ', $errors), Error::METADATA_SP_INVALID);
     }
   }
 
@@ -378,7 +378,7 @@ class SamlService {
    */
   protected function getSamlAuth() {
     if (!isset($this->samlAuth)) {
-      $this->samlAuth = new OneLogin_Saml2_Auth(static::reformatConfig($this->config));
+      $this->samlAuth = new Auth(static::reformatConfig($this->config));
     }
 
     return $this->samlAuth;
@@ -436,6 +436,7 @@ class SamlService {
       ],
       'security' => [
         'authnRequestsSigned' => (bool) $config->get('security_authn_requests_sign'),
+        'logoutRequestSigned' => (bool) $config->get('security_logout_requests_sign'),
         'wantMessagesSigned' => (bool) $config->get('security_messages_sign'),
         'requestedAuthnContext' => (bool) $config->get('security_request_authn_context'),
         'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),

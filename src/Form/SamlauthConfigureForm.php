@@ -241,7 +241,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['identity_provider']['idp_single_log_out_service'] = [
       '#type' => 'url',
-      '#title' => $this->t('Single Log Out Service'),
+      '#title' => $this->t('Single Logout Service'),
       '#description' => $this->t('URL where the SP will send the logout request message.'),
       '#default_value' => $config->get('idp_single_log_out_service'),
     ];
@@ -371,6 +371,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_authn_requests_sign'),
     ];
 
+    $form['security']['security_logout_requests_sign'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Sign logout requests'),
+      '#description' => $this->t('Requests sent to the Single Logout Service of the IDP will include a signature.'),
+      '#default_value' => $config->get('security_logout_requests_sign'),
+    ];
+
     $form['security']['security_signature_algorithm'] = [
       '#type' => 'select',
       '#title' => $this->t('Signature algorithm'),
@@ -386,7 +393,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_signature_algorithm'),
       '#states' => [
         'visible' => [
-          ':input[name="security_authn_requests_sign"]' => ['checked' => TRUE],
+          [':input[name="security_authn_requests_sign"]' => ['checked' => TRUE]],
+          'or',
+          [':input[name="security_logout_requests_sign"]' => ['checked' => TRUE]],
         ],
       ],
     ];
@@ -506,6 +515,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('user_name_attribute', $form_state->getValue('user_name_attribute'))
       ->set('user_mail_attribute', $form_state->getValue('user_mail_attribute'))
       ->set('security_authn_requests_sign', $form_state->getValue('security_authn_requests_sign'))
+      ->set('security_logout_requests_sign', $form_state->getValue('security_logout_requests_sign'))
       ->set('security_lowercase_url_encoding', $form_state->getValue('security_lowercase_url_encoding'))
       ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))
       ->set('security_request_authn_context', $form_state->getValue('security_request_authn_context'))
