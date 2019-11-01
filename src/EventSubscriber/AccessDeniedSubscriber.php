@@ -47,7 +47,7 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
         case 'samlauth.saml_controller_login':
         case 'samlauth.saml_controller_acs':
           // Redirect an authenticated user to the profile page.
-          $url = Url::fromRoute('entity.user.canonical', ['user' => $this->account->id()])->toString();
+          $url = Url::fromRoute('entity.user.canonical', ['user' => $this->account->id()])->toString(TRUE)->getGeneratedUrl();
           $event->setResponse(new LocalRedirectResponse($url));
       }
     }
