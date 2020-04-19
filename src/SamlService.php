@@ -442,7 +442,12 @@ class SamlService {
         'requestedAuthnContext' => (bool) $config->get('security_request_authn_context'),
         'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),
         'signatureAlgorithm' => $config->get('security_signature_algorithm'),
-        'wantNameId' => (bool) $config->get('security_want_name_id'),
+        // This is the first setting that is TRUE by default AND must be TRUE
+        // on existing installations that didn't have the setting before, so
+        // it's the first one to get a default value. (If we didn't have the
+        // (bool) operator, we wouldn't necessarily need the default - but
+        // leaving it out would just invite a bug later on.)
+        'wantNameId' => (bool) ($config->get('security_want_name_id') ?? TRUE),
       ],
       'strict' => (bool) $config->get('strict'),
     ];
