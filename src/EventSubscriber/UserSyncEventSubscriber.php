@@ -8,6 +8,8 @@ use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\TypedData\TypedDataManagerInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
+// @todo replace by Drupal\Component\Utility\EmailValidatorInterface in time,
+//   and remove the comment in the constructor.
 use Egulias\EmailValidator\EmailValidator;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -40,7 +42,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
   /**
    * The email validator.
    *
-   * @var \Egulias\EmailValidator\EmailValidator
+   * @var \Drupal\Component\Utility\EmailValidatorInterface
    */
   protected $emailValidator;
 
@@ -65,8 +67,18 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
    *   The config factory.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The EntityTypeManager service.
-   * @param \Egulias\EmailValidator\EmailValidator $email_validator
-   *   The email validator.
+   * @param \Drupal\Component\Utility\EmailValidatorInterface $email_validator
+   *   The email validator. Note the code defines it as
+   *   \Egulias\EmailValidator\EmailValidator for the time being; reason:
+   *   - The default service used to be \Egulias\EmailValidator\EmailValidator,
+   *     which in v1 only had one required argument. (v2 has two.)
+   *   - From core 8.7, \Drupal\Component\Utility\EmailValidatorInterface was
+   *     introduced, and the service now implements that interface AND still
+   *     extends \Egulias\EmailValidator\EmailValidator, but makes the 2nd
+   *     argument optional (and in fact, unusable) for backward compatibility.
+   *   We already typehint the interface in comments, otherwise the call to
+   *   isValid() will appear to contain errors. But we don't want to mandate
+   *   Core >= 8.7 just yet, so the 'use' statement is still not updated.
    * @param \Drupal\Core\TypedData\TypedDataManagerInterface $typed_data_manager
    *   The typed data manager.
    * @param \Psr\Log\LoggerInterface $logger
@@ -89,7 +101,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Performs actions to synchronize users with Factory data on login.
+   * Performs actions to synchronize users with SAML data on login.
    *
    * @param \Drupal\samlauth\Event\SamlauthUserSyncEvent $event
    *   The event.

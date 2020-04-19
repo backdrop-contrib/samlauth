@@ -11,7 +11,7 @@ use Drupal\Core\Utility\Token;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Provides a configuration form for samlauth module settings and IDP/SP info.
+ * Provides a configuration form for samlauth module settings and IdP/SP info.
  */
 class SamlauthConfigureForm extends ConfigFormBase {
 
@@ -118,14 +118,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['saml_login_logout']['login_redirect_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Login redirect URL'),
-      '#description' => $this->t("Define the default URL to redirect the user after login. Enter a internal path starting with a slash, or a absolute URL. Defaults to the logged-in user's account page."),
+      '#description' => $this->t("The default URL to redirect the user to after login. This should be an internal path starting with a slash, or an absolute URL. Defaults to the logged-in user's account page."),
       '#default_value' => $config->get('login_redirect_url'),
     ];
 
     $form['saml_login_logout']['logout_redirect_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Logout redirect URL'),
-      '#description' => $this->t('Define the default URL to redirect the user after logout. Enter a internal path starting with a slash, or a absolute URL. Defaults to the front page.'),
+      '#description' => $this->t('The default URL to redirect the user to after logout. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page.'),
       '#default_value' => $config->get('logout_redirect_url'),
     ];
 
@@ -148,14 +148,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_entity_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Entity ID'),
-      '#description' => $this->t('Specifies the identifier to be used to represent the SP.'),
+      '#description' => $this->t('The identifier representing the SP.'),
       '#default_value' => $config->get('sp_entity_id'),
     ];
 
     $form['service_provider']['sp_name_id_format'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Name ID Format'),
-      '#description' => $this->t('Specify the NameIDFormat attribute to request from the identity provider'),
+      '#description' => $this->t('The NameIDFormat attribute to request from the identity provider.'),
       '#default_value' => $config->get('sp_name_id_format'),
     ];
 
@@ -183,7 +183,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('sp_x509_certificate'),
       '#states' => [
         'visible' => [
-          [':input[name="sp_cert_type"]' => ['value' => 'fields']],
+          ':input[name="sp_cert_type"]' => ['value' => 'fields'],
         ],
       ],
     ];
@@ -195,7 +195,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('sp_private_key'),
       '#states' => [
         'visible' => [
-          [':input[name="sp_cert_type"]' => ['value' => 'fields']],
+          ':input[name="sp_cert_type"]' => ['value' => 'fields'],
         ],
       ],
     ];
@@ -203,11 +203,11 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_cert_folder'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Certificate folder'),
-      '#description' => $this->t('Set the path to the folder containing a /certs subfolder and the /certs/sp.key (private key) and /certs/sp.crt (public cert) files. The names of the subfolder and files are mandated by the external SAML Toolkit library.'),
+      '#description' => $this->t('This folder must contain a certs/ subfolder containing certs/sp.key (private key) and certs/sp.crt (public cert) files. The names of the subfolder and files are mandated by the external SAML Toolkit library.'),
       '#default_value' => $cert_folder,
       '#states' => [
         'visible' => [
-          [':input[name="sp_cert_type"]' => ['value' => 'folder']],
+          ':input[name="sp_cert_type"]' => ['value' => 'folder'],
         ],
       ],
     ];
@@ -217,7 +217,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Identity Provider Configuration'),
     ];
 
-    // @TODO: Allow a user to automagically populate this by providing a metadata URL for the iDP.
+    // @TODO: Allow a user to automagically populate this by providing a metadata URL for the IdP.
 //    $form['identity_provider']['idp_metadata_url'] = [
 //      '#type' => 'url',
 //      '#title' => $this->t('Metadata URL'),
@@ -228,7 +228,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['identity_provider']['idp_entity_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Entity ID'),
-      '#description' => $this->t('Specifies the identifier to be used to represent the IDP.'),
+      '#description' => $this->t('The identifier representing the IdP.'),
       '#default_value' => $config->get('idp_entity_id'),
     ];
 
@@ -292,7 +292,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['user_info']['unique_id_attribute'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Unique identifier attribute'),
-      '#description' => $this->t("Specify a SAML attribute that is always going to be unique per user. This will be used to identify local users through an 'auth mapping' (which is stored separately from the user account info).<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
+      '#description' => $this->t("A SAML attribute that is always going to be unique per user. This will be used to identify local users through an 'auth mapping' (which is stored separately from the user account info).<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
       '#default_value' => $config->get('unique_id_attribute') ?: 'eduPersonTargetedID',
     ];
 
@@ -367,14 +367,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['security']['security_authn_requests_sign'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Sign authentication requests'),
-      '#description' => $this->t('Requests sent to the Single Sign-On Service of the IDP will include a signature.'),
+      '#description' => $this->t('Requests sent to the Single Sign-On Service of the IdP will include a signature.'),
       '#default_value' => $config->get('security_authn_requests_sign'),
     ];
 
     $form['security']['security_logout_requests_sign'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Sign logout requests'),
-      '#description' => $this->t('Requests sent to the Single Logout Service of the IDP will include a signature.'),
+      '#description' => $this->t('Requests sent to the Single Logout Service of the IdP will include a signature.'),
       '#default_value' => $config->get('security_logout_requests_sign'),
     ];
 
@@ -392,10 +392,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#description' => $this->t('Algorithm used in the signing process.'),
       '#default_value' => $config->get('security_signature_algorithm'),
       '#states' => [
-        'visible' => [
-          [':input[name="security_authn_requests_sign"]' => ['checked' => TRUE]],
-          'or',
-          [':input[name="security_logout_requests_sign"]' => ['checked' => TRUE]],
+        'invisible' => [
+          ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
+          ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
         ],
       ],
     ];
@@ -403,7 +402,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['security']['security_messages_sign'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Request messages to be signed'),
-      '#description' => $this->t('Response messages from the IDP are expected to be signed.'),
+      '#description' => $this->t('Response messages from the IdP are expected to be signed.'),
       '#default_value' => $config->get('security_messages_sign'),
       '#states' => [
         'disabled' => [
@@ -418,11 +417,20 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_request_authn_context'),
     ];
 
-
+    // I (RM) am just going to throw this out here: this has nothing to do with
+    // 'lowercasing'. When this option is set, the SAML toolkit uses
+    // rawurlencode() rather than urlencode(); their differences have nothing
+    // to do with casing. (The original Python code committed in
+    // https://github.com/onelogin/python-saml/pull/144/files, which inspired
+    // the fix to https://github.com/onelogin/php-saml/issues/136, does have
+    // differences in casing which I have no basis to judge.) I half suspect
+    // that this option is unnecessary in the PHP toolkit, and ALL SAML
+    // conversations work find with this option set / the 'fix' applied. Not
+    // going to investigate this further at the moment, though.
     $form['security']['security_lowercase_url_encoding'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Encode urls in lowercase'),
-      '#description' => $this->t('ADFS encodes urls as lowercase and the library does it so in uppercase. When using ADFS and signature verification, this setting must be enabled.'),
+      '#title' => $this->t("'Raw' encoding of SAML messages"),
+      '#description' => $this->t('The default way in which the SAML toolkit encodes SAML messages differs from ADFS IdPs, which makes signature verification fail. When using ADFS and signature verification, this setting must be enabled.'),
       '#default_value' => $config->get('security_lowercase_url_encoding'),
     ];
 

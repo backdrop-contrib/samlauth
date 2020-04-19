@@ -20,7 +20,7 @@ use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
- * Governs communication between the SAML toolkit and the IDP / login behavior.
+ * Governs communication between the SAML toolkit and the IdP / login behavior.
  */
 class SamlService {
 
@@ -99,7 +99,7 @@ class SamlService {
   }
 
   /**
-   * Show metadata about the local sp. Use this to configure your saml2 IDP
+   * Show metadata about the local sp. Use this to configure your saml2 IdP
    *
    * @return mixed xml string representing metadata
    * @throws \OneLogin\Saml2\Error
@@ -118,11 +118,11 @@ class SamlService {
   }
 
   /**
-   * Initiates a SAML2 authentication flow and redirects to the IDP.
+   * Initiates a SAML2 authentication flow and redirects to the IdP.
    *
    * @param string $return_to
    *   (optional) The path to return the user to after successful processing by
-   *   the IDP.
+   *   the IdP.
    *
    * @return string
    *   The URL of the single sign-on service to redirect to, including query
@@ -137,7 +137,7 @@ class SamlService {
    *
    * @param null $return_to
    *   (optional) The path to return the user to after successful processing by
-   *   the IDP.
+   *   the IdP.
    *
    * @return string
    *   The URL of the single logout service to redirect to, including query
@@ -298,7 +298,7 @@ class SamlService {
     }
 
     // Usually we don't get any URL returned. The case in which we do, seems to
-    // be something like IDP-initiated logout. Therefore we won't do further
+    // be something like IdP-initiated logout. Therefore we won't do further
     // processing.
     if (!$url) {
       // Delete private stored session information.
@@ -414,7 +414,8 @@ class SamlService {
       'sp' => [
         'entityId' => $config->get('sp_entity_id'),
         'assertionConsumerService' => [
-          // See SamlController::redirectResponseFromUrl() for details.
+          // Try SamlController::createRedirectResponse() if curious for
+          // details on why the long chained call is necessary.
           'url' => Url::fromRoute('samlauth.saml_controller_acs', [], ['absolute' => TRUE])->toString(TRUE)->getGeneratedUrl(),
         ],
         'singleLogoutService' => [

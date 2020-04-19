@@ -5,6 +5,7 @@ namespace Drupal\samlauth\Controller;
 use Exception;
 use Drupal\samlauth\SamlService;
 use Drupal\Component\Utility\UrlHelper;
+use Drupal\Core\Cache\CacheableResponse;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Path\PathValidatorInterface;
@@ -16,7 +17,6 @@ use OneLogin\Saml2\Utils;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Returns responses for samlauth module routes.
@@ -81,7 +81,7 @@ class SamlController extends ControllerBase {
   }
 
   /**
-   * Factory method for dependency injection container.
+   * Factory method for use by dependency injection container.
    *
    * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
    *
@@ -100,8 +100,9 @@ class SamlController extends ControllerBase {
   /**
    * Initiates a SAML2 authentication flow.
    *
-   * This should redirect to the Login service on the IDP and then to our ACS.
-   * It does not actually log us in (yet).
+   * This route does not log us in (yet); it should redirect to the Login
+   * service on the IdP, which should be redirecting back to our ACS endpoint
+   * after authenticating the user.
    *
    * @return \Drupal\Core\Routing\TrustedRedirectResponse
    */
@@ -114,14 +115,16 @@ class SamlController extends ControllerBase {
       $url = Url::fromRoute('<front>');
     }
 
+    // This response redirects to an external URL in all/common cases. We count
+    // on the routing.yml to specify that it's not cacheable.
     return $this->createRedirectResponse($url, TRUE);
   }
 
   /**
-   * Initiate a SAML2 logout flow.
+   * Initiates a SAML2 logout flow.
    *
-   * This should redirect to the SLS service on the IDP and then to our SLS.
-   * It does not actually log us out (yet).
+   * This route does not log us out (yet); it should redirect to the SLS
+   * service on the IdP, which should be redirecting back to our SLS endpoint.
    *
    * @return \Drupal\Core\Routing\TrustedRedirectResponse
    */
@@ -134,6 +137,8 @@ class SamlController extends ControllerBase {
       $url = Url::fromRoute('<front>');
     }
 
+    // This response redirects to an external URL in all/common cases. We count
+    // on the routing.yml to specify that it's not cacheable.
     return $this->createRedirectResponse($url, TRUE);
   }
 
@@ -148,17 +153,20 @@ class SamlController extends ControllerBase {
     }
     catch (Exception $e) {
       $this->handleException($e, 'processing SAML SP metadata');
+      // This response caused by an error condition must not be cacheable.
       return $this->createRedirectResponse(Url::fromRoute('<front>'));
     }
 
-    return new Response($metadata, 200, ['Content-Type' => 'text/xml']);
+    // The metadata is a 'regular' response and should be cacheable.
+    // @todo debugging option: make it not cacheable.
+    return new CacheableResponse($metadata, 200, ['Content-Type' => 'text/xml']);
   }
 
   /**
-   * Attribute Consumer Service.
+   * Performs the Attribute Consumer Service.
    *
    * This is usually the second step in the authentication flow; the Login
-   * service on the IDP should redirect (or: execute a POST request to) here.
+   * service on the IdP should redirect (or: execute a POST request to) here.
    *
    * @return \Symfony\Component\HttpFoundation\Response
    */
@@ -176,10 +184,10 @@ class SamlController extends ControllerBase {
   }
 
   /**
-   * Single Logout Service.
+   * Performs the Single Logout Service.
    *
    * This is usually the second step in the logout flow; the SLS service on the
-   * IDP should redirect here.
+   * IdP should redirect here.
    *
    * @return \Symfony\Component\HttpFoundation\Response
    */
@@ -199,7 +207,7 @@ class SamlController extends ControllerBase {
   }
 
   /**
-   * Change password redirector.
+   * Redirects to the 'Change Password' service.
    *
    * @return \Symfony\Component\HttpFoundation\RedirectResponse
    */
@@ -284,7 +292,7 @@ class SamlController extends ControllerBase {
     $relay_state = $this->requestStack->getCurrentRequest()->get('RelayState');
     if ($relay_state) {
       // We should be able to trust the RelayState parameter at this point
-      // because the response from the IDP was verified. Only validate general
+      // because the response from the IdP was verified. Only validate general
       // syntax.
       if (!UrlHelper::isValid($relay_state, TRUE)) {
         $this->getLogger('samlauth')->error('Invalid RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
@@ -327,20 +335,24 @@ class SamlController extends ControllerBase {
    *   A URL to redirect to, either as a string or a Drupal URL object. (Drupal
    *   code usually creates and passes objects, but the SAML toolkit methods
    *   return strings, so we allow those to be passed without conversion.)
-   * @param bool $external_allowed
+   * @param bool $cacheable_and_can_be_external
    *   If TRUE, $url is allowed to be external. (By default, external URLs
-   *   cause an exception to be thrown later on saying they are disallowed.)
-   *   It's also allowed to be cacheable. The downside to this is, code doing
-   *   this MUST NOT call any 'unknown' code (meaning: any calls to code that
-   *   might call hooks/fire events is disallowed), because that would open us
-   *   up to the dreaded 'leaked metadata' exception.
+   *   cause an exception to be thrown later on, saying they are disallowed.)
+   *   It's also cacheable. The downside to this is, code doing this MUST NOT
+   *   call any 'unknown' code (meaning: any calls to code that might call
+   *   hooks / fire events is disallowed), because that would open us up to the
+   *   dreaded 'leaked metadata' exception. We're overloading this parameter to
+   *   have two uses for as long as we can get away with it, because 1) it's a
+   *   protected 'internal' method, not bound to any interface; 2) we want as
+   *   few different return values as possible; it's been confusing enough
+   *   getting our code to this point where we can prevent any exceptions.
    *
    * @return \Symfony\Component\HttpFoundation\RedirectResponse|\Drupal\Core\Routing\TrustedRedirectResponse
    *   A response object representing a redirect: a Symfony RedirectResponse by
    *   default; TrustedRedirectResponse (which is cacheable and can be
-   *   external) if $external_allowed is TRUE.
+   *   external) if $cacheable_and_can_be_external is TRUE.
    */
-  protected function createRedirectResponse($url, $external_allowed = FALSE) {
+  protected function createRedirectResponse($url, $cacheable_and_can_be_external = FALSE) {
     if (is_object($url)) {
       // This construct is needed to prevent exceptions; see comments at
       // getUrlFromDestination(). The difference: in some cases we'll actually
@@ -349,7 +361,7 @@ class SamlController extends ControllerBase {
       $generated_url_object = $url->toString(TRUE);
       $url = $generated_url_object->getGeneratedUrl();
     }
-    if ($external_allowed) {
+    if ($cacheable_and_can_be_external) {
       // We have to use TrustedRedirectResponse here; just a RedirectResponse
       // is prohibited from handling an external URL.
       $response = new TrustedRedirectResponse($url);

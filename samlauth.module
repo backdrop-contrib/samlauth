@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Contains samlauth.module.
+ * Allows users to authenticate against an external SAML identity provider.
  */
 
 use Drupal\Core\Form\FormStateInterface;
