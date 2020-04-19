@@ -413,13 +413,17 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['security']['security_want_name_id'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('NameId is required'),
-      '#default_value' => $config->get('security_want_name_id'),
+      '#title' => $this->t('Require NameID'),
+      // This is the first setting that is TRUE by default AND must be set to
+      // TRUE on existing installations that didn't have this checkbox before,
+      // so it's the first one to get a default value.
+      '#default_value' => $config->get('security_want_name_id') ?? TRUE,
+      '#description' => $this->t('The login response message from the IdP must contain a NameID attribute.'),
     ];
 
     $form['security']['security_request_authn_context'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Request authn context'),
+      '#title' => $this->t('Requested authn context'),
       '#default_value' => $config->get('security_request_authn_context'),
     ];
 

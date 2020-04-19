@@ -1,8 +1,10 @@
 # Most of this module's configuration must be filled from scratch by the user,
 # but we will enable some security settings by default, since it is possible but
-# not recommended for the module to operate without them.
+# not recommended for the module to operate without them. This is a deviation
+# from the SAML Toolkit which does not set these values to True by default.
 security_authn_requests_sign: true
 security_logout_requests_sign: true
 security_messages_sign: true
-security_want_name_id: true
 strict: true
+# The following is True by default in the SAML Toolkit too:
+security_want_name_id: true
