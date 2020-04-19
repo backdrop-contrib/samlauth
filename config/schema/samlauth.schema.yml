@@ -59,6 +59,8 @@ samlauth.authentication:
       type: string
     security_messages_sign:
       type: boolean
+    security_want_name_id:
+      type: boolean
     security_request_authn_context:
       type: boolean
     security_lowercase_url_encoding:

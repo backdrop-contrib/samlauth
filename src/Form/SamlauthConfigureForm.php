@@ -411,6 +411,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    $form['security']['security_want_name_id'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('NameId is required'),
+      '#default_value' => $config->get('security_want_name_id'),
+    ];
+
     $form['security']['security_request_authn_context'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Request authn context'),
@@ -526,6 +532,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_logout_requests_sign', $form_state->getValue('security_logout_requests_sign'))
       ->set('security_lowercase_url_encoding', $form_state->getValue('security_lowercase_url_encoding'))
       ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))
+      ->set('security_want_name_id', $form_state->getValue('security_want_name_id'))
       ->set('security_request_authn_context', $form_state->getValue('security_request_authn_context'))
       ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))
       ->set('strict', $form_state->getValue('strict'))

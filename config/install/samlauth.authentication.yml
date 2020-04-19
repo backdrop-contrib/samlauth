@@ -4,4 +4,5 @@
 security_authn_requests_sign: true
 security_logout_requests_sign: true
 security_messages_sign: true
+security_want_name_id: true
 strict: true
