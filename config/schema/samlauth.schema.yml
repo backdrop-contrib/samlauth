@@ -21,7 +21,7 @@ samlauth.authentication:
       type: string
     sp_private_key:
       type: string
-    idp_enity_id:
+    idp_entity_id:
       type: string
     idp_single_sign_on_service:
       type: string
