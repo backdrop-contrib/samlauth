@@ -438,6 +438,7 @@ class SamlService {
       'security' => [
         'authnRequestsSigned' => (bool) $config->get('security_authn_requests_sign'),
         'logoutRequestSigned' => (bool) $config->get('security_logout_requests_sign'),
+        'wantAssertionsEncrypted' => (bool) $config->get('security_assertions_encrypt'),
         'wantMessagesSigned' => (bool) $config->get('security_messages_sign'),
         'requestedAuthnContext' => (bool) $config->get('security_request_authn_context'),
         'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),

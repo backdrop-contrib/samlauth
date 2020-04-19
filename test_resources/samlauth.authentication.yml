@@ -15,6 +15,7 @@ sp_private_key: MIIEwQIBADANBgkqhkiG9w0BAQEFAASCBKswggSnAgEAAoIBAgDDZOeQF9Cp5k0W
 sp_name_id_format: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient'
 map_users: 0
 security_logout_requests_sign: 0
+security_assertions_encrypt: 0
 security_authn_requests_sign: 0
 security_messages_sign: null
 security_request_authn_context: 1

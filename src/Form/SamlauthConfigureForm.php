@@ -401,7 +401,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['security']['security_messages_sign'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Request messages to be signed'),
+      '#title' => $this->t('Require messages to be signed'),
       '#description' => $this->t('Response messages from the IdP are expected to be signed.'),
       '#default_value' => $config->get('security_messages_sign'),
       '#states' => [
@@ -409,6 +409,16 @@ class SamlauthConfigureForm extends ConfigFormBase {
           ':input[name="strict"]' => ['checked' => FALSE],
         ],
       ],
+    ];
+
+    $form['security']['security_assertions_encrypt'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Require assertions to be encrypted'),
+      // The metadata changes if wantAssertionsEncrypted OR wantNameIdEncrypted
+      // are set. But we don't have wantNameIdEncrypted yet, so we'll describe
+      // this option as the way to change the metadata.
+      '#description' => $this->t("Assertion elements in response messages from the IdP are expected to be encrypted. (When strict mode is off, this option still has effect: it changes the SP metadata to include this expectation.)"),
+      '#default_value' => $config->get('security_assertions_encrypt'),
     ];
 
     $form['security']['security_want_name_id'] = [
@@ -534,6 +544,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('user_mail_attribute', $form_state->getValue('user_mail_attribute'))
       ->set('security_authn_requests_sign', $form_state->getValue('security_authn_requests_sign'))
       ->set('security_logout_requests_sign', $form_state->getValue('security_logout_requests_sign'))
+      ->set('security_assertions_encrypt', $form_state->getValue('security_assertions_encrypt'))
       ->set('security_lowercase_url_encoding', $form_state->getValue('security_lowercase_url_encoding'))
       ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))
       ->set('security_want_name_id', $form_state->getValue('security_want_name_id'))
