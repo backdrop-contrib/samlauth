@@ -353,15 +353,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
 
     $form['security'] = [
-      '#title' => $this->t('Security Options'),
+      '#title' => $this->t('Security / SAML Request Contents'),
       '#type' => 'fieldset',
-    ];
-
-    $form['security']['strict'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Strict mode'),
-      '#description' => $this->t('In strict mode, any validation failures or unsigned SAML messages which are requested to be signed (according to your settings) will cause the SAML conversation to be terminated. In production environments, this <em>must</em> be set.'),
-      '#default_value' => $config->get('strict'),
     ];
 
     $form['security']['security_authn_requests_sign'] = [
@@ -399,7 +392,66 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
-    $form['security']['security_messages_sign'] = [
+    // This option has effect on signing of (login + logout) requests and on
+    // verification of signatures on logout responses. But we never turn on
+    // 'logoutResponseSigned' yet, so the latter isn't important yet.
+    // Something else I (RM) am just going to throw out here: this has nothing
+    // to do with 'lowercasing'. When this option is set, the SAML toolkit uses
+    // rawurlencode() rather than urlencode(); their differences have nothing
+    // to do with casing. (The original Python code committed in
+    // https://github.com/onelogin/python-saml/pull/144/files, which inspired
+    // the fix to https://github.com/onelogin/php-saml/issues/136, does have
+    // differences in casing which I have no basis to judge.) I half suspect
+    // that this option is unnecessary in the PHP toolkit, and ALL SAML
+    // conversations work fine with this option set / the 'fix' applied. Not
+    // going to investigate this further at the moment, though.
+    $form['security']['security_lowercase_url_encoding'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("'Raw' encoding of SAML messages"),
+      '#description' => $this->t('The default way in which the SAML Toolkit library encodes SAML messages differs from ADFS IdPs, which makes signature validation fail. When using ADFS and signing requests, this setting must be enabled.'),
+      '#default_value' => $config->get('security_lowercase_url_encoding'),
+      // These #states are valid as long as we don't do logoutResponseSigned.
+      '#states' => [
+        'disabled' => [
+          ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
+          ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
+        ],
+      ],
+    ];
+
+    $form['security']['security_request_authn_context'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Specify authentication context'),
+      '#description' => $this->t('Specify that only a subset of authentication methods available at the IdP should be used. (If checked, the "PasswordProtectedTransport" authentication method is specified, which is default behavior for the SAML Toolkit library. If other restrictions are needed, we should change the checkbox to a text input.)'),
+      '#default_value' => $config->get('security_request_authn_context'),
+    ];
+
+    // Just mucking around with grouping of options a bit...
+    $form['responses'] = [
+      '#title' => $this->t('Security / SAML Response Validation'),
+      '#type' => 'fieldset',
+    ];
+    $group = isset($form['responses']) ? 'responses' : 'security';
+
+
+    $form[$group]['security_want_name_id'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Require NameID'),
+      '#description' => $this->t('The login response message from the IdP must contain a NameID attribute.'),
+      // This is the first checkbox that is TRUE by default AND must be set to
+      // TRUE on existing module installations that didn't have the checkbox
+      // before, so it's the first one to get a default value in this form.
+      '#default_value' => $config->get('security_want_name_id') ?? TRUE,
+    ];
+
+    $form[$group]['strict'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Strict validation of responses'),
+      '#description' => $this->t('Validation failures (partly based on the next options) will cause the SAML conversation to be terminated. In production environments, this <em>must</em> be set.'),
+      '#default_value' => $config->get('strict'),
+    ];
+
+    $form[$group]['security_messages_sign'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require messages to be signed'),
       '#description' => $this->t('Response messages from the IdP are expected to be signed.'),
@@ -411,47 +463,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
-    $form['security']['security_assertions_encrypt'] = [
+    $form[$group]['security_assertions_encrypt'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require assertions to be encrypted'),
       // The metadata changes if wantAssertionsEncrypted OR wantNameIdEncrypted
       // are set. But we don't have wantNameIdEncrypted yet, so we'll describe
       // this option as the way to change the metadata.
-      '#description' => $this->t("Assertion elements in response messages from the IdP are expected to be encrypted. (When strict mode is off, this option still has effect: it changes the SP metadata to include this expectation.)"),
+      '#description' => $this->t("Assertion elements in response messages from the IdP are expected to be encrypted. (When strict validation is turned off, this option still has the effect of specifying this expectation in the SP metadata.)"),
       '#default_value' => $config->get('security_assertions_encrypt'),
-    ];
-
-    $form['security']['security_want_name_id'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Require NameID'),
-      // This is the first setting that is TRUE by default AND must be set to
-      // TRUE on existing installations that didn't have this checkbox before,
-      // so it's the first one to get a default value.
-      '#default_value' => $config->get('security_want_name_id') ?? TRUE,
-      '#description' => $this->t('The login response message from the IdP must contain a NameID attribute.'),
-    ];
-
-    $form['security']['security_request_authn_context'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Requested authn context'),
-      '#default_value' => $config->get('security_request_authn_context'),
-    ];
-
-    // I (RM) am just going to throw this out here: this has nothing to do with
-    // 'lowercasing'. When this option is set, the SAML toolkit uses
-    // rawurlencode() rather than urlencode(); their differences have nothing
-    // to do with casing. (The original Python code committed in
-    // https://github.com/onelogin/python-saml/pull/144/files, which inspired
-    // the fix to https://github.com/onelogin/php-saml/issues/136, does have
-    // differences in casing which I have no basis to judge.) I half suspect
-    // that this option is unnecessary in the PHP toolkit, and ALL SAML
-    // conversations work find with this option set / the 'fix' applied. Not
-    // going to investigate this further at the moment, though.
-    $form['security']['security_lowercase_url_encoding'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("'Raw' encoding of SAML messages"),
-      '#description' => $this->t('The default way in which the SAML toolkit encodes SAML messages differs from ADFS IdPs, which makes signature verification fail. When using ADFS and signature verification, this setting must be enabled.'),
-      '#default_value' => $config->get('security_lowercase_url_encoding'),
     ];
 
     return parent::buildForm($form, $form_state);

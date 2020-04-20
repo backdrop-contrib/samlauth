@@ -8,3 +8,9 @@ security_messages_sign: true
 strict: true
 # The following is True by default in the SAML Toolkit too:
 security_want_name_id: true
+# The following option has existed since forever and has not been set to true
+# in this file until 3.x-alpha2, even though it is True by default in the SAML
+# Toolkit. This means it would flip to False, whenever the configuration screen
+# was saved without explicitly checking the checkbox. We'll set it to True for
+# new installations.
+security_request_authn_context: true
