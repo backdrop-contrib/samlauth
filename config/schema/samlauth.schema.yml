@@ -49,6 +49,8 @@ samlauth.authentication:
       type: string
     user_mail_attribute:
       type: string
+    request_set_name_id_policy:
+      type: boolean
     strict:
       type: boolean
     security_authn_requests_sign:

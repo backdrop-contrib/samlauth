@@ -129,7 +129,7 @@ class SamlService {
    *   parameters.
    */
   public function login($return_to = null) {
-    return $this->getSamlAuth()->login($return_to, [], FALSE, FALSE, TRUE);
+    return $this->getSamlAuth()->login($return_to, [], FALSE, FALSE, TRUE, $this->config->get('request_set_name_id_policy') ?? TRUE);
   }
 
   /**
@@ -421,7 +421,7 @@ class SamlService {
         'singleLogoutService' => [
           'url' => Url::fromRoute('samlauth.saml_controller_sls', [], ['absolute' => TRUE])->toString(TRUE)->getGeneratedUrl(),
         ],
-        'NameIDFormat' => $config->get('sp_name_id_format'),
+        'NameIDFormat' => $config->get('sp_name_id_format') ?: NULL,
         'x509cert' => $sp_cert,
         'privateKey' => $sp_key,
       ],

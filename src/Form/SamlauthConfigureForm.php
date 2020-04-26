@@ -111,7 +111,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['saml_login_logout']['drupal_saml_login'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Allow SAML users to log in directly'),
-      '#description' => $this->t('If this option is enabled, users that have a remote SAML ID will also be allowed to log in through the normal Drupal process (without the intervention of the configured identity provider). This option does not change anything to site layout (e.g. enabling menu links); you will need to do this yourself.'),
+      '#description' => $this->t('If this option is enabled, Drupal users that have been linked to a SAML login can also use the Drupal login screen. By default they can only use the SAML Identity Provider.'),
       '#default_value' => $config->get('drupal_saml_login'),
     ];
 
@@ -132,6 +132,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Service Provider Configuration'),
+      '#description' => $this->t('The metadata for the Service Provider is influenced by some "security" options, as well as by the settings in this section.'),
     ];
 
     $form['service_provider']['config_info'] = [
@@ -150,13 +151,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Entity ID'),
       '#description' => $this->t('The identifier representing the SP.'),
       '#default_value' => $config->get('sp_entity_id'),
-    ];
-
-    $form['service_provider']['sp_name_id_format'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Name ID Format'),
-      '#description' => $this->t('The NameIDFormat attribute to request from the identity provider.'),
-      '#default_value' => $config->get('sp_name_id_format'),
     ];
 
     $cert_folder = $config->get('sp_cert_folder');
@@ -291,22 +285,22 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['user_info']['unique_id_attribute'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Unique identifier attribute'),
-      '#description' => $this->t("A SAML attribute that is always going to be unique per user. This will be used to identify local users through an 'auth mapping' (which is stored separately from the user account info).<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
+      '#title' => $this->t('Unique ID attribute'),
+      '#description' => $this->t("A SAML attribute whose value is unique per user and does not change over time. Its value is stored by Drupal and linked to the Drupal user that is logged in. (In principle, a non-transient NameID could also be used for this value; the SAML Authentication module does not support this yet.)<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
       '#default_value' => $config->get('unique_id_attribute') ?: 'eduPersonTargetedID',
     ];
 
     $form['user_info']['map_users'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Attempt to map SAML users to existing local users'),
-      '#description' => $this->t('If this option is enabled and the SAML authentication response is not mapped to a user yet, but the name / e-mail attribute matches an existing non-mapped user, the SAML user will be mapped to the user.'),
+      '#title' => $this->t('Attempt to link SAML data to existing local users'),
+      '#description' => $this->t('If the unique ID in the SAML assertion is not linked to a Drupal user, and the name / e-mail attribute matches an existing non-linked Drupal user, that user will be linked.'),
       '#default_value' => $config->get('map_users'),
     ];
 
     $form['user_info']['create_users'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Create users specified by SAML server'),
-      '#description' => $this->t('If this option is enabled and the SAML authentication response is not mapped to a user, a new user is created using the name / e-mail attributes from the response.'),
+      '#title' => $this->t('Create users from SAML data'),
+      '#description' => $this->t('If data in the SAML assertion is not linked to a Drupal user, a new user is created using the name / e-mail attributes from the response.'),
       '#default_value' => $config->get('create_users'),
     ];
 
@@ -314,20 +308,20 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'checkbox',
       '#title' => $this->t('Synchronize user name on every login'),
       '#default_value' => $config->get('sync_name'),
-      '#description' => $this->t('If this option is enabled, any changes to the name of SAML users will be propagated into Drupal user accounts.'),
+      '#description' => $this->t('The name attribute in the SAML assertion will be propagated to the linked Drupal user on every login. By default the Drupal user name is not changed after user creation.'),
     ];
 
     $form['user_info']['sync_mail'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Synchronize email address on every login'),
       '#default_value' => $config->get('sync_mail'),
-      '#description' => $this->t('If this option is enabled, any changes to the email address of SAML users will be propagated into Drupal user accounts.'),
+      '#description' => $this->t('The email attribute in the SAML assertion will be propagated to the linked Drupal user on every login. By default the Drupal user email is not changed after user creation.'),
     ];
 
     $form['user_info']['user_name_attribute'] = [
       '#type' => 'textfield',
       '#title' => $this->t('User name attribute'),
-      '#description' => $this->t('When SAML users are mapped / created, this field specifies which SAML attribute should be used for the Drupal user name.<br />Example: <em>cn</em> or <em>eduPersonPrincipalName</em>'),
+      '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal user name.<br />Example: <em>cn</em> or <em>eduPersonPrincipalName</em>'),
       '#default_value' => $config->get('user_name_attribute') ?: 'cn',
       '#states' => [
         'invisible' => [
@@ -341,7 +335,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['user_info']['user_mail_attribute'] = [
       '#type' => 'textfield',
       '#title' => $this->t('User email attribute'),
-      '#description' => $this->t('When SAML users are mapped / created, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
+      '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
       '#default_value' => $config->get('user_mail_attribute') ?: 'email',
       '#states' => [
         'invisible' => [
@@ -426,6 +420,23 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_request_authn_context'),
     ];
 
+    $form['security']['request_set_name_id_policy'] = [
+      '#type' => 'checkbox',
+      '#title' => t('Specify NameID policy'),
+      '#description' => t('A NameIDPolicy element is added in authentication requests. This is default behavior for the SAML Toolkit library, but may be unneeded. If checked, "NameID Format" may need to be specified too. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
+      // This is one of the few checkboxes that must be TRUE on existing
+      // installations where the checkbox didn't exist before (in older module
+      // versions). Others get their default only from the config/install file.
+      '#default_value' => $config->get('request_set_name_id_policy') ?? TRUE,
+    ];
+
+    $form['security']['sp_name_id_format'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('NameID Format'),
+      '#description' => $this->t('The format for the NameID attribute to request from the identity provider. If "Specify NameID policy" is unchecked, this value is not included in authentication requests but is still included in the SP metadata. Some common formats (with "unspecified" being the default):<br>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified<br>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress<br>urn:oasis:names:tc:SAML:2.0:nameid-format:transient<br>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'),
+      '#default_value' => $config->get('sp_name_id_format'),
+    ];
+
     // Just mucking around with grouping of options a bit...
     $form['responses'] = [
       '#title' => $this->t('Security / SAML Response Validation'),
@@ -433,14 +444,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
     $group = isset($form['responses']) ? 'responses' : 'security';
 
-
     $form[$group]['security_want_name_id'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require NameID'),
-      '#description' => $this->t('The login response message from the IdP must contain a NameID attribute.'),
-      // This is the first checkbox that is TRUE by default AND must be set to
-      // TRUE on existing module installations that didn't have the checkbox
-      // before, so it's the first one to get a default value in this form.
+      '#description' => $this->t('The login response message from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
+      // This is one of the few checkboxes that must be TRUE on existing
+      // installations where the checkbox didn't exist before (in older module
+      // versions). Others get their default only from the config/install file.
       '#default_value' => $config->get('security_want_name_id') ?? TRUE,
     ];
 
@@ -566,6 +576,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_assertions_encrypt', $form_state->getValue('security_assertions_encrypt'))
       ->set('security_lowercase_url_encoding', $form_state->getValue('security_lowercase_url_encoding'))
       ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))
+      ->set('request_set_name_id_policy', $form_state->getValue('request_set_name_id_policy'))
       ->set('security_want_name_id', $form_state->getValue('security_want_name_id'))
       ->set('security_request_authn_context', $form_state->getValue('security_request_authn_context'))
       ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))

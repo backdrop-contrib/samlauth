@@ -6,7 +6,14 @@ security_authn_requests_sign: true
 security_logout_requests_sign: true
 security_messages_sign: true
 strict: true
-# The following is True by default in the SAML Toolkit too:
+# The following are True by default in the SAML Toolkit. They have defaults in
+# the configuration screen's code to make sure existing installs were not
+# affected (i.e. values kept being True) when these configuration settings were
+# added. So those defaults in code should keep being set for backward
+# compatibility, even if we decide to set explicitly set these options to False
+# in this file, for new installations. (We may well want to do that for the
+# NameID options, once we're sure this has no adverse effects.)
+request_set_name_id_policy: true
 security_want_name_id: true
 # The following option has existed since forever and has not been set to true
 # in this file until 3.x-alpha2, even though it is True by default in the SAML
