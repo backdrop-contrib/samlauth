@@ -57,6 +57,8 @@ samlauth.authentication:
       type: boolean
     security_logout_requests_sign:
       type: boolean
+    security_logout_responses_sign:
+      type: boolean
     security_assertions_encrypt:
       type: boolean
     security_signature_algorithm:

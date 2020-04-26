@@ -229,21 +229,21 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['identity_provider']['idp_single_sign_on_service'] = [
       '#type' => 'url',
       '#title' => $this->t('Single Sign On Service'),
-      '#description' => $this->t('URL where the SP will send the authentication request message.'),
+      '#description' => $this->t('URL where the SP will direct authentication requests.'),
       '#default_value' => $config->get('idp_single_sign_on_service'),
     ];
 
     $form['identity_provider']['idp_single_log_out_service'] = [
       '#type' => 'url',
       '#title' => $this->t('Single Logout Service'),
-      '#description' => $this->t('URL where the SP will send the logout request message.'),
+      '#description' => $this->t('URL where the SP will direct logout requests.'),
       '#default_value' => $config->get('idp_single_log_out_service'),
     ];
 
     $form['identity_provider']['idp_change_password_service'] = [
       '#type' => 'url',
       '#title' => $this->t('Change Password Service'),
-      '#description' => $this->t('URL where users will be redirected to change their password.'),
+      '#description' => $this->t('URL where users will be directed to change their password.'),
       '#default_value' => $config->get('idp_change_password_service'),
     ];
 
@@ -347,7 +347,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
 
     $form['security'] = [
-      '#title' => $this->t('Security / SAML Request Contents'),
+      '#title' => $this->t('SAML Message Construction'),
       '#type' => 'fieldset',
     ];
 
@@ -363,6 +363,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Sign logout requests'),
       '#description' => $this->t('Requests sent to the Single Logout Service of the IdP will include a signature.'),
       '#default_value' => $config->get('security_logout_requests_sign'),
+    ];
+
+    $form['security']['security_logout_responses_sign'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Sign logout responses'),
+      '#description' => $this->t('Responses sent back to the IdP will include a signature.'),
+      '#default_value' => $config->get('security_logout_responses_sign'),
     ];
 
     $form['security']['security_signature_algorithm'] = [
@@ -382,13 +389,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
         'invisible' => [
           ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
           ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
+          ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
         ],
       ],
     ];
 
-    // This option has effect on signing of (login + logout) requests and on
-    // verification of signatures on logout responses. But we never turn on
-    // 'logoutResponseSigned' yet, so the latter isn't important yet.
+    // This option has effect on signing of (login + logout) requests and
+    // logout responses.
     // Something else I (RM) am just going to throw out here: this has nothing
     // to do with 'lowercasing'. When this option is set, the SAML toolkit uses
     // rawurlencode() rather than urlencode(); their differences have nothing
@@ -402,13 +409,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['security']['security_lowercase_url_encoding'] = [
       '#type' => 'checkbox',
       '#title' => $this->t("'Raw' encoding of SAML messages"),
-      '#description' => $this->t('The default way in which the SAML Toolkit library encodes SAML messages differs from ADFS IdPs, which makes signature validation fail. When using ADFS and signing requests, this setting must be enabled.'),
+      '#description' => $this->t('The default way in which the SAML Toolkit library encodes SAML requests (and logout responses) differs from ADFS IdPs, which makes signature validation fail. When using ADFS and signing requests, this setting must be enabled.'),
       '#default_value' => $config->get('security_lowercase_url_encoding'),
-      // These #states are valid as long as we don't do logoutResponseSigned.
       '#states' => [
         'disabled' => [
           ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
           ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
+          ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
         ],
       ],
     ];
@@ -439,7 +446,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     // Just mucking around with grouping of options a bit...
     $form['responses'] = [
-      '#title' => $this->t('Security / SAML Response Validation'),
+      '#title' => $this->t('SAML Message Validation'),
       '#type' => 'fieldset',
     ];
     $group = isset($form['responses']) ? 'responses' : 'security';
@@ -447,7 +454,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form[$group]['security_want_name_id'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require NameID'),
-      '#description' => $this->t('The login response message from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
+      '#description' => $this->t('The login response from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
       // This is one of the few checkboxes that must be TRUE on existing
       // installations where the checkbox didn't exist before (in older module
       // versions). Others get their default only from the config/install file.
@@ -464,7 +471,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form[$group]['security_messages_sign'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require messages to be signed'),
-      '#description' => $this->t('Response messages from the IdP are expected to be signed.'),
+      '#description' => $this->t('Responses (and logout requests) from the IdP are expected to be signed.'),
       '#default_value' => $config->get('security_messages_sign'),
       '#states' => [
         'disabled' => [
@@ -479,7 +486,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // The metadata changes if wantAssertionsEncrypted OR wantNameIdEncrypted
       // are set. But we don't have wantNameIdEncrypted yet, so we'll describe
       // this option as the way to change the metadata.
-      '#description' => $this->t("Assertion elements in response messages from the IdP are expected to be encrypted. (When strict validation is turned off, this option still has the effect of specifying this expectation in the SP metadata.)"),
+      '#description' => $this->t("Assertion elements in responses from the IdP are expected to be encrypted. (When strict validation is turned off, this option still has the effect of specifying this expectation in the SP metadata.)"),
       '#default_value' => $config->get('security_assertions_encrypt'),
     ];
 
@@ -573,6 +580,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('user_mail_attribute', $form_state->getValue('user_mail_attribute'))
       ->set('security_authn_requests_sign', $form_state->getValue('security_authn_requests_sign'))
       ->set('security_logout_requests_sign', $form_state->getValue('security_logout_requests_sign'))
+      ->set('security_logout_responses_sign', $form_state->getValue('security_logout_responses_sign'))
       ->set('security_assertions_encrypt', $form_state->getValue('security_assertions_encrypt'))
       ->set('security_lowercase_url_encoding', $form_state->getValue('security_lowercase_url_encoding'))
       ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))

@@ -4,6 +4,7 @@
 # from the SAML Toolkit which does not set these values to True by default.
 security_authn_requests_sign: true
 security_logout_requests_sign: true
+security_logout_responses_sign: true
 security_messages_sign: true
 strict: true
 # The following are True by default in the SAML Toolkit. They have defaults in
