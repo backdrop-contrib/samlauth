@@ -461,6 +461,25 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_want_name_id') ?? TRUE,
     ];
 
+    // This option's default value is FALSE but according to the SAML spec,
+    // signing parameters should always be retrieved from the original request
+    // instead of recalculated. (As argued in e.g.
+    // https://github.com/onelogin/php-saml/issues/130.) The 'TRUE' option
+    // (which was implemented in #6a828bf, as a result of
+    // https://github.com/onelogin/php-saml/pull/37) reads the parameters from
+    // $_SERVER['REQUEST'] but unfortunately this is not always populated in
+    // all PHP/webserver configurations. IMHO the code should have a fallback
+    // to other 'self encoding' methods if $_SERVER['REQUEST'] is empty; I see
+    // no downside to that and it would enable us to always set TRUE / get rid
+    // of this option in a future version of the SAML Toolkit library.
+    // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
+    $form[$group]['security_logout_reuse_sigs'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Retrieve logout signature parameters from \$_SERVER['REQUEST']"),
+      '#description' => $this->t('Validation of logout requests/responses can fail on some IdPs (among others, ADFS) if this option is not set. This happens independently of the  "Strict validation" option.'),
+      '#default_value' => $config->get('security_logout_reuse_sigs'),
+    ];
+
     $form[$group]['strict'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Strict validation of responses'),
@@ -586,6 +605,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))
       ->set('request_set_name_id_policy', $form_state->getValue('request_set_name_id_policy'))
       ->set('security_want_name_id', $form_state->getValue('security_want_name_id'))
+      ->set('security_logout_reuse_sigs', $form_state->getValue('security_logout_reuse_sigs'))
       ->set('security_request_authn_context', $form_state->getValue('security_request_authn_context'))
       ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))
       ->set('strict', $form_state->getValue('strict'))

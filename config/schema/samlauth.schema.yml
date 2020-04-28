@@ -71,3 +71,5 @@ samlauth.authentication:
       type: boolean
     security_lowercase_url_encoding:
       type: boolean
+    security_logout_reuse_sigs:
+      type: boolean

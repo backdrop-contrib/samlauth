@@ -288,7 +288,7 @@ class SamlService {
     // This call can either set an error condition or throw a
     // \OneLogin_Saml2_Error exception, depending on whether or not we are
     // processing a POST request. Don't catch the exception.
-    $url = $this->getSamlAuth()->processSLO(FALSE, NULL, FALSE, NULL, TRUE);
+    $url = $this->getSamlAuth()->processSLO(FALSE, NULL, (bool) $this->config->get('security_logout_reuse_sigs'), NULL, TRUE);
     // Now look if there were any errors and also throw.
     $errors = $this->getSamlAuth()->getErrors();
     if (!empty($errors)) {
