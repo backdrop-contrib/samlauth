@@ -123,13 +123,15 @@ class SamlService {
    * @param string $return_to
    *   (optional) The path to return the user to after successful processing by
    *   the IdP.
+   * @param array $parameters
+   *   (optional) Extra query parameters to add to the returned redirect URL.
    *
    * @return string
    *   The URL of the single sign-on service to redirect to, including query
    *   parameters.
    */
-  public function login($return_to = null) {
-    return $this->getSamlAuth()->login($return_to, [], FALSE, FALSE, TRUE, $this->config->get('request_set_name_id_policy') ?? TRUE);
+  public function login($return_to = null, $parameters = []) {
+    return $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $this->config->get('request_set_name_id_policy') ?? TRUE);
   }
 
   /**
@@ -138,15 +140,17 @@ class SamlService {
    * @param null $return_to
    *   (optional) The path to return the user to after successful processing by
    *   the IdP.
+   * @param array $parameters
+   *   (optional) Extra query parameters to add to the returned redirect URL.
    *
    * @return string
    *   The URL of the single logout service to redirect to, including query
    *   parameters.
    */
-  public function logout($return_to = null) {
+  public function logout($return_to = null, $parameters = []) {
     return $this->getSamlAuth()->logout(
       $return_to,
-      [],
+      $parameters,
       $this->privateTempStore->get('name_id'),
       $this->privateTempStore->get('session_index'),
       TRUE,
