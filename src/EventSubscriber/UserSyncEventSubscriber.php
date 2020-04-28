@@ -162,7 +162,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
     }
 
     // Synchronize e-mail.
-    if ($account->isNew() || $this->config->get('sync_mail')) {
+    if ($this->config->get('user_mail_attribute') && ($account->isNew() || $this->config->get('sync_mail'))) {
       $mail = $this->getAttributeByConfig('user_mail_attribute', $event);
       if ($mail) {
         if ($mail != $account->getEmail()) {
