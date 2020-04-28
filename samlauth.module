@@ -45,9 +45,15 @@ function samlauth_check_saml_user($form, FormStateInterface $form_state) {
     }
 
     // If the user has logged into the site using samlauth before, block them.
-    // (There currently is no option to disallow _any_ user from logging in
-    // locally.)
-    if ($account = user_load_by_name($form_state->getValue('name'))) {
+    // (There is no option to disallow _any_ user from logging in locally;
+    // that's not considered the business of this module.) Account for modules
+    // that change the login form, only in the sense that we check whether the
+    // 'name' element actually exists. If modules change the login form (by
+    // e.g. having a 'mail' element instead, or having the 'name' field contain
+    // an e-mail address) and need this blocking to work (differently), that
+    // should be solved by a custom module to make both work together. (Or a
+    // well thought out suggestion in the issue queue.)
+    if ($form_state->hasValue('name') && $account = user_load_by_name($form_state->getValue('name'))) {
       /** @var \Drupal\externalauth\AuthmapInterface $authmap */
       $authmap = \Drupal::service('externalauth.authmap');
       $saml_id = $authmap->get($account->id(), 'samlauth');
