@@ -322,7 +322,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'textfield',
       '#title' => $this->t('User name attribute'),
       '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal user name.<br />Example: <em>cn</em> or <em>eduPersonPrincipalName</em>'),
-      '#default_value' => $config->get('user_name_attribute') ?: 'cn',
+      '#default_value' => $config->get('user_name_attribute'),
       '#states' => [
         'invisible' => [
           ':input[name="map_users"]' => ['checked' => FALSE],
@@ -336,7 +336,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'textfield',
       '#title' => $this->t('User email attribute'),
       '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
-      '#default_value' => $config->get('user_mail_attribute') ?: 'email',
+      '#default_value' => $config->get('user_mail_attribute'),
       '#states' => [
         'invisible' => [
           ':input[name="map_users"]' => ['checked' => FALSE],
