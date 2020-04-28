@@ -111,7 +111,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['saml_login_logout']['drupal_saml_login'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Allow SAML users to log in directly'),
-      '#description' => $this->t('If this option is enabled, Drupal users that have been linked to a SAML login can also use the Drupal login screen. By default they can only use the SAML Identity Provider.'),
+      '#description' => $this->t('Drupal users who have previously logged in through the SAML Identity Provider can also log in through the standard Drupal login screen. (By default, they must always log in through the Identity Provider. This option does not affect Drupal user acounts that are never linked to a SAML login.)'),
       '#default_value' => $config->get('drupal_saml_login'),
     ];
 
@@ -131,8 +131,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['service_provider'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('Service Provider Configuration'),
-      '#description' => $this->t('The metadata for the Service Provider is influenced by some "security" options, as well as by the settings in this section.'),
+      '#title' => $this->t('Service Provider'),
     ];
 
     $form['service_provider']['config_info'] = [
@@ -144,6 +143,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
       '#empty' => [],
       '#list_type' => 'ul',
+      '#suffix' => $this->t("The info advertised at the metadata URL are influenced by this configuration section, as well as by some more advanced SAML message options below. Those options often don't matter for getting SAML login into Drupal to work."),
     ];
 
     $form['service_provider']['sp_entity_id'] = [
@@ -208,7 +208,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['identity_provider'] = [
       '#type' => 'fieldset',
-      '#title' => $this->t('Identity Provider Configuration'),
+      '#title' => $this->t('Identity Provider'),
     ];
 
     // @TODO: Allow a user to automagically populate this by providing a metadata URL for the IdP.
@@ -293,7 +293,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['user_info']['map_users'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Attempt to link SAML data to existing local users'),
-      '#description' => $this->t('If the unique ID in the SAML assertion is not linked to a Drupal user, and the name / e-mail attribute matches an existing non-linked Drupal user, that user will be linked.'),
+      '#description' => $this->t('If the unique ID in the SAML assertion is not linked to a Drupal user, and the name / e-mail attribute matches an existing non-linked Drupal user, that user will be linked and logged in. (By default, a new user is created with the same data depending on the next option - which may result in an error about a duplicate or missing user.)'),
       '#default_value' => $config->get('map_users'),
     ];
 
@@ -308,14 +308,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'checkbox',
       '#title' => $this->t('Synchronize user name on every login'),
       '#default_value' => $config->get('sync_name'),
-      '#description' => $this->t('The name attribute in the SAML assertion will be propagated to the linked Drupal user on every login. By default the Drupal user name is not changed after user creation.'),
+      '#description' => $this->t('The name attribute in the SAML assertion will be propagated to the linked Drupal user on every login. (By default, the Drupal user name is not changed after user creation.)'),
     ];
 
     $form['user_info']['sync_mail'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Synchronize email address on every login'),
       '#default_value' => $config->get('sync_mail'),
-      '#description' => $this->t('The email attribute in the SAML assertion will be propagated to the linked Drupal user on every login. By default the Drupal user email is not changed after user creation.'),
+      '#description' => $this->t('The email attribute in the SAML assertion will be propagated to the linked Drupal user on every login. (By default, the Drupal user email is not changed after user creation.)'),
     ];
 
     $form['user_info']['user_name_attribute'] = [
@@ -387,32 +387,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_signature_algorithm'),
       '#states' => [
         'invisible' => [
-          ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
-          ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
-          ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
-        ],
-      ],
-    ];
-
-    // This option has effect on signing of (login + logout) requests and
-    // logout responses.
-    // Something else I (RM) am just going to throw out here: this has nothing
-    // to do with 'lowercasing'. When this option is set, the SAML toolkit uses
-    // rawurlencode() rather than urlencode(); their differences have nothing
-    // to do with casing. (The original Python code committed in
-    // https://github.com/onelogin/python-saml/pull/144/files, which inspired
-    // the fix to https://github.com/onelogin/php-saml/issues/136, does have
-    // differences in casing which I have no basis to judge.) I half suspect
-    // that this option is unnecessary in the PHP toolkit, and ALL SAML
-    // conversations work fine with this option set / the 'fix' applied. Not
-    // going to investigate this further at the moment, though.
-    $form['security']['security_lowercase_url_encoding'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("'Raw' encoding of SAML messages"),
-      '#description' => $this->t('The default way in which the SAML Toolkit library encodes SAML requests (and logout responses) differs from ADFS IdPs, which makes signature validation fail. When using ADFS and signing requests, this setting must be enabled.'),
-      '#default_value' => $config->get('security_lowercase_url_encoding'),
-      '#states' => [
-        'disabled' => [
           ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
           ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
           ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
@@ -507,6 +481,42 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // this option as the way to change the metadata.
       '#description' => $this->t("Assertion elements in responses from the IdP are expected to be encrypted. (When strict validation is turned off, this option still has the effect of specifying this expectation in the SP metadata.)"),
       '#default_value' => $config->get('security_assertions_encrypt'),
+    ];
+
+    $form['debugging'] = [
+      '#title' => $this->t('Debugging'),
+      '#type' => 'fieldset',
+    ];
+
+    // This option has effect on signing of (login + logout) requests and
+    // logout responses. It's badly named (in the SAML Toolkit;
+    // "lowercaseUrlencoding") because there has never been any connection to
+    // the case of URL-encoded strings. The only thing this does is use
+    // rawurlencode() rather than urlencode() for URL encoding of signatures
+    // sent to the IdP. This option arguably shouldn't even exist because the
+    // use of urlencode() arguably is a bug that should just have been fixed.
+    // (The name "lowercaseUrlencoding" seems to come from a mistake: it
+    // originates from https://github.com/onelogin/python-saml/pull/144/files,
+    // a PR for the signature validation code for incoming messages, which was
+    // then mentioned in https://github.com/onelogin/php-saml/issues/136.
+    // However, the latter / this option is about signature generation for
+    // outgoing messages. Validation concerns different code, and is influenced
+    // by the 'security_logout_reuse_sigs' option below, which has its own
+    // issues.) This means that the default value should actually be TRUE.
+    // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
+    // @TODO change default to TRUE; amend description (and d.o issue, and README
+    $form['debugging']['security_lowercase_url_encoding'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("'Raw' encoding of SAML messages"),
+      '#description' => $this->t("If there is ever a reason to turn this option off, a bug report is greatly appreciated. (The module author believes this option is unnecessary and plans for a PR to the SAML Toolkit to re-document it / phase it out. If you installed this module prior to 8.x-3.0-alpha2 and this option is turned off already, that's fine - changing it should make no difference.)"),
+      '#default_value' => $config->get('security_lowercase_url_encoding'),
+      '#states' => [
+        'disabled' => [
+          ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
+          ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
+          ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
+        ],
+      ],
     ];
 
     return parent::buildForm($form, $form_state);
