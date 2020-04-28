@@ -2,6 +2,7 @@
 
 namespace Drupal\samlauth\EventSubscriber;
 
+use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Routing\LocalRedirectResponse;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Routing\RouteMatch;
@@ -17,6 +18,16 @@ use Symfony\Component\HttpKernel\KernelEvents;
 class AccessDeniedSubscriber implements EventSubscriberInterface {
 
   /**
+   * Routes to check.
+   *
+   * @var array
+   */
+  const INTERNALROUTES = [
+    'samlauth.saml_controller_login',
+    'samlauth.saml_controller_acs',
+  ];
+
+  /**
    * The current user.
    *
    * @var \Drupal\Core\Session\AccountInterface
@@ -24,13 +35,23 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
   protected $account;
 
   /**
+   * Path validator.
+   *
+   * @var \Drupal\Core\Path\PathValidatorInterface
+   */
+  protected $pathValidator;
+
+  /**
    * Constructs a new redirect subscriber.
    *
    * @param \Drupal\Core\Session\AccountInterface $account
    *   The current user.
+   * @param \Drupal\Core\Path\PathValidatorInterface $path_validator
+   *   Path validator.
    */
-  public function __construct(AccountInterface $account) {
+  public function __construct(AccountInterface $account, PathValidatorInterface $path_validator) {
     $this->account = $account;
+    $this->pathValidator = $path_validator;
   }
 
   /**
@@ -42,13 +63,23 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
   public function onException(GetResponseForExceptionEvent $event) {
     $exception = $event->getException();
     if ($exception instanceof AccessDeniedHttpException && $this->account->isAuthenticated()) {
-      $route_name = RouteMatch::createFromRequest($event->getRequest())->getRouteName();
-      switch ($route_name) {
-        case 'samlauth.saml_controller_login':
-        case 'samlauth.saml_controller_acs':
-          // Redirect an authenticated user to the profile page.
-          $url = Url::fromRoute('entity.user.canonical', ['user' => $this->account->id()])->toString(TRUE)->getGeneratedUrl();
-          $event->setResponse(new LocalRedirectResponse($url));
+      $route_name = RouteMatch::createFromRequest($event->getRequest())
+        ->getRouteName();
+      if (in_array($route_name, self::INTERNALROUTES)) {
+        // If a RelayState is provided the allow that redirection to happen,
+        // otherwise redirect an authenticated user to the profile page.
+        if ($relay_state = $event->getRequest()->request->get('RelayState')) {
+          /* @var $relay_url Url */
+          if ($relay_url = $this->pathValidator->getUrlIfValidWithoutAccessCheck($relay_state)) {
+            $url = $relay_url->toUriString();
+          }
+        }
+        else {
+          $url = Url::fromRoute('entity.user.canonical', ['user' => $this->account->id()])
+            ->toString(TRUE)
+            ->getGeneratedUrl();
+        }
+        $event->setResponse(new LocalRedirectResponse($url));
       }
     }
   }

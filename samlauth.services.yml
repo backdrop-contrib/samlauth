@@ -12,6 +12,6 @@ services:
       - { name: event_subscriber }
   samlauth.event_subscriber.user_access_denied:
     class: Drupal\samlauth\EventSubscriber\AccessDeniedSubscriber
-    arguments: ['@current_user']
+    arguments: ['@current_user', '@path.validator']
     tags:
       - { name: event_subscriber }
