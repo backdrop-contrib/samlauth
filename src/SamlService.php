@@ -402,8 +402,10 @@ class SamlService {
     $sp_key = '';
     $cert_folder = $config->get('sp_cert_folder');
     if ($cert_folder) {
-      // Set the folder so the Simple SAML toolkit knows where to look.
-      define('ONELOGIN_CUSTOMPATH', "$cert_folder/");
+      // Set the folder so the SAML toolkit knows where to look.
+      if (!defined('ONELOGIN_CUSTOMPATH')) {
+        define('ONELOGIN_CUSTOMPATH', "$cert_folder/");
+      }
     }
     else {
       $sp_cert = $config->get('sp_x509_certificate');
