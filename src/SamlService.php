@@ -10,7 +10,7 @@ use Drupal\externalauth\ExternalAuth;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
-use Drupal\user\PrivateTempStoreFactory;
+use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\user\UserInterface;
 use Exception;
 use OneLogin\Saml2\Auth;
@@ -67,11 +67,11 @@ class SamlService {
   protected $eventDispatcher;
 
   /**
-   * Private account session store.
+   * The tempstore factory.
    *
-   * @var \Drupal\user\PrivateTempStore.
+   * @var \Drupal\Core\TempStore\PrivateTempStoreFactory
    */
-  protected $privateTempStore;
+  protected $tempStoreFactory;
 
   /**
    * Constructor for Drupal\samlauth\SamlService.
@@ -86,7 +86,7 @@ class SamlService {
    *   A logger instance.
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $event_dispatcher
    *   The event dispatcher.
-   * @param \Drupal\user\PrivateTempStoreFactory $temp_store_factory
+   * @param \Drupal\Core\TempStore\PrivateTempStoreFactory $temp_store_factory
    *   A temp data store factory object.
    */
   public function __construct(ExternalAuth $external_auth, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory) {
@@ -95,7 +95,7 @@ class SamlService {
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger;
     $this->eventDispatcher = $event_dispatcher;
-    $this->privateTempStore = $temp_store_factory->get('samlauth');
+    $this->tempStoreFactory = $temp_store_factory->get('samlauth');
   }
 
   /**
@@ -151,10 +151,10 @@ class SamlService {
     return $this->getSamlAuth()->logout(
       $return_to,
       $parameters,
-      $this->privateTempStore->get('name_id'),
-      $this->privateTempStore->get('session_index'),
+      $this->tempStoreFactory->get('name_id'),
+      $this->tempStoreFactory->get('session_index'),
       TRUE,
-      $this->privateTempStore->get('name_id_format')
+      $this->tempStoreFactory->get('name_id_format')
     );
   }
 
@@ -274,10 +274,10 @@ class SamlService {
                'name_id_format' => $this->samlAuth->getNameIdFormat(),
              ] as $key => $value) {
       if (isset($value)) {
-        $this->privateTempStore->set($key, $value);
+        $this->tempStoreFactory->set($key, $value);
       }
       else {
-        $this->privateTempStore->delete($key);
+        $this->tempStoreFactory->delete($key);
       }
     }
   }
@@ -307,7 +307,7 @@ class SamlService {
     if (!$url) {
       // Delete private stored session information.
       foreach (['session_index', 'session_expiration'] as $key) {
-        $this->privateTempStore->delete($key);
+        $this->tempStoreFactory->delete($key);
       }
       user_logout();
     }

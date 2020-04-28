@@ -154,7 +154,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
               // the law of dependency injection for this.)
               $error = "Error updating user name from SAML attribute: $error";
               $this->logger->error($error, ['@username' => $name]);
-              drupal_set_message(t($error, ['@username' => $name]), 'error');
+              \Drupal::messenger()->addError(t($error, ['@username' => $name]));
             }
           }
         }

@@ -421,7 +421,7 @@ class SamlController extends ControllerBase {
     $this->getLogger('samlauth')->critical("%type encountered$while: @message in %function (line %line of %file).", $error);
     // Don't expose the error to prevent information leakage; the user probably
     // can't do much with it anyway. But hint that more details are available.
-    drupal_set_message("Error encountered$while; details have been logged.", 'error');
+    \Drupal::messenger()->addError("Error encountered{$while}; details have been logged.");
   }
 
 }
