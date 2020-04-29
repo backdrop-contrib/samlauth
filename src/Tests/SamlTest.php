@@ -2,7 +2,6 @@
 
 namespace Drupal\samlauth\Tests;
 
-use Drupal\Core\Url;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Component\Serialization\Yaml;
 
@@ -13,16 +12,25 @@ use Drupal\Component\Serialization\Yaml;
  */
 class SamlTest extends BrowserTestBase {
 
-  // We don't need a strict schema. There *isn't* one.
+  /**
+   * We don't need a strict schema. There *isn't* one.
+   */
   protected $strictConfigSchema = FALSE;
-  public static $modules = array('samlauth');
 
+  /**
+   * Modules to Enable.
+   */
+  public static $modules = ['samlauth'];
+
+  /**
+   * Return info on the test.
+   */
   public static function getInfo() {
-    return array(
+    return [
       'name' => 'Tests SAML authentication',
       'description' => 'Functional tests for the samlauth module functionality.',
       'group' => 'samlauth',
-    );
+    ];
   }
 
   /**
@@ -30,6 +38,9 @@ class SamlTest extends BrowserTestBase {
    */
   protected $defaultTheme = 'stark';
 
+  /**
+   * {@inheritdoc}
+   */
   public function setUp() {
     parent::setUp();
 
@@ -40,6 +51,9 @@ class SamlTest extends BrowserTestBase {
     \Drupal::configFactory()->getEditable('samlauth.authentication')->setData($config)->save();
   }
 
+  /**
+   * Tests the Admin Page.
+   */
   public function testAdminPage() {
     // Test that the administration page is present.
     // These aren't very good tests, but the form and config systems are already
@@ -55,6 +69,9 @@ class SamlTest extends BrowserTestBase {
     $this->assertText('SAML Message Validation', 'SAML Message Validation fieldset present');
   }
 
+  /**
+   * Tests metadata coming back.
+   */
   public function testMetadata() {
     $web_user = $this->drupalCreateUser(['view sp metadata']);
     $this->drupalLogin($web_user);
@@ -64,4 +81,5 @@ class SamlTest extends BrowserTestBase {
     $this->assertResponse(200, 'SP metadata is accessible');
     $this->assertRaw('entityID="samlauth"', 'Entity ID found in the metadata');
   }
+
 }

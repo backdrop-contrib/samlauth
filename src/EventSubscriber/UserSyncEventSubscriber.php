@@ -137,7 +137,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
         // Check if the username is not already taken by someone else. For new
         // accounts this can happen if the 'map existing users' setting is off.
         if (!$fatal_errors) {
-          $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(array('name' => $name));
+          $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name]);
           $existing_account = reset($account_search);
           if (!$existing_account || $account->id() == $existing_account->id()) {
             $account->setUsername($name);
@@ -171,7 +171,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
 
             $account->setEmail($mail);
             if ($account->isNew()) {
-              // externalauth sets init to a non e-mail value so we will fix it.
+              // Externalauth sets init to a non e-mail value so we will fix it.
               $account->set('init', $mail);
             }
             $event->markAccountChanged();

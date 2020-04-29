@@ -99,9 +99,10 @@ class SamlService {
   }
 
   /**
-   * Show metadata about the local sp. Use this to configure your saml2 IdP
+   * Show metadata about the local sp. Use this to configure your saml2 IdP.
    *
    * @return mixed xml string representing metadata
+   *
    * @throws \OneLogin\Saml2\Error
    */
   public function getMetadata() {
@@ -130,7 +131,7 @@ class SamlService {
    *   The URL of the single sign-on service to redirect to, including query
    *   parameters.
    */
-  public function login($return_to = null, $parameters = []) {
+  public function login($return_to = NULL, $parameters = []) {
     $url = $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $this->config->get('request_set_name_id_policy') ?? TRUE);
     if ($this->config->get('debug_log_saml_out')) {
       $this->logger->debug('Sending SAML login request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
@@ -151,7 +152,7 @@ class SamlService {
    *   The URL of the single logout service to redirect to, including query
    *   parameters.
    */
-  public function logout($return_to = null, $parameters = []) {
+  public function logout($return_to = NULL, $parameters = []) {
     $url = $this->getSamlAuth()->logout(
       $return_to,
       $parameters,
@@ -173,7 +174,7 @@ class SamlService {
    * Drupal user (logs in / maps existing / create new) depending on attributes
    * sent in the request and our module configuration.
    *
-   * @throws Exception
+   * @throws \Exception
    */
   public function acs() {
     if ($this->config->get('debug_log_in')) {
@@ -296,11 +297,11 @@ class SamlService {
     // Set some request properties in local private storage. We can use these on
     // logout.
     foreach ([
-               'session_index' => $this->samlAuth->getSessionIndex(),
-               'session_expiration' => $this->samlAuth->getSessionExpiration(),
-               'name_id' => $this->samlAuth->getNameId(),
-               'name_id_format' => $this->samlAuth->getNameIdFormat(),
-             ] as $key => $value) {
+      'session_index' => $this->samlAuth->getSessionIndex(),
+      'session_expiration' => $this->samlAuth->getSessionExpiration(),
+      'name_id' => $this->samlAuth->getNameId(),
+      'name_id_format' => $this->samlAuth->getNameIdFormat(),
+    ] as $key => $value) {
       if (isset($value)) {
         $this->tempStoreFactory->set($key, $value);
       }
@@ -530,22 +531,23 @@ class SamlService {
     $multi = $config->get('idp_cert_type');
     switch ($multi) {
       case "signing":
-        $library_config['idp']['x509certMulti'] = array (
-          'signing' => array (
+        $library_config['idp']['x509certMulti'] = [
+          'signing' => [
             $config->get('idp_x509_certificate'),
             $config->get('idp_x509_certificate_multi'),
-          )
-        );
+          ],
+        ];
         break;
+
       case "encryption":
-        $library_config['idp']['x509certMulti'] = array (
-          'signing' => array (
+        $library_config['idp']['x509certMulti'] = [
+          'signing' => [
             $config->get('idp_x509_certificate'),
-          ),
-          'encryption' => array (
+          ],
+          'encryption' => [
             $config->get('idp_x509_certificate_multi'),
-          ),
-        );
+          ],
+        ];
         break;
     }
 

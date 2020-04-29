@@ -61,7 +61,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    */
   protected function getEditableConfigNames() {
     return [
-      'samlauth.authentication'
+      'samlauth.authentication',
     ];
   }
 
@@ -88,9 +88,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $form['saml_login_logout']['menu_item'] = [
         '#type' => 'markup',
         '#markup' => '<em>' . $this->t('Note: You <a href="@url">may want to enable</a> the "log in" / "log out" menu item and disable the original one.', [
-            '@url' => Url::fromRoute('entity.menu.edit_form', ['menu' => 'account'])
-              ->toString()
-          ]) . '</em>',
+          '@url' => Url::fromRoute('entity.menu.edit_form', ['menu' => 'account'])
+            ->toString(),
+        ]) . '</em>',
       ];
     }
 
@@ -212,13 +212,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
 
     // @TODO: Allow a user to automagically populate this by providing a metadata URL for the IdP.
-//    $form['identity_provider']['idp_metadata_url'] = [
-//      '#type' => 'url',
-//      '#title' => $this->t('Metadata URL'),
-//      '#description' => $this->t('URL of the XML metadata for the identity provider'),
-//      '#default_value' => $config->get('idp_metadata_url'),
-//    ];
-
+    //    $form['identity_provider']['idp_metadata_url'] = [
+    //      '#type' => 'url',
+    //      '#title' => $this->t('Metadata URL'),
+    //      '#description' => $this->t('URL of the XML metadata for the identity provider'),
+    //      '#default_value' => $config->get('idp_metadata_url'),
+    //    ];
     $form['identity_provider']['idp_entity_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Entity ID'),
@@ -256,7 +255,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
         'signing' => $this->t('Key Rollover Phase'),
         'encryption' => $this->t('Unique Signing/Encryption'),
       ],
-      '#default_value' => $config->get('idp_cert_type') ?  $config->get('idp_cert_type') : 'single',
+      '#default_value' => $config->get('idp_cert_type') ? $config->get('idp_cert_type') : 'single',
     ];
 
     $form['identity_provider']['idp_x509_certificate'] = [
@@ -381,7 +380,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
         'http://www.w3.org/2000/09/xmldsig#hmac-sha1' => 'HMAC-sha1',
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256' => 'sha256',
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384' => 'sha384',
-        'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512' => 'sha512'
+        'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512' => 'sha512',
       ],
       '#description' => $this->t('Algorithm used in the signing process.'),
       '#default_value' => $config->get('security_signature_algorithm'),
@@ -526,7 +525,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('debug_log_saml_out'),
     ];
 
-
     $form['debugging']['debug_log_saml_in'] = [
       '#type' => 'checkbox',
       '#title' => $this->t("Log incoming SAML messages"),
@@ -557,7 +555,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state);
     // @TODO: Validate cert. Might be able to just openssl_x509_parse().
-
     // Validate login/logout redirect URLs.
     $login_url_path = $form_state->getValue('login_redirect_url');
     if ($login_url_path) {
@@ -660,7 +657,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    */
   private function fixFolderPath($path) {
     if ($path) {
-      $path =  rtrim($path, '/');
+      $path = rtrim($path, '/');
     }
     return $path;
   }

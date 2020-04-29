@@ -70,4 +70,3 @@ samlauth.samlauth_configure_form:
     _title: 'SAML Authentication'
   requirements:
     _permission: 'configure saml'
-
