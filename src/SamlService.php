@@ -252,11 +252,11 @@ class SamlService {
         $this->externalAuth->userLoginFinalize($account, $unique_id, 'samlauth');
       }
       else {
-        throw new RuntimeException('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
+        throw new UserVisibleException('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
       }
     }
     elseif ($account->isBlocked()) {
-      throw new RuntimeException('Requested account is blocked.');
+      throw new UserVisibleException('Requested account is blocked.');
     }
     else {
       // Synchronize the user account with SAML attributes if needed.

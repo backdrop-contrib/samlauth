@@ -4,6 +4,7 @@ namespace Drupal\samlauth\Controller;
 
 use Exception;
 use Drupal\samlauth\SamlService;
+use Drupal\samlauth\UserVisibleException;
 use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Cache\CacheableResponse;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -175,6 +176,11 @@ class SamlController extends ControllerBase {
       $this->saml->acs();
       $url = $this->getRedirectUrlAfterProcessing(TRUE);
     }
+    catch (UserVisibleException $e) {
+      $this->getLogger('samlauth')->warning($e->getMessage());
+      \Drupal::messenger()->addError($e->getMessage());
+      $url = Url::fromRoute('<front>');
+    }
     catch (Exception $e) {
       $this->handleException($e, 'processing SAML authentication response');
       $url = Url::fromRoute('<front>');
@@ -197,6 +203,11 @@ class SamlController extends ControllerBase {
       if (!$url) {
         $url = $this->getRedirectUrlAfterProcessing();
       }
+    }
+    catch (UserVisibleException $e) {
+      $this->getLogger('samlauth')->warning($e->getMessage());
+      \Drupal::messenger()->addError($e->getMessage());
+      $url = Url::fromRoute('<front>');
     }
     catch (Exception $e) {
       $this->handleException($e, 'processing SAML single-logout response');
