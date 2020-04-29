@@ -14,7 +14,8 @@ use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\user\UserInterface;
 use Exception;
 use OneLogin\Saml2\Auth;
-use OneLogin\Saml2\Error;
+use OneLogin\Saml2\Error as SamlError;
+use OneLogin\Saml2\Utils as SamlUtils;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -96,6 +97,11 @@ class SamlService {
     $this->logger = $logger;
     $this->eventDispatcher = $event_dispatcher;
     $this->tempStoreFactory = $temp_store_factory->get('samlauth');
+
+    if ($this->config->get('use_proxy_headers')) {
+      // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
+      SamlUtils::setProxyVars(TRUE);
+    }
   }
 
   /**
@@ -114,7 +120,7 @@ class SamlService {
       return $metadata;
     }
     else {
-      throw new Error('Invalid SP metadata: ' . implode(', ', $errors), Error::METADATA_SP_INVALID);
+      throw new SamlError('Invalid SP metadata: ' . implode(', ', $errors), SamlError::METADATA_SP_INVALID);
     }
   }
 

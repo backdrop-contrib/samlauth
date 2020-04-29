@@ -482,6 +482,18 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_assertions_encrypt'),
     ];
 
+    $form['other'] = [
+      '#title' => $this->t('Other'),
+      '#type' => 'fieldset',
+    ];
+
+    $form['other']['use_proxy_headers'] = array(
+      '#type' => 'checkbox',
+      '#title' => $this->t("Use 'X-Forwarded-*' headers."),
+      '#description' => $this->t("The SAML Toolkit will use 'X-Forwarded-*' HTTP headers (if present) for constructing/identifying the SP URL in sent/received messages. This is likely necessary if your SP is behind a reverse proxy, and your Drupal installation is not already <a href=\"https://www.drupal.org/node/425990\" target=\"_blank\">dealing with this</a>."),
+      '#default_value' => $config->get('use_proxy_headers'),
+    );
+
     $form['debugging'] = [
       '#title' => $this->t('Debugging'),
       '#type' => 'fieldset',
@@ -645,6 +657,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_request_authn_context', $form_state->getValue('security_request_authn_context'))
       ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))
       ->set('strict', $form_state->getValue('strict'))
+      ->set('use_proxy_headers', $form_state->getValue('use_proxy_headers'))
       ->set('debug_log_saml_out', $form_state->getValue('debug_log_saml_out'))
       ->set('debug_log_saml_in', $form_state->getValue('debug_log_saml_in'))
       ->set('debug_log_in', $form_state->getValue('debug_log_in'))
