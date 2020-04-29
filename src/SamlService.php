@@ -131,7 +131,11 @@ class SamlService {
    *   parameters.
    */
   public function login($return_to = null, $parameters = []) {
-    return $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $this->config->get('request_set_name_id_policy') ?? TRUE);
+    $url = $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $this->config->get('request_set_name_id_policy') ?? TRUE);
+    if ($this->config->get('debug_log_saml_out')) {
+      $this->logger->debug('Sending SAML login request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
+    }
+    return $url;
   }
 
   /**
@@ -148,7 +152,7 @@ class SamlService {
    *   parameters.
    */
   public function logout($return_to = null, $parameters = []) {
-    return $this->getSamlAuth()->logout(
+    $url = $this->getSamlAuth()->logout(
       $return_to,
       $parameters,
       $this->tempStoreFactory->get('name_id'),
@@ -156,6 +160,10 @@ class SamlService {
       TRUE,
       $this->tempStoreFactory->get('name_id_format')
     );
+    if ($this->config->get('debug_log_saml_out')) {
+      $this->logger->debug('Sending SAML logout request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
+    }
+    return $url;
   }
 
   /**
@@ -168,10 +176,30 @@ class SamlService {
    * @throws Exception
    */
   public function acs() {
+    if ($this->config->get('debug_log_in')) {
+      if (isset($_POST['SAMLResponse'])) {
+        $response = base64_decode($_POST['SAMLResponse']);
+        if ($response) {
+          $this->logger->debug("ACS received 'SAMLResponse' in POST request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
+        }
+        else {
+          $this->logger->warning("ACS received 'SAMLResponse' in POST request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLResponse']]);
+        }
+      }
+      else {
+        // Not sure if we should be more detailed...
+        $this->logger->warning("HTTP request to ACS is not a POST request, or contains no 'SAMLResponse' parameter.");
+      }
+    }
+
     // This call can either set an error condition or throw a
     // \OneLogin_Saml2_Error exception, depending on whether or not we are
     // processing a POST request. Don't catch the exception.
     $this->getSamlAuth()->processResponse();
+
+    if ($this->config->get('debug_log_saml_in')) {
+      $this->logger->debug('ACS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastResponseXML()]);
+    }
     // Now look if there were any errors and also throw.
     $errors = $this->getSamlAuth()->getErrors();
     if (!empty($errors)) {
@@ -289,10 +317,47 @@ class SamlService {
    *   Usually returns nothing. May return a URL to redirect to.
    */
   public function sls() {
+    // We might at some point check if this code can be abstracted a bit...
+    if ($this->config->get('debug_log_in')) {
+      if (isset($_GET['SAMLResponse'])) {
+        $response = base64_decode($_GET['SAMLResponse']);
+        if ($response) {
+          $this->logger->debug("SLS received 'SAMLResponse' in GET request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
+        }
+        else {
+          $this->logger->warning("SLS received 'SAMLResponse' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLResponse']]);
+        }
+      }
+      elseif (isset($_GET['SAMLRequest'])) {
+        $response = base64_decode($_GET['SAMLRequest']);
+        if ($response) {
+          $this->logger->debug("SLS received 'SAMLRequest' in GET request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
+        }
+        else {
+          $this->logger->warning("SLS received 'SAMLRequest' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLRequest']]);
+        }
+      }
+      else {
+        // Not sure if we should be more detailed...
+        $this->logger->warning("HTTP request to SLS is not a GET request, or contains no 'SAMLResponse'/'SAMLRequest' parameters.");
+      }
+    }
+
     // This call can either set an error condition or throw a
     // \OneLogin_Saml2_Error exception, depending on whether or not we are
     // processing a POST request. Don't catch the exception.
     $url = $this->getSamlAuth()->processSLO(FALSE, NULL, (bool) $this->config->get('security_logout_reuse_sigs'), NULL, TRUE);
+
+    if ($this->config->get('debug_log_saml_in')) {
+      // There should be no way we can get here if nether GET parameter is set;
+      // if nothing gets logged, that's a bug.
+      if (isset($_GET['SAMLResponse'])) {
+        $this->logger->debug('SLS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastResponseXML()]);
+      }
+      elseif (isset($_GET['SAMLRequest'])) {
+        $this->logger->debug('SLS received SAML request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
+      }
+    }
     // Now look if there were any errors and also throw.
     $errors = $this->getSamlAuth()->getErrors();
     if (!empty($errors)) {
@@ -417,6 +482,7 @@ class SamlService {
     }
 
     $library_config = [
+      'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
         'entityId' => $config->get('sp_entity_id'),
         'assertionConsumerService' => [

@@ -149,8 +149,10 @@ in detail; hopefully the setting descriptions give a clue. Just some hints:
 
 DEBUGGING
 ---------
-You can use third party tools to help debug your SSO flow with SAML. The
-following are browser extensions that can be used on Linux, macOS and Windows:
+
+Besides the debugging options available in the configuration screen, you can 
+use third party tools to help debug your SSO flow with SAML. The following are
+browser extensions that can be used on Linux, macOS and Windows:
 
 Google Chrome:
 - SAML Chrome Panel: https://chrome.google.com/webstore/detail/saml-chrome-panel/paijfdbeoenhembfhkhllainmocckace
@@ -170,6 +172,3 @@ OneLogin's Decrypt XML tool at https://www.samltool.com/decrypt.php.
 
 You can also find more debugging tools located at
 https://www.samltool.com/saml_tools.php.
-
-More configurable debugging settings will hopefully find their way into version
-8.x-3.0-alpha2 of the module.

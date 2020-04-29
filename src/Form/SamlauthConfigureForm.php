@@ -519,6 +519,35 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    $form['debugging']['debug_log_saml_out'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Log outgoing SAML messages"),
+      '#description' => $this->t("Log messages which the SAML Toolkit 'sends' to the IdP (usually via the web browser through a HTTP redirect, as part of the URL)."),
+      '#default_value' => $config->get('debug_log_saml_out'),
+    ];
+
+
+    $form['debugging']['debug_log_saml_in'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Log incoming SAML messages"),
+      '#description' => $this->t("Log SAML responses (and logout requests) received by the ACS/SLS endpoints."),
+      '#default_value' => $config->get('debug_log_saml_in'),
+    ];
+
+    $form['debugging']['debug_log_in'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Log incoming messages before validation"),
+      '#description' => $this->t("Log supposed SAML messages received by the ACS/SLS endpoints before validating them as XML. If the other option logs nothing, this still might, but the logged contents may make less sense."),
+      '#default_value' => $config->get('debug_log_in'),
+    ];
+
+    $form['debugging']['debug_phpsaml'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Enable debugging in SAML Toolkit library"),
+      '#description' => $this->t("The exact benefit is unclear; as of library v3.4, this prints out certain validation errors to STDOUT / syslog, many of which would also be reported by other means. However, that might change..."),
+      '#default_value' => $config->get('debug_phpsaml'),
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -619,6 +648,10 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_request_authn_context', $form_state->getValue('security_request_authn_context'))
       ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))
       ->set('strict', $form_state->getValue('strict'))
+      ->set('debug_log_saml_out', $form_state->getValue('debug_log_saml_out'))
+      ->set('debug_log_saml_in', $form_state->getValue('debug_log_saml_in'))
+      ->set('debug_log_in', $form_state->getValue('debug_log_in'))
+      ->set('debug_phpsaml', $form_state->getValue('debug_phpsaml'))
       ->save();
   }
 
