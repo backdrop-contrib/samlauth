@@ -531,6 +531,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    $form['debugging']['debug_display_error_details'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Show detailed errors to the user"),
+      '#description' => $this->t("This can help testing until SAML login/logout works. (Technical details about failed SAML login/logout are only logged to watchdog by default, to prevent exposing information about a misconfigured system / because it's unlikely they are useful.)"),
+      '#default_value' => $config->get('debug_display_error_details'),
+    ];
+
     $form['debugging']['debug_log_saml_out'] = [
       '#type' => 'checkbox',
       '#title' => $this->t("Log outgoing SAML messages"),
@@ -659,6 +666,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))
       ->set('strict', $form_state->getValue('strict'))
       ->set('use_proxy_headers', $form_state->getValue('use_proxy_headers'))
+      ->set('debug_display_error_details', $form_state->getValue('debug_display_error_details'))
       ->set('debug_log_saml_out', $form_state->getValue('debug_log_saml_out'))
       ->set('debug_log_saml_in', $form_state->getValue('debug_log_saml_in'))
       ->set('debug_log_in', $form_state->getValue('debug_log_in'))
