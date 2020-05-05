@@ -28,24 +28,17 @@ class SamlService {
   /**
    * Indicates whether we're storing SAML session values in $_SESSION.
    *
-   * This means (if this value is TRUE) the SAML session is not tied to the
-   * Drupal login session.
-   *
-   * If FALSE, we store SAML session values in Drupal's PrivateTempStore. This
-   * means values that were set before login/logout are not available anymore
-   * after login/logout. This potentially effects at least already-logged-out
-   * users calling logout(); the generated LogoutRequest will not contain the
-   * SAML session values anymore. (In other words: after logging out from
-   * Drupal locally, the user may be unable to log out from their IdP session
-   * -depending on how their IdP works- unless they log into Drupal again and
-   * then use SAML logout.)
-   *
-   * This constant is not meant to be changed; the code and this comment is
-   * just kept around for reference / testing / until we're absolutely sure the
-   * above behavior is indeed problematic and we indeed do not want to tie SAML
-   * session values to the Drupal login session.
+   * This is just to aid testing during development. No practical use has yet
+   * emerged. ($_SESSION is still available during PHP execution after
+   * user_logout() is called, but that's not of any real use to us. What would
+   * make a difference is keeping SAML session data for future HTTP requests
+   * after the user logs out, so our logout() also has it available for users
+   * who previously logged out of Drupal locally. Neither supported way of
+   * storing the SAML session does this, so far. Also, we don't actually know
+   * of any practical implications (yet) of not being able to forward the SAML
+   * session ID in the LogoutRequest sent to the IdP, so we don't care much.
    */
-  const SAML_SESSION_IN_GLOBAL_SESSION = TRUE;
+  const SAML_SESSION_IN_GLOBAL_SESSION = FALSE;
 
   /**
    * An Auth object representing the current request state.
@@ -330,6 +323,16 @@ class SamlService {
    *   parameters.
    */
   public function logout($return_to = NULL, $parameters = []) {
+    // Start the SAML logout process. If the user was already logged out before
+    // this method was called, we won't have any SAML session data so won't be
+    // able to tell the IdP which session should be logging out. Even so, the
+    // SAML Toolkit is able to create a generic LogoutRequest, and for at least
+    // some IdPs that's enough to log the user out from the IdP if applicable
+    // (because they have their own browser/cookie based session handling) and
+    // return a SAMLResponse indicating success. (Maybe there's some way to
+    // modify the Drupal logout process to keep the SAML session data available
+    // but we won't explore that until there's a practical situation where
+    // that's clearly needed.)
     // @todo should we check session expiration time before sending a logout
     //   request to the IdP? (What would an IdP do if it received an old
     //   session index? Is it better to not redirect, and throw an error on
