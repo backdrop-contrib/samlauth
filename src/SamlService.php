@@ -373,14 +373,11 @@ class SamlService {
       throw new RuntimeException('Error(s) encountered during processing of SLS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $this->getSamlAuth()->getLastErrorReason());
     }
 
-    // Usually we don't get any URL returned. The case in which we do, seems to
-    // be something like IdP-initiated logout. Therefore we won't do further
-    // processing.
-    if (!$url) {
-      // Delete private stored session information.
-      foreach (['session_index', 'session_expiration'] as $key) {
-        $this->tempStoreFactory->delete($key);
-      }
+    // Remove SAML session data and log the user out of Drupal.
+    foreach (['session_index', 'session_expiration', 'name_id', 'name_id_format'] as $key) {
+      $this->tempStoreFactory->delete($key);
+    }
+    if (\Drupal::currentUser()->isAuthenticated()) {
       user_logout();
     }
 
