@@ -26,6 +26,28 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 class SamlService {
 
   /**
+   * Indicates whether we're storing SAML session values in $_SESSION.
+   *
+   * This means (if this value is TRUE) the SAML session is not tied to the
+   * Drupal login session.
+   *
+   * If FALSE, we store SAML session values in Drupal's PrivateTempStore. This
+   * means values that were set before login/logout are not available anymore
+   * after login/logout. This potentially effects at least already-logged-out
+   * users calling logout(); the generated LogoutRequest will not contain the
+   * SAML session values anymore. (In other words: after logging out from
+   * Drupal locally, the user may be unable to log out from their IdP session
+   * -depending on how their IdP works- unless they log into Drupal again and
+   * then use SAML logout.)
+   *
+   * This constant is not meant to be changed; the code and this comment is
+   * just kept around for reference / testing / until we're absolutely sure the
+   * above behavior is indeed problematic and we indeed do not want to tie SAML
+   * session values to the Drupal login session.
+   */
+  const SAML_SESSION_IN_GLOBAL_SESSION = TRUE;
+
+  /**
    * An Auth object representing the current request state.
    *
    * @var \OneLogin\Saml2\Auth
@@ -68,11 +90,13 @@ class SamlService {
   protected $eventDispatcher;
 
   /**
-   * The tempstore factory.
+   * Private store for SAML session data.
    *
-   * @var \Drupal\Core\TempStore\PrivateTempStoreFactory
+   * Likely unused, but kept around for the time being.
+   *
+   * @var \Drupal\Core\TempStore\PrivateTempStore
    */
-  protected $tempStoreFactory;
+  protected $privateTempStore;
 
   /**
    * Constructor for Drupal\samlauth\SamlService.
@@ -96,7 +120,7 @@ class SamlService {
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger;
     $this->eventDispatcher = $event_dispatcher;
-    $this->tempStoreFactory = $temp_store_factory->get('samlauth');
+    $this->privateTempStore = $temp_store_factory->get('samlauth');
 
     if ($this->config->get('use_proxy_headers')) {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
@@ -146,34 +170,6 @@ class SamlService {
   }
 
   /**
-   * Initiates a SAML2 logout flow and redirects to the IdP.
-   *
-   * @param null $return_to
-   *   (optional) The path to return the user to after successful processing by
-   *   the IdP.
-   * @param array $parameters
-   *   (optional) Extra query parameters to add to the returned redirect URL.
-   *
-   * @return string
-   *   The URL of the single logout service to redirect to, including query
-   *   parameters.
-   */
-  public function logout($return_to = NULL, $parameters = []) {
-    $url = $this->getSamlAuth()->logout(
-      $return_to,
-      $parameters,
-      $this->tempStoreFactory->get('name_id'),
-      $this->tempStoreFactory->get('session_index'),
-      TRUE,
-      $this->tempStoreFactory->get('name_id_format')
-    );
-    if ($this->config->get('debug_log_saml_out')) {
-      $this->logger->debug('Sending SAML logout request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
-    }
-    return $url;
-  }
-
-  /**
    * Processes a SAML response (Assertion Consumer Service).
    *
    * First checks whether the SAML request is OK, then takes action on the
@@ -202,6 +198,10 @@ class SamlService {
     // This call can either set an error condition or throw a
     // \OneLogin_Saml2_Error exception, depending on whether or not we are
     // processing a POST request. Don't catch the exception.
+    // @todo should we check a Response against the ID of the request we sent
+    //   earlier? Seems to be not absolutely required on top of the validity /
+    //   signature checks which the library already does - but every extra
+    //   check is good. Maybe make it optional.
     $this->getSamlAuth()->processResponse();
 
     if ($this->config->get('debug_log_saml_in')) {
@@ -300,8 +300,7 @@ class SamlService {
       $this->externalAuth->userLoginFinalize($account, $unique_id, 'samlauth');
     }
 
-    // Set some request properties in local private storage. We can use these on
-    // logout.
+    // Remember SAML session values that may be necessary for logout.
     foreach ([
       'session_index' => $this->samlAuth->getSessionIndex(),
       'session_expiration' => $this->samlAuth->getSessionExpiration(),
@@ -309,12 +308,45 @@ class SamlService {
       'name_id_format' => $this->samlAuth->getNameIdFormat(),
     ] as $key => $value) {
       if (isset($value)) {
-        $this->tempStoreFactory->set($key, $value);
+        $this->setSamlSessionValue($key, $value);
       }
       else {
-        $this->tempStoreFactory->delete($key);
+        $this->deleteSamlSessionValue($key);
       }
     }
+  }
+
+  /**
+   * Initiates a SAML2 logout flow and redirects to the IdP.
+   *
+   * @param null $return_to
+   *   (optional) The path to return the user to after successful processing by
+   *   the IdP.
+   * @param array $parameters
+   *   (optional) Extra query parameters to add to the returned redirect URL.
+   *
+   * @return string
+   *   The URL of the single logout service to redirect to, including query
+   *   parameters.
+   */
+  public function logout($return_to = NULL, $parameters = []) {
+    // @todo should we check session expiration time before sending a logout
+    //   request to the IdP? (What would an IdP do if it received an old
+    //   session index? Is it better to not redirect, and throw an error on
+    //   our side?)
+    // @todo include nameId(SP)NameQualifier?
+    $url = $this->getSamlAuth()->logout(
+      $return_to,
+      $parameters,
+      $this->getSamlSessionValue('name_id'),
+      $this->getSamlSessionValue('session_index'),
+      TRUE,
+      $this->getSamlSessionValue('name_id_format')
+    );
+    if ($this->config->get('debug_log_saml_out')) {
+      $this->logger->debug('Sending SAML logout request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
+    }
+    return $url;
   }
 
   /**
@@ -350,10 +382,17 @@ class SamlService {
       }
     }
 
-    // This call can either set an error condition or throw a
-    // \OneLogin_Saml2_Error exception, depending on whether or not we are
-    // processing a POST request. Don't catch the exception.
-    $url = $this->getSamlAuth()->processSLO(FALSE, NULL, (bool) $this->config->get('security_logout_reuse_sigs'), NULL, TRUE);
+    // Unlike the 'logout()' route, we only log the user out if we have a valid
+    // request/response, so first have the SAML Toolkit check things. Don't
+    // have it do any session actions, because nothing is needed besides our
+    // own logout actions (if any). This call can either set an error condition
+    // or throw a \OneLogin_Saml2_Error, depending on whether we are processing
+    // a POST request; don't catch anything.
+    // @todo should we check a LogoutResponse against the ID of the
+    //   LogoutRequest we sent earlier? Seems to be not absolutely required on
+    //   top of the validity / signature checks which the library already does
+    //   - but every extra check is good. Maybe make it optional.
+    $url = $this->getSamlAuth()->processSLO(TRUE, NULL, (bool) $this->config->get('security_logout_reuse_sigs'), NULL, TRUE);
 
     if ($this->config->get('debug_log_saml_in')) {
       // There should be no way we can get here if nether GET parameter is set;
@@ -375,7 +414,7 @@ class SamlService {
 
     // Remove SAML session data and log the user out of Drupal.
     foreach (['session_index', 'session_expiration', 'name_id', 'name_id_format'] as $key) {
-      $this->tempStoreFactory->delete($key);
+      $this->deleteSamlSessionValue($key);
     }
     if (\Drupal::currentUser()->isAuthenticated()) {
       user_logout();
@@ -455,6 +494,58 @@ class SamlService {
     }
 
     return $this->samlAuth;
+  }
+
+  /**
+   * Retrieves a value from the SAML session for a given key.
+   *
+   * @param string $key
+   *   The key of the data to retrieve.
+   *
+   * @param $name
+   *
+   * @return mixed|null
+   */
+  protected function getSamlSessionValue($key) {
+    if (static::SAML_SESSION_IN_GLOBAL_SESSION) {
+      return $_SESSION['samlauth'][$key] ?? NULL;
+    }
+    return $this->privateTempStore->get($key);
+  }
+
+  /**
+   * Stores a particular key/value pair in this PrivateTempStore.
+   *
+   * @param string $key
+   *   The key of the data to store.
+   * @param mixed $value
+   *   The data to store.
+   */
+  protected function setSamlSessionValue($key, $value) {
+    if (static::SAML_SESSION_IN_GLOBAL_SESSION) {
+      $_SESSION['samlauth'][$key] = $value;
+    }
+    else {
+      $this->privateTempStore->set($key, $value);
+    }
+  }
+
+  /**
+   * Deletes data from the SAML session.
+   *
+   * @param string $key
+   *   The key of the data to delete.
+   */
+  protected function deleteSamlSessionValue($key) {
+    if (static::SAML_SESSION_IN_GLOBAL_SESSION) {
+      unset($_SESSION['samlauth'][$key]);
+      if (empty($_SESSION['samlauth'])) {
+        unset($_SESSION['samlauth']);
+      }
+    }
+    else {
+      $this->privateTempStore->delete($key);
+    }
   }
 
   /**
