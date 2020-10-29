@@ -474,7 +474,10 @@ class SamlService {
    *   An array with all returned SAML attributes..
    */
   public function getAttributes() {
-    return $this->getSamlAuth()->getAttributes();
+    $attributes = $this->getSamlAuth()->getAttributes();
+    $friendly_attributes = $this->getSamlAuth()->getAttributesWithFriendlyName();
+
+    return $attributes + $friendly_attributes;
   }
 
   /**
@@ -497,6 +500,11 @@ class SamlService {
       $attribute = $this->getSamlAuth()->getAttribute($attribute_name);
       if (!empty($attribute[0])) {
         return $attribute[0];
+      }
+
+      $friendly_attribute = $this->getSamlAuth()->getAttributeWithFriendlyName($attribute_name);
+      if (!empty($friendly_attribute[0])) {
+        return $friendly_attribute[0];
       }
     }
   }
