@@ -204,7 +204,11 @@ class SamlController extends ControllerBase {
       $url = Url::fromRoute('<front>');
     }
 
-    return $this->createRedirectResponse($url);
+    // This response redirects to an external URL in most casess. (Except for
+    // SP-initiated logout that was initially started from this SP, i.e.
+    // through the logout() route). We count on the routing.yml to specify that
+    // it's not cacheable.
+    return $this->createRedirectResponse($url, TRUE);
   }
 
   /**
