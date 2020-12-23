@@ -1,14 +1,8 @@
 <?php
-/**
- * Created by IntelliJ IDEA.
- * User: jbaker
- * Date: 7/13/17
- * Time: 4:06 PM
- */
 
 namespace Drupal\samlauth_custom_attributes\Form;
 
-
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfirmFormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -17,19 +11,19 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Form for deleting a mapping.
- *
- * Class SamlauthCustomAttributesDeleteForm
- *
- * @package Drupal\samlauth_custom_attributes\Form
  */
 class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
 
   /**
+   * A configuration object containing mapping settings.
+   *
    * @var \Drupal\Core\Config\Config
    */
   protected $mappingConfig;
 
   /**
+   * The entity field manager service.
+   *
    * @var \Drupal\Core\Entity\EntityFieldManagerInterface
    */
   protected $entityFieldManager;
@@ -39,39 +33,40 @@ class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
    *
    * @var string
    */
-  protected $attribute_name;
+  protected $attributeName;
 
   /**
    * The name of the field we're deleting (needed for the confirm message).
    *
    * @var string
    */
-  protected $field_name;
+  protected $fieldName;
 
   /**
    * SamlauthCustomAttributesDeleteForm constructor.
    *
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
+   *   The config factory.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
+   *   The entity field manager service.
    */
-  public function __construct(EntityFieldManagerInterface $entity_field_manager) {
-    $configFactory = $this->configFactory();
-    $this->mappingConfig = $configFactory->getEditable('samlauth_custom_attributes.mappings');
+  public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager) {
+    $this->mappingConfig = $config_factory->getEditable('samlauth_custom_attributes.mappings');
     $this->entityFieldManager = $entity_field_manager;
   }
 
   /**
-   * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
-   *
-   * @return static
+   * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
     return new static(
+      $container->get('config.factory'),
       $container->get('entity_field.manager')
     );
   }
 
   /**
-   * @inheritdoc
+   * {@inheritdoc}
    */
   public function getFormId() {
     return 'samlauth_custom_attributes_delete_form';
@@ -80,60 +75,66 @@ class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
   /**
    * Form for deleting a mapping.
    *
-   * @param $form
-   * @param $form_state
-   * @param $mapping
+   * @param array $form
+   *   An associative array containing the structure of the form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
+   * @param int $mapping_id
+   *   (optional) The numeric ID of the mapping.
    *
-   * @return bool|array
+   * @return array
+   *   The form structure.
    */
-  function buildForm(array $form, FormStateInterface $form_state, $mapping = FALSE) {
-    if (is_numeric($mapping)) {
-      $mappings = $this->mappingConfig->get('mappings');
+  public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
+    if ($mapping_id !== NULL) {
+      $mappings = $this->mappingConfig->get('field_mappings');
 
       // Set these values for the confirm message to pick up on them.
-      $this->attribute_name = $mappings[$mapping]['attribute_name'];
-      $this->field_name = $mappings[$mapping]['field_name'];
+      $this->attributeName = $mappings[$mapping_id]['attribute_name'];
+      $this->fieldName = $mappings[$mapping_id]['field_name'];
 
       // Set the mapping id so the submit handler can delete it.
-      $form_state->set('samlauth_custom_attributes_mapping', $mapping);
+      $form_state->set('mapping_id', $mapping_id);
 
       return parent::buildForm($form, $form_state);
     }
-    return FALSE;
+    return [];
   }
 
   /**
-   * @inheritdoc
+   * {@inheritdoc}
    */
   public function getQuestion() {
-    // Get the pretty label for the message.
     $fields = $this->entityFieldManager->getFieldDefinitions('user', 'user');
-    $field_name = $fields[$this->field_name]->getLabel();
+    $field_name = $fields[$this->fieldName]->getLabel();
 
-    return $this->t('Are you sure you want to delete the "' . $this->attribute_name . ' > ' . $field_name . '" mapping?');
+    return $this->t('Are you sure you want to delete the mapping for %attribute > %field?', [
+      '%attribute' => $this->attributeName,
+      '%field' => $field_name,
+    ]);
   }
 
   /**
-   * @inheritdoc
+   * {@inheritdoc}
    */
   public function getCancelUrl() {
     return new Url('samlauth_custom_attributes.list');
   }
 
   /**
-   * @param array $form
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   * {@inheritdoc}
    */
-  function submitForm(array &$form, FormStateInterface $form_state) {
-    $mappings = $this->mappingConfig->get('mappings');
+  public function submitForm(array &$form, FormStateInterface $form_state) {
+    $mappings = $this->mappingConfig->get('field_mappings');
 
     // Remove the mapping from the array.
-    unset($mappings[$form_state->get('samlauth_custom_attributes_mapping')]);
+    unset($mappings[$form_state->get('mapping_id')]);
 
     // Save the new config.
-    $this->mappingConfig->set('mappings', $mappings)->save();
+    $this->mappingConfig->set('field_mappings', $mappings)->save();
 
     // Go back to the list page.
     $form_state->setRedirect('samlauth_custom_attributes.list');
   }
+
 }

@@ -114,6 +114,12 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
     $fatal_errors = [];
 
     // Synchronize username.
+    // @todo in v4, can/should we get rid of most of this validation code, and
+    //   just call $account->validate() afterwards? (Because that supposedly
+    //   also checks for duplicate e-mail addresses etc.) This should be in
+    //   'base' code, likely moved into externalauth if possible. (It's
+    //   mentioned in #3132453. At the moment I think we should have an option
+    //   for entity level validation, and keep field level validation in here.)
     if ($account->isNew() || $this->config->get('sync_name')) {
       // Get value from the SAML attribute whose name is configured in the
       // samlauth module.

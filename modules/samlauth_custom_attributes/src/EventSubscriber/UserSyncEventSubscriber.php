@@ -3,20 +3,18 @@
 namespace Drupal\samlauth_custom_attributes\EventSubscriber;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\samlauth_custom_attributes\Event\SamlauthCustomAttributesEvents;
-use Drupal\samlauth_custom_attributes\Event\SamlauthCustomAttributesCustomUserFieldEvent;
+use Drupal\Core\StringTranslation\PluralTranslatableMarkup;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\TypedData\TypedDataManagerInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Drupal\user\UserInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\Validator\ConstraintViolation;
 
 /**
- * Class UserSyncEventSubscriber
- *
- * Does some extra processing to the user sync to manage mapped fields, and to
- * dispatch the custom field events for fields that need more processing.
- *
- * @package Drupal\samlauth_custom_attributes\EventSubscriber
+ * Saves configured SAML attribute values into user fields during login.
  */
 class UserSyncEventSubscriber implements EventSubscriberInterface {
 
@@ -28,19 +26,33 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
   protected $config;
 
   /**
-   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
+   * A logger instance.
+   *
+   * @var \Psr\Log\LoggerInterface
    */
-  protected $eventDispatcher;
+  protected $logger;
+
+  /**
+   * The typed data manager service.
+   *
+   * @var \Drupal\Core\TypedData\TypedDataManagerInterface
+   */
+  protected $typedDataManager;
 
   /**
    * UserSyncEventSubscriber constructor.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $event_dispatcher
+   *   The config factory.
+   * @param \Psr\Log\LoggerInterface $logger
+   *   A logger instance.
+   * @param \Drupal\Core\TypedData\TypedDataManagerInterface $typed_data_manager
+   *   The typed data manager service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EventDispatcherInterface $event_dispatcher) {
+  public function __construct(ConfigFactoryInterface $config_factory, LoggerInterface $logger, TypedDataManagerInterface $typed_data_manager) {
     $this->config = $config_factory->get('samlauth_custom_attributes.mappings');
-    $this->eventDispatcher = $event_dispatcher;
+    $this->logger = $logger;
+    $this->typedDataManager = $typed_data_manager;
   }
 
   /**
@@ -52,43 +64,230 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Performs actions to synchronize attributes to user fields.
+   * Saves configured SAML attribute values into user fields.
    *
    * @param \Drupal\samlauth\Event\SamlauthUserSyncEvent $event
    *   The event.
    */
   public function onUserSync(SamlauthUserSyncEvent $event) {
-    // Get the user account from the event.
     $account = $event->getAccount();
-
-    // Get the mappings.
-    $mappings = $this->config->get('mappings');
-
-    // Synchronize attribute to field.
+    $mappings = $this->config->get('field_mappings');
+    $validation_errors = [];
     foreach ($mappings as $id => $mapping) {
-      // Get value from the SAML attribute.
-      $attribute = $this->getAttributeByName($mapping['attribute_name'], $event);
-
-      // If this is a custom field, dispatch an event with the originating
-      // event and the name of the attribute to get out of the SAML.
-      if ($mapping['field_name'] === 'custom') {
-        $custom_field_event = new SamlauthCustomAttributesCustomUserFieldEvent($event, $mapping['attribute_name']);
-        $this->eventDispatcher->dispatch(SamlauthCustomAttributesEvents::CUSTOM_FIELD, $custom_field_event);
+      // If the attribute name is invalid, or the field does not exist, spam
+      // the logs on every login until the mapping is fixed.
+      if (empty($mapping['attribute_name']) || !is_string($mapping['attribute_name'])) {
+        $this->logger->warning('Invalid SAML attribute %attribute detected in mapping; the mapping must be fixed.');
       }
-      // Otherwise, we just copy the data into the mapped field.
+      elseif (empty($mapping['field_name']) || !is_string($mapping['field_name'])) {
+        $this->logger->warning('Invalid user field mapped from SAML attribute %attribute; the mapping must be fixed.', ['%attribute' => $mapping['attribute_name']]);
+      }
+      elseif (!$account->hasField($mapping['field_name'])) {
+        $this->logger->warning('User field %field is mapped from SAML attribute %attr, but does not exist; the mapping must be fixed.', [
+          '%field' => $mapping['field_name'],
+          '%attribute' => $mapping['attribute_name'],
+        ]);
+      }
       else {
-        $account->set($mapping['field_name'], $attribute);
+        // Skip if the attribute name does not exist in the set of SAML
+        // attributes. Or the value is NULL, which we assume does not happen.
+        // We'll likely also skip empty strings, but that's determined by
+        // isInputValueUpdatable().
+        $value = $this->getAttribute($mapping['attribute_name'], $event);
+        if (isset($value)
+            && $this->isInputValueUpdatable($value, $account, $mapping['field_name'])) {
+          $valid = $this->validateAccountFieldValue($value, $account, $mapping['field_name']);
+          if ($valid) {
+            $account->set($mapping['field_name'], $value);
+            $event->markAccountChanged();
+          }
+          else {
+            // Collect values to include below. Supposedly we have scalar
+            // values; var_export() shows their type. And identifier should
+            // include both source and destination because we can have
+            // multiple mappings defined for either.
+            $validation_errors[] = $mapping['attribute_name'] . ' (' . var_export($value, TRUE)
+              . ') > ' . $mapping['field_name'];
+          }
+        }
       }
     }
 
-    // We'll just assume there were changes to make sure everything is up to date.
-    $event->markAccountChanged();
+    if ($validation_errors) {
+      // Log an extra message summarizing which values failed validation,
+      // because our field validation supposedly doesn't do that. The user is
+      // expected to see the correlation between the different log messages.
+      $this->logger->warning('Validation errors were encountered while synchronizing SAML attributes into the user account: @values', ['@values' => implode(', ', $validation_errors)]);
+    }
   }
 
   /**
-   * Returns value from a SAML attribute whose name is configured in our module.
+   * Checks if a value should be updated into an existing user account field.
    *
-   * This is suitable for single-value attributes.
+   * This returns FALSE if the value is already equal in the user account. This
+   * is abstracted into a separate method because the definition of "equals" is
+   * not fully clear / is easier to override if necessary.
+   *
+   * @param mixed $input_value
+   *   The value to (maybe) update / write into the user account field.
+   * @param \Drupal\user\UserInterface $account
+   *   The Drupal user account.
+   * @param string $account_field_name
+   *   The field name in the user account.
+   *
+   * @return bool
+   *   True if the account should be updated (that is: if it's different and
+   *   not considered 'empty'). This does not imply the value is valid;
+   *   validity should still be checked.
+   */
+  protected function isInputValueUpdatable($input_value, UserInterface $account, $account_field_name) {
+    // It would be awesome if we could just do $input_value != $current_value
+    // but that implies trust that the attribute data is properly 'typed' and
+    // does not contain meaningless values (such as empty strings - which
+    // likely mean NULL rather than an empty value that should be overwritten
+    // in the user). In absence of exact detailed knowledge/trust of our input
+    // value, we'll fall back to generic rules that usually work:
+    // - Do not treat "" as a value - i.e. don't overwrite a field with "".
+    // - Do treat some other similar values (like 0) as a value. See
+    //   isInputValueEqual() for more details.
+    return $account->hasField($account_field_name)
+      && !$this->isInputValueEqual($input_value, '')
+      && !$this->isInputValueEqual($input_value, $account->get($account_field_name)->value, $account_field_name);
+  }
+
+  /**
+   * Checks if an input value is equal to a user account field value.
+   *
+   * This is abstracted into a separate method because the definition of
+   * "equals" is not fully clear / is easier to override if necessary.
+   *
+   * @param mixed $input_value
+   *   The input value.
+   * @param mixed $field_value
+   *   The value in a user account field.
+   * @param string $account_field_name
+   *   The field name in the user account.
+   *
+   * @return bool
+   *   Indicates whether the values are considered equal.
+   */
+  protected function isInputValueEqual($input_value, $field_value, $account_field_name = '') {
+    // This represents what is most likely for values from an unknown source:
+    // - string values are equal to their numeric equivalent.
+    // - NULL is equal to ''... because our default assumption is that an empty
+    //   string represents a/the 'empty' value.)
+    // - 0/"0"/0.00 are equal, but not equal to ''/NULL and not equal to "00"
+    //   or "0x".
+    return (is_scalar($input_value) || $input_value === NULL) && (is_scalar($field_value) || $field_value === NULL)
+      ? (string) $input_value === (string) $field_value
+      // We don't care much about the '===' below; it's just there because we
+      // can't cast non-scalars to string and don't want strange input values
+      // to cause PHP notices when they're cast to another type. It could
+      // likely be '==' too but
+      // - We don't know realistic situations where it makes a difference.
+      // - Erring on the side of "inequal" seems valid - because in practice
+      //   this means erring on the side of too many update calls.
+      // (Also: [] == null even though [] != false. Not that we care; just
+      // noting this for completeness in case this code is reused elsewhere.)
+      : $input_value === $field_value;
+  }
+
+  /**
+   * Validates a value as being valid to set into a certain user account field.
+   *
+   * This only performs validation based on the single field, so 'entity based'
+   * validation (e.g. uniqueness of a value among all users) is not done. This
+   * method logs validation violations.
+   *
+   * @param mixed $input_value
+   *   The value to (maybe) update / write into the user account field.
+   * @param \Drupal\user\UserInterface $account
+   *   The Drupal user account.
+   * @param string $account_field_name
+   *   The field name in the user account.
+   *
+   * @return bool
+   *   True if the value validated correctly
+   */
+  protected function validateAccountFieldValue($input_value, UserInterface $account, $account_field_name) {
+    $valid = FALSE;
+    // The value can be validated by making it into a 'typed data' value that
+    // contains the field definition (which supposedly contains all validation
+    // constraints that could apply here).
+    $field_definition = $account->getFieldDefinition($account_field_name);
+    if ($field_definition) {
+      $data = $this->typedDataManager->create($field_definition, $input_value);
+      $violations = $data->validate();
+      $valid = !(bool) $violations;
+      if ($violations) {
+        // Don't cancel; just skip setting the value and log.
+        foreach ($violations as $violation) {
+          // We have the following options:
+          // - Log just the validation message. This makes it unclear where the
+          //   message comes from: it does not include the account, attribute
+          //   or field name.
+          // - Concatenate extra info into the validation message. This is
+          //   bad for translatability of the original message.
+          // - Log a second message mentioning the account and attribute name.
+          //   This spams logs and isn't very clear.
+          // We'll do the first, and hope that a caller will log extra info if
+          // necessary, so it can choose whether or not to be 'spammy'.
+          if ($violation instanceof ConstraintViolation) {
+            list($message, $context) = $this->getLoggableParameters($violation);
+            $this->logger->warning($message, $context);
+          }
+          else {
+            $this->logger->debug('Validation for user field %field encountered unloggable error (which points to an internal code error).', ['%field' => $account_field_name]);
+          }
+        }
+      }
+    }
+
+    return $valid;
+  }
+
+  /**
+   * Extracts proper message + arguments from a violation.
+   *
+   * @param \Symfony\Component\Validator\ConstraintViolation $violation
+   *   A violation object containing a message.
+   *
+   * @return array
+   *   Two-element array: message + context. The message is suitable for
+   *   'consumption' by a logger - specifically, Drupal's watchdog logger which
+   *   wants an untranslated string + context passed.
+   */
+  protected function getLoggableParameters(ConstraintViolation $violation) {
+    $message = $violation->getMessage();
+    if ($message instanceof TranslatableMarkup && !($message instanceof PluralTranslatableMarkup)) {
+      return [$message->getUntranslatedString(), $message->getArguments()];
+    }
+    // If this is some other kind of object, it might be
+    // - A PluralTranslatableMarkup object. We can't get to the 'count'
+    //   parameter, which is important to know which message (for which
+    //   plurality) to extract from the message template, which contains
+    //   multiple messages. (Which we'd need to do with code copied from
+    //   render() - if we had the count.) Even then, this would harm
+    //   translatability - because translation systems usually translate the
+    //   full message at once.
+    // - A FormattableMarkup object. Unfortunately this has no way to get to
+    //   the separate message and arguments.
+    // - Some other object, whose message + context are likely still PSR-3
+    //   style; if we knew how to get to the separate arguments, we'd still
+    //   need to pass them through LogMessageParser::parseMessagePlaceholders.
+    // The only thing we know / can assume is, it's convertable to a simple
+    // string, so we'll just log the string (which will unfortunately be
+    // translated already / have its context substituted already).
+    return [(string) $message, []];
+  }
+
+  /**
+   * Returns value from a SAML attribute.
+   *
+   * This is suitable for single-value attributes. For multi-value attributes,
+   * we will log a debug message to make clear we're dropping data (because
+   * this indicates that the site owner may need to take care of getting more
+   * sophisticated path mapping code).
    *
    * @param string $name
    *   The name of a SAML attribute.
@@ -98,9 +297,33 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
    * @return mixed|null
    *   The SAML attribute value; NULL if the attribute value was not found.
    */
-  public function getAttributeByName($name, SamlauthUserSyncEvent $event) {
+  protected function getAttribute($name, SamlauthUserSyncEvent $event) {
     $attributes = $event->getAttributes();
-    return $name && !empty($attributes[$name][0]) ? $attributes[$name][0] : NULL;
+    $value = NULL;
+    if (isset($attributes[$name])) {
+      // Log everything unexpected about the format of the attributes. Use
+      // debug() because we're not sure if the site owner would be able to fix
+      // things.
+      if (!is_array($attributes[$name])) {
+        $this->logger->debug('SAML attribute %name has a non-array value; this points to a coding error somewhere (since the SAML standard seems to mandate this).', ['%name' => $name]);
+      }
+      elseif ($attributes[$name]) {
+        if (count($attributes[$name]) > 1) {
+          $this->logger->debug('SAML attribute %name has multiple values; we only support using the first one: @values.', [
+            '%name' => $name,
+            '@values' => function_exists('json_encode') ? json_encode($attributes[$name]) : var_export($attributes[$name], TRUE),
+          ]);
+        }
+        if (!isset($attributes[$name][0])) {
+          $value = reset($attributes[$name]);
+          $this->logger->debug("SAML attribute %name's one-element array value has non-zero key %key, which points to a coding error somewhere; even though we are using the value, we're not sure if that's right.", ['%name' => $name]);
+        }
+        else {
+          $value = $attributes[$name][0];
+        }
+      }
+    }
+    return $value;
   }
 
 }
