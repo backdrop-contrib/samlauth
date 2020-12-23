@@ -6,7 +6,7 @@ use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\Event;
 
 /**
- * Wraps a samlauth user sync event for event listeners.
+ * Wraps a samlauth user link event for event listeners.
  */
 class SamlauthUserLinkEvent extends Event {
 
@@ -18,7 +18,7 @@ class SamlauthUserLinkEvent extends Event {
   protected $account;
 
   /**
-   * The SAML attributes received from the IDP.
+   * The SAML attributes received from the IdP.
    *
    * Single values are typically represented as one-element arrays.
    *
@@ -30,7 +30,7 @@ class SamlauthUserLinkEvent extends Event {
    * Constructs a samlouth user link event object.
    *
    * @param array $attributes
-   *   The SAML attributes received from the IDP.
+   *   The SAML attributes received from the IdP.
    */
   public function __construct(array $attributes) {
     $this->attributes = $attributes;
@@ -39,7 +39,7 @@ class SamlauthUserLinkEvent extends Event {
   /**
    * Gets the Drupal user account to link.
    *
-   * @return \Drupal\user\UserInterface $account
+   * @return \Drupal\user\UserInterface
    *   The Drupal user account.
    */
   public function getLinkedAccount() {
@@ -60,7 +60,7 @@ class SamlauthUserLinkEvent extends Event {
    * Gets the SAML attributes.
    *
    * @return array
-   *   The SAML attributes received from the IDP.
+   *   The SAML attributes received from the IdP.
    */
   public function getAttributes() {
     return $this->attributes;

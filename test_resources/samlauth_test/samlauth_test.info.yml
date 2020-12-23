@@ -1,0 +1,7 @@
+type: module
+name: SAML Authentication Test
+description: Testing module for SAML Authentication functionality.
+core: 8.x
+core_version_requirement: ^8 || ^9
+package: Testing
+hidden: TRUE

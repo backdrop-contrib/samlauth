@@ -4,7 +4,9 @@ namespace Drupal\samlauth\Controller;
 
 use Exception;
 use Drupal\samlauth\SamlService;
+use Drupal\samlauth\UserVisibleException;
 use Drupal\Component\Utility\UrlHelper;
+use Drupal\Core\Cache\CacheableResponse;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Path\PathValidatorInterface;
@@ -14,8 +16,8 @@ use Drupal\Core\Utility\Error;
 use Drupal\Core\Utility\Token;
 use OneLogin\Saml2\Utils;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Returns responses for samlauth module routes.
@@ -80,7 +82,7 @@ class SamlController extends ControllerBase {
   }
 
   /**
-   * Factory method for dependency injection container.
+   * Factory method for use by dependency injection container.
    *
    * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
    *
@@ -99,8 +101,11 @@ class SamlController extends ControllerBase {
   /**
    * Initiates a SAML2 authentication flow.
    *
-   * This should redirect to the Login service on the IDP and then to our ACS.
-   * It does not actually log us in (yet).
+   * This route does not log us in (yet); it should redirect to the Login
+   * service on the IdP, which should be redirecting back to our ACS endpoint
+   * after authenticating the user.
+   *
+   * @return \Drupal\Core\Routing\TrustedRedirectResponse
    */
   public function login() {
     try {
@@ -111,14 +116,18 @@ class SamlController extends ControllerBase {
       $url = Url::fromRoute('<front>');
     }
 
-    return $this->createRedirectResponse($url);
+    // This response redirects to an external URL in all/common cases. We count
+    // on the routing.yml to specify that it's not cacheable.
+    return $this->createRedirectResponse($url, TRUE);
   }
 
   /**
-   * Initiate a SAML2 logout flow.
+   * Initiates a SAML2 logout flow.
    *
-   * This should redirect to the SLS service on the IDP and then to our SLS.
-   * It does not actually log us out (yet).
+   * This route does not log us out (yet); it should redirect to the SLS
+   * service on the IdP, which should be redirecting back to our SLS endpoint.
+   *
+   * @return \Drupal\Core\Routing\TrustedRedirectResponse
    */
   public function logout() {
     try {
@@ -129,7 +138,9 @@ class SamlController extends ControllerBase {
       $url = Url::fromRoute('<front>');
     }
 
-    return $this->createRedirectResponse($url);
+    // This response redirects to an external URL in all/common cases. We count
+    // on the routing.yml to specify that it's not cacheable.
+    return $this->createRedirectResponse($url, TRUE);
   }
 
   /**
@@ -143,19 +154,22 @@ class SamlController extends ControllerBase {
     }
     catch (Exception $e) {
       $this->handleException($e, 'processing SAML SP metadata');
+      // This response caused by an error condition must not be cacheable.
       return $this->createRedirectResponse(Url::fromRoute('<front>'));
     }
 
-    return new Response($metadata, 200, ['Content-Type' => 'text/xml']);
+    // The metadata is a 'regular' response and should be cacheable.
+    // @todo debugging option: make it not cacheable.
+    return new CacheableResponse($metadata, 200, ['Content-Type' => 'text/xml']);
   }
 
   /**
-   * Attribute Consumer Service.
+   * Performs the Attribute Consumer Service.
    *
    * This is usually the second step in the authentication flow; the Login
-   * service on the IDP should redirect (or: execute a POST request to) here.
+   * service on the IdP should redirect (or: execute a POST request to) here.
    *
-   * @return \Drupal\Core\Routing\TrustedRedirectResponse
+   * @return \Symfony\Component\HttpFoundation\Response
    */
   public function acs() {
     try {
@@ -171,12 +185,12 @@ class SamlController extends ControllerBase {
   }
 
   /**
-   * Single Logout Service.
+   * Performs the Single Logout Service.
    *
    * This is usually the second step in the logout flow; the SLS service on the
-   * IDP should redirect here.
+   * IdP should redirect here.
    *
-   * @return \Drupal\Core\Routing\TrustedRedirectResponse
+   * @return \Symfony\Component\HttpFoundation\Response
    */
   public function sls() {
     try {
@@ -190,11 +204,15 @@ class SamlController extends ControllerBase {
       $url = Url::fromRoute('<front>');
     }
 
-    return $this->createRedirectResponse($url);
+    // This response redirects to an external URL in most casess. (Except for
+    // SP-initiated logout that was initially started from this SP, i.e.
+    // through the logout() route). We count on the routing.yml to specify that
+    // it's not cacheable.
+    return $this->createRedirectResponse($url, TRUE);
   }
 
   /**
-   * Change password redirector.
+   * Redirects to the 'Change Password' service.
    *
    * @return \Symfony\Component\HttpFoundation\RedirectResponse
    */
@@ -206,9 +224,20 @@ class SamlController extends ControllerBase {
   /**
    * Constructs a full URL from the 'destination' parameter.
    *
-   * This is only considered suitable for feeding into  php-saml's  login() /
-   * logout() methods (or anything that does not care about cache contexts)
-   * because we disregard cacheability metadata.
+   * This is only considered suitable for feeding a URL string into php-saml's
+   * login() / logout() methods (or anything that does not care about cache
+   * contexts) because we explicitly unset the destination parameter and
+   * discard cacheability metadata generated along with the URL.
+   *
+   * (PSA for unsuspecting developers: A plain Url::toString() call performs
+   * cacheability related actions invisibly in the background, which are needed
+   * for outputting a URL as part of a rendered page, but which are likely to
+   * cause hard to trace exceptions to be thrown in other cases. I suspect this
+   * magic behavior was initially designed not to happen always; it only
+   * happens when the current code is executing in a 'render context'. However,
+   * Drupal creates a 'render context' super early in the HTTP stack, so in
+   * practice all Url::toString() calls cause this behavior. More info:
+   * #2630808 / #2638686 / https://www.lullabot.com/articles/early-rendering-a-lesson-in-debugging-drupal-8.)
    *
    * @return string|null
    *   The full absolute URL (i.e. our hostname plus the path in the destination
@@ -224,7 +253,7 @@ class SamlController extends ControllerBase {
     $destination = $request_query_parameters->get('destination');
     if ($destination) {
       if (UrlHelper::isExternal($destination)) {
-        // Prevent authenticating and then redirecting somewhere else.
+        // Disallow redirecting to an external URL after we log in.
         throw new \RuntimeException("Destination URL query parameter must not be external: $destination");
       }
       // The destination parameter is relative by convention but fromUserInput()
@@ -233,17 +262,19 @@ class SamlController extends ControllerBase {
       if (strpos($destination, '/') !== 0) {
         $destination = "/$destination";
       }
-      // toString(TRUE) will prevent 'leaking cacheability metadata into our
-      // render context'. (See comments at createRedirectResponse().) Instead,
-      // it will return the metadata to us... which we ignore because we're not
-      // rendering or caching anything; just providing whatever resulting URL
-      // to the SAML toolkit (so we get the exact same URL back after login;
-      // *then* we'll do something with it).
+      // See the PSA in the PHPDoc. Details: toString(TRUE) returns an object
+      // which contains cacheability metadata (rather than storing it /
+      // 'bubbling it up' into an invisible render context in the background,
+      // which would cause an exception to be thrown by a caller). We discard
+      // it (and only use the URL string) because we don't render or cache
+      // anything; we only pass the URL to the SAML toolkit.
       $destination_url = Url::fromUserInput($destination)->setAbsolute()->toString(TRUE)->getGeneratedUrl();
 
       // After we return from this controller, Drupal immediately redirects to
-      // the path set in the 'destination' parameter - but we don't want that
-      // to happen until after login, so remove the parameter.
+      // the path set in the 'destination' parameter (for the current URL being
+      // handled). We want to always redirect to the IdP instead (and only use
+      // $destination_url after the user gets redirected back here), so remove
+      // the parameter.
       $request_query_parameters->remove('destination');
     }
 
@@ -266,7 +297,7 @@ class SamlController extends ControllerBase {
     $relay_state = $this->requestStack->getCurrentRequest()->get('RelayState');
     if ($relay_state) {
       // We should be able to trust the RelayState parameter at this point
-      // because the response from the IDP was verified. Only validate general
+      // because the response from the IdP was verified. Only validate general
       // syntax.
       if (!UrlHelper::isValid($relay_state, TRUE)) {
         $this->getLogger('samlauth')->error('Invalid RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
@@ -306,42 +337,77 @@ class SamlController extends ControllerBase {
    * Converts a URL to a response object that is suitable for this controller.
    *
    * @param string|\Drupal\Core\Url $url
-   *   A URL to redirect to, either as a string or a Drupal URL object. Strings
-   *   may only be used by callbacks that are configured in routing.yml as not
-   *   being cacheable. (Which, in our case, is most callbacks.)
+   *   A URL to redirect to, either as a string or a Drupal URL object. (Drupal
+   *   code usually creates and passes objects, but the SAML toolkit methods
+   *   return strings, so we allow those to be passed without conversion.)
+   * @param bool $cacheable_and_can_be_external
+   *   If TRUE, $url is allowed to be external. (By default, external URLs
+   *   cause an exception to be thrown later on, saying they are disallowed.)
+   *   It's also cacheable. The downside to this is, code doing this MUST NOT
+   *   call any 'unknown' code (meaning: any calls to code that might call
+   *   hooks / fire events is disallowed), because that would open us up to the
+   *   dreaded 'leaked metadata' exception. We're overloading this parameter to
+   *   have two uses for as long as we can get away with it, because 1) it's a
+   *   protected 'internal' method, not bound to any interface; 2) we want as
+   *   few different return values as possible; it's been confusing enough
+   *   getting our code to this point where we can prevent any exceptions.
    *
-   * @return \Drupal\Core\Routing\TrustedRedirectResponse
-   *   A response object representing a redirect.
+   * @return \Symfony\Component\HttpFoundation\RedirectResponse|\Drupal\Core\Routing\TrustedRedirectResponse
+   *   A response object representing a redirect: a Symfony RedirectResponse by
+   *   default; TrustedRedirectResponse (which is cacheable and can be
+   *   external) if $cacheable_and_can_be_external is TRUE.
    */
-  protected function createRedirectResponse($url) {
+  protected function createRedirectResponse($url, $cacheable_and_can_be_external = FALSE) {
     if (is_object($url)) {
-      // $url->toString() forces 'early rendering' which will make our
-      // controller's caller throw a LogicException mentioning "leaked
-      // metadata"*. We have to call toString(TRUE) to prevent this; this will
-      // return a GeneratedUrl object (instead of a string) containing
-      // 'cacheability metadata' which we'll need to handle ourselves.
-      // * Controller methods are executed in a 'render context', which causes
-      // $url->toString() to actually construct a render array, 'leaking'
-      // metadata into the render context. More info: #2630808 / #2638686 /
-      // https://www.lullabot.com/articles/early-rendering-a-lesson-in-debugging-drupal-8.
-      $generated_url = $url->toString(TRUE);
-      $url = $generated_url->getGeneratedUrl();
+      // This construct is needed to prevent exceptions; see comments at
+      // getUrlFromDestination(). The difference: in some cases we'll actually
+      // add the metadata into the response (because we can, and because we're
+      // returning a response object rather than a string).
+      $generated_url_object = $url->toString(TRUE);
+      $url = $generated_url_object->getGeneratedUrl();
     }
-    // Also when having returned from the IDP, we might redirect to an external
-    // url (at least in theory), so we always return a TrustedRedirectResponse.
-    $response = new TrustedRedirectResponse($url);
-    if (isset($generated_url)) {
-      // We shouldn't have to add cacheability metadata to our response object
-      // when the route is configured to not cache responses in our routing.yml.
-      // Do it anyway to prevent future obscure bugs with new routes.
-      $response->addCacheableDependency($generated_url);
+    if ($cacheable_and_can_be_external) {
+      // We have to use TrustedRedirectResponse here; just a RedirectResponse
+      // is prohibited from handling an external URL.
+      $response = new TrustedRedirectResponse($url);
+      if (isset($generated_url_object)) {
+        // We shouldn't have to add cacheability metadata to our response
+        // object when the route is configured to not cache responses in our
+        // routing.yml. Do it anyway to prevent future obscure bugs with new
+        // routes.
+        $response->addCacheableDependency($generated_url_object);
+      }
+    }
+    else {
+      // NOTE: all the above fussing over the use of toString() / handling of
+      // cacheability metadata is about getting our own code to do the right
+      // thing. However we can't prevent 'external' code (called on user login/
+      // insert/update hooks or the events fired by SamlService) from doing the
+      // wrong thing, so we have to take measures to prevent that external code
+      // from causing the 'leaked metadata' exception when we issue a
+      // redirect. There are several things we could do:
+      // - Patch Drupal to not throw exceptions if our response isn't cacheable
+      //   in the first place, as specified by our routing.yml ;-)
+      // - Create our own render context which 'catches' the cacheability
+      //   metadata that e.g. external toString() calls could have generated
+      //   in the background, so that the current render context (created by
+      //   our callers) does not see that metadata and throw an exception. This
+      //   could be done by e.g. adding the following code around our acs():
+      //   $RENDERER_SERVICE->executeInRenderContext(new RenderContext(), $this->acs());
+      //   This construct immediately discards the metadata; we don't need it
+      //   because our responses aren't cacheable anyway.
+      // - Use a Symfony RedirectResponse. Since that is not a cacheable
+      //   response, our callers won't check for unaccounted-for metadata and
+      //   therefore can't throw the related exception.
+      // We do the latter.
+      $response = new RedirectResponse($url);
     }
 
     return $response;
   }
 
   /**
-   * Displays error message and logs full exception.
+   * Displays and/or logs exception message.
    *
    * @param $exception
    *   The exception thrown.
@@ -349,18 +415,28 @@ class SamlController extends ControllerBase {
    *   A description of when the error was encountered.
    */
   protected function handleException($exception, $while = '') {
-    if ($while) {
-      $while = " while $while";
+    if ($exception instanceof UserVisibleException || $this->config->get('debug_display_error_details')) {
+      // Show the full error on screen; also log, but with lowered severity.
+      // Assume we don't need the "while" part for a user visible error because
+      // it's likely not fully correct.
+      \Drupal::messenger()->addError($exception->getMessage());
+      $this->getLogger('samlauth')->warning($exception->getMessage());
     }
-    // We use the same format for logging as Drupal's ExceptionLoggingSubscriber
-    // except we also specify where the error was encountered. (The options are
-    // limited, so we make this part of the message, not a context parameter.)
-    $error = Error::decodeException($exception);
-    unset($error['severity_level']);
-    $this->getLogger('samlauth')->critical("%type encountered$while: @message in %function (line %line of %file).", $error);
-    // Don't expose the error to prevent information leakage; the user probably
-    // can't do much with it anyway. But hint that more details are available.
-    drupal_set_message("Error encountered$while; details have been logged.", 'error');
+    else {
+      // Use the same format for logging as Drupal's ExceptionLoggingSubscriber
+      // except also specify where the error was encountered. (The options for
+      // the "while" part are limited, so we make this part of the message
+      // rather than a context parameter.)
+      if ($while) {
+        $while = " while $while";
+      }
+      $error = Error::decodeException($exception);
+      unset($error['severity_level']);
+      $this->getLogger('samlauth')->critical("%type encountered$while: @message in %function (line %line of %file).", $error);
+      // Don't expose the error to prevent information leakage; the user probably
+      // can't do much with it anyway. But hint that more details are available.
+      \Drupal::messenger()->addError("Error encountered{$while}; details have been logged.");
+    }
   }
 
 }

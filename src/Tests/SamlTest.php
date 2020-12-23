@@ -2,8 +2,7 @@
 
 namespace Drupal\samlauth\Tests;
 
-use Drupal\Core\Url;
-use Drupal\simpletest\WebTestBase;
+use Drupal\Tests\BrowserTestBase;
 use Drupal\Component\Serialization\Yaml;
 
 /**
@@ -11,20 +10,37 @@ use Drupal\Component\Serialization\Yaml;
  *
  * @group samlauth
  */
-class SamlTest extends WebTestBase {
+class SamlTest extends BrowserTestBase {
 
-  // We don't need a strict schema. There *isn't* one.
+  /**
+   * We don't need a strict schema. There *isn't* one.
+   */
   protected $strictConfigSchema = FALSE;
-  public static $modules = array('samlauth');
 
+  /**
+   * Modules to Enable.
+   */
+  public static $modules = ['samlauth'];
+
+  /**
+   * Return info on the test.
+   */
   public static function getInfo() {
-    return array(
+    return [
       'name' => 'Tests SAML authentication',
       'description' => 'Functional tests for the samlauth module functionality.',
       'group' => 'samlauth',
-    );
+    ];
   }
 
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'stark';
+
+  /**
+   * {@inheritdoc}
+   */
   public function setUp() {
     parent::setUp();
 
@@ -35,6 +51,9 @@ class SamlTest extends WebTestBase {
     \Drupal::configFactory()->getEditable('samlauth.authentication')->setData($config)->save();
   }
 
+  /**
+   * Tests the Admin Page.
+   */
   public function testAdminPage() {
     // Test that the administration page is present.
     // These aren't very good tests, but the form and config systems are already
@@ -43,12 +62,16 @@ class SamlTest extends WebTestBase {
     $this->drupalLogin($web_user);
     $this->drupalGet('admin/config/people/saml');
     $this->assertText('Login / Logout', 'Login / Logout fieldset present');
-    $this->assertText('Service Provider Configuration', 'SP fieldset present');
-    $this->assertText('Identity Provider Configuration', 'iDP fieldset present');
+    $this->assertText('Service Provider', 'SP fieldset present');
+    $this->assertText('Identity Provider', 'iDP fieldset present');
     $this->assertText('User Info and Syncing', 'User Info and Syncing fieldset present');
-    $this->assertText('Security Options', 'Security options fieldset present');
+    $this->assertText('SAML Message Construction', 'SAML Message Construction fieldset present');
+    $this->assertText('SAML Message Validation', 'SAML Message Validation fieldset present');
   }
 
+  /**
+   * Tests metadata coming back.
+   */
   public function testMetadata() {
     $web_user = $this->drupalCreateUser(['view sp metadata']);
     $this->drupalLogin($web_user);
@@ -59,54 +82,4 @@ class SamlTest extends WebTestBase {
     $this->assertRaw('entityID="samlauth"', 'Entity ID found in the metadata');
   }
 
-  /**
-   * Test login without mapping or user creation.
-   */
-  public function testLoginNotAllowed() {
-    // Ensure that this test is run as an anonymous user.
-    if ($this->loggedInUser) {
-      $this->drupalLogout();
-    }
-
-    // Since the SP is properly configured (done in setUp()), this should be a
-    // redirect.
-    $this->drupalGet('saml/login');
-    $url = Url::fromUri('https://idp.testshib.org:443/idp/Authn/UserPassword');
-    $this->assertUrl($url, [], 'Correct iDP page loaded');
-    $this->assertResponse(200, 'iDP page loaded successfully');
-
-    // Submit the login form with the testshib credentials.
-    $this->drupalPost('https://idp.testshib.org/idp/Authn/UserPassword', '*', array(
-      'j_username' => 'myself',
-      'j_password' => 'myself'
-    ));
-
-    // When mapping and creation aren't enabled, users are taken to user/login.
-    // @todo the return url tests aren't quite working yet. missing state on the iDP? might need to store JSESSIONID and _idp_authn_lc_key cookies?
-//    $url = Url::fromRoute('user.page');
-//    $this->assertUrl($url, [], 'User was redirected to user/login after iDP authentication.');
-//    $this->assertText('No existing user account matches the SAML ID provided', 'Error message was displayed to the user.');
-  }
-
-  /**
-   * Test that Drupal login is not allowed for SAML users when configured.
-   *
-   * This test relies on implicit behavior. The drupal_saml_login option is disabled by default.
-   */
-  public function testDrupalLoginNotAllowed() {
-    // Create a user.
-    $saml_user = $this->createUser();
-
-    // Manually set the SAML ID (this would normally be done by mapping or creating saml users)
-    \Drupal::service('user.data')->set('samlauth', $saml_user->id(), 'saml_id', '12345');
-
-    $edit = array(
-      'name' => $saml_user->getUsername(),
-      'pass' => $saml_user->pass_raw,
-    );
-    $this->drupalPostForm('user/login', $edit, t('Log in'));
-
-    $this->assert(!$this->drupalUserIsLoggedIn($saml_user), 'SAML user is not logged in.');
-    $this->assertText('SAML users must sign in with SSO', 'Error is displayed to the user.');
-  }
 }

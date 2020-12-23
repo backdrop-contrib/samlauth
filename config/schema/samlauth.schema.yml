@@ -21,7 +21,7 @@ samlauth.authentication:
       type: string
     sp_private_key:
       type: string
-    idp_enity_id:
+    idp_entity_id:
       type: string
     idp_single_sign_on_service:
       type: string
@@ -49,17 +49,27 @@ samlauth.authentication:
       type: string
     user_mail_attribute:
       type: string
+    request_set_name_id_policy:
+      type: boolean
     strict:
       type: boolean
     security_authn_requests_sign:
       type: boolean
     security_logout_requests_sign:
       type: boolean
+    security_logout_responses_sign:
+      type: boolean
+    security_assertions_encrypt:
+      type: boolean
     security_signature_algorithm:
       type: string
     security_messages_sign:
       type: boolean
+    security_want_name_id:
+      type: boolean
     security_request_authn_context:
       type: boolean
     security_lowercase_url_encoding:
+      type: boolean
+    security_logout_reuse_sigs:
       type: boolean

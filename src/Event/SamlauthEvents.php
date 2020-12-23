@@ -18,7 +18,7 @@ final class SamlauthEvents {
    * be found according to the module settings for basic required properties
    * (username, email). The event listener method receives a
    * Drupal\samlauth\Event\SamlauthUserLinkEvent instance. If it finds an
-   * account to link, it should call the event's linkAccount() method.
+   * account to link, it should call the event's setLinkedAccount() method.
    *
    * @Event
    *
