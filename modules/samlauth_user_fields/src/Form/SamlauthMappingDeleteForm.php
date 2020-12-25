@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth_custom_attributes\Form;
+namespace Drupal\samlauth_user_fields\Form;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Form for deleting a mapping.
  */
-class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
+class SamlauthMappingDeleteForm extends ConfirmFormBase {
 
   /**
    * A configuration object containing mapping settings.
@@ -43,7 +43,7 @@ class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
   protected $fieldName;
 
   /**
-   * SamlauthCustomAttributesDeleteForm constructor.
+   * SamlauthMappingDeleteForm constructor.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
@@ -51,7 +51,7 @@ class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
    *   The entity field manager service.
    */
   public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager) {
-    $this->mappingConfig = $config_factory->getEditable('samlauth_custom_attributes.mappings');
+    $this->mappingConfig = $config_factory->getEditable('samlauth_user_fields.mappings');
     $this->entityFieldManager = $entity_field_manager;
   }
 
@@ -69,7 +69,7 @@ class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'samlauth_custom_attributes_delete_form';
+    return 'samlauth_user_fields_delete_form';
   }
 
   /**
@@ -118,7 +118,7 @@ class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
    * {@inheritdoc}
    */
   public function getCancelUrl() {
-    return new Url('samlauth_custom_attributes.list');
+    return new Url('samlauth_user_fields.list');
   }
 
   /**
@@ -134,7 +134,7 @@ class SamlauthCustomAttributesDeleteForm extends ConfirmFormBase {
     $this->mappingConfig->set('field_mappings', $mappings)->save();
 
     // Go back to the list page.
-    $form_state->setRedirect('samlauth_custom_attributes.list');
+    $form_state->setRedirect('samlauth_user_fields.list');
   }
 
 }

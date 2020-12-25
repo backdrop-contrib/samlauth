@@ -1,4 +1,4 @@
-name: 'SAML Auth Custom Attribute Mapping'
+name: 'SAML Auth User Fields Mapping'
 type: module
 description: 'Maps custom SAML SSO attributes to user fields.'
 package: 'User Authentication'

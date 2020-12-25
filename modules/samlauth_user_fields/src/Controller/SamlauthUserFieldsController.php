@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth_custom_attributes\Controller;
+namespace Drupal\samlauth_user_fields\Controller;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Controller\ControllerBase;
@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Handles the routes for our mapper.
  */
-class SamlauthCustomAttributesController extends ControllerBase {
+class SamlauthUserFieldsController extends ControllerBase {
 
   /**
    * A configuration object containing mapping settings.
@@ -28,7 +28,7 @@ class SamlauthCustomAttributesController extends ControllerBase {
   protected $entityFieldManager;
 
   /**
-   * SamlauthCustomAttributesController constructor.
+   * SamlauthUserFieldsController constructor.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
@@ -36,7 +36,7 @@ class SamlauthCustomAttributesController extends ControllerBase {
    *   The entity field manager service.
    */
   public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager) {
-    $this->mappingConfig = $config_factory->get('samlauth_custom_attributes.mappings');
+    $this->mappingConfig = $config_factory->get('samlauth_user_fields.mappings');
     $this->entityFieldManager = $entity_field_manager;
   }
 
@@ -94,11 +94,11 @@ class SamlauthCustomAttributesController extends ControllerBase {
           '#links' => [
             'edit' => [
               'title' => $this->t('edit'),
-              'url' => Url::fromRoute('samlauth_custom_attributes.edit', ['mapping' => $id]),
+              'url' => Url::fromRoute('samlauth_user_fields.edit', ['mapping_id' => $id]),
             ],
             'delete' => [
               'title' => $this->t('delete'),
-              'url' => Url::fromRoute('samlauth_custom_attributes.delete', ['mapping' => $id]),
+              'url' => Url::fromRoute('samlauth_user_fields.delete', ['mapping_id' => $id]),
             ],
           ],
         ];

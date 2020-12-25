@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth_custom_attributes\Form;
+namespace Drupal\samlauth_user_fields\Form;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Form for adding a mapped SAML attribute -> user field.
  */
-class SamlauthCustomAttributesEditForm extends FormBase {
+class SamlauthMappingEditForm extends FormBase {
 
   /**
    * The set of 'core' entity fields that are mappable.
@@ -35,7 +35,7 @@ class SamlauthCustomAttributesEditForm extends FormBase {
   protected $entityFieldManager;
 
   /**
-   * SamlauthCustomAttributesEditForm constructor.
+   * SamlauthMappingEditForm constructor.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
@@ -43,7 +43,7 @@ class SamlauthCustomAttributesEditForm extends FormBase {
    *   The entity field manager service.
    */
   public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager) {
-    $this->mappingConfig = $config_factory->getEditable('samlauth_custom_attributes.mappings');
+    $this->mappingConfig = $config_factory->getEditable('samlauth_user_fields.mappings');
     $this->entityFieldManager = $entity_field_manager;
   }
 
@@ -61,7 +61,7 @@ class SamlauthCustomAttributesEditForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'samlauth_custom_attributes_edit_form';
+    return 'samlauth_user_fields_edit_form';
   }
 
   /**
@@ -170,7 +170,7 @@ class SamlauthCustomAttributesEditForm extends FormBase {
     $this->mappingConfig->set('field_mappings', $mappings)->save();
 
     // Go back to the listing page.
-    $form_state->setRedirect('samlauth_custom_attributes.list');
+    $form_state->setRedirect('samlauth_user_fields.list');
   }
 
 }

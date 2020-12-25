@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth_custom_attributes\EventSubscriber;
+namespace Drupal\samlauth_user_fields\EventSubscriber;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\StringTranslation\PluralTranslatableMarkup;
@@ -50,7 +50,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
    *   The typed data manager service.
    */
   public function __construct(ConfigFactoryInterface $config_factory, LoggerInterface $logger, TypedDataManagerInterface $typed_data_manager) {
-    $this->config = $config_factory->get('samlauth_custom_attributes.mappings');
+    $this->config = $config_factory->get('samlauth_user_fields.mappings');
     $this->logger = $logger;
     $this->typedDataManager = $typed_data_manager;
   }

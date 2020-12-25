@@ -1,5 +1,0 @@
-samlauth_custom_attributes.list:
-  title: 'Attribute mapping'
-  route_name: samlauth_custom_attributes.list
-  base_route: samlauth.samlauth_configure_form
-  weight: 1
