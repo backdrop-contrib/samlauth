@@ -10,9 +10,11 @@ use Drupal\Core\TypedData\TypedDataManagerInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
+use Drupal\samlauth\UserVisibleException;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\ConstraintViolation;
 
@@ -78,7 +80,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Tries to link an existing non-linked user based on SAML attribute values.
+   * Tries to link an existing user based on SAML attribute values.
    *
    * @param \Drupal\samlauth\Event\SamlauthUserLinkEvent $event
    *   The event.
@@ -91,24 +93,41 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
         $query->condition($field_name, $value);
       }
       $results = $query->execute();
-
+      // @todo we should figure out what we want to do with users that are
+      //   already 'linked' in the authmap table. Maybe we want to exclude
+      //   them from the query results; maybe we want to include them and
+      //   (optionally) give an error if we encounter them. At this point, we
+      //   include them without error. The main module will just "link" this
+      //   user, which will silently fail (because of the existing link) and
+      //   be repeated on the next login. This is consistent with existing
+      //   behavior for name/email. I may want to wait with refining this
+      //   behavior, until the behavior of ExternalAuth::linkExistingAccount()
+      //   is clear and stable. (IMHO it currently is not / I think there are
+      //   outstanding issues which will influence its behavior.)
+      // @todo when we change that, change "existing (local|Drupal)? user" to
+      //   "existing non-linked (local|Drupal)? user" in descriptions.
+      // @todo more options:
+      //   - take first user if we get multiple
+      //   - exclude blocked users. (They are included by default so we don't
+      //     create new duplicate-ish users.)
       $count = count($results);
       if ($count) {
         if ($count > 1) {
-          // If we don't want to choose the wrong user, and we also don't want to
-          // create yet another user, we have no option but to throw an exception
-          // (which will abort login) and let the user figure it out.
-          throw new RuntimeException(count($results) . ' existing Drupal users can be linked to the user authenticated by the SAML IDP. This should be fixed before the user can log in.');
+          // If we don't want to choose the wrong user, and we also don't want
+          // to create yet another user, we have no option but to throw an
+          // exception (which will abort login) and let the user figure it out.
+          throw new UserVisibleException(count($results) . ' existing Drupal users can be linked to the user authenticated by the SAML IDP. This should be fixed before the user can log in.');
         }
         $account = User::load(reset($results));
-        if ($account) { // CANNOT load account exce?
+        if ($account) {
           // Found an account; we're done.
           $event->setLinkedAccount($account);
           break;
         }
+        else {
+          throw new RuntimeException('Found user %uid to link on login, but it cannot be loaded.');
+        }
       }
-
-      // @TODO 'non-linked'? What does main module do? Also, blocked?
     }
   }
 
@@ -179,7 +198,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
         $this->logger->warning('Invalid user field mapped from SAML attribute %attribute; the mapping must be fixed.', ['%attribute' => $mapping['attribute_name']]);
       }
       elseif (!$account->hasField($mapping['field_name'])) {
-        $this->logger->warning('User field %field is mapped from SAML attribute %attr, but does not exist; the mapping must be fixed.', [
+        $this->logger->warning('User field %field is mapped from SAML attribute %attribute, but does not exist; the mapping must be fixed.', [
           '%field' => $mapping['field_name'],
           '%attribute' => $mapping['attribute_name'],
         ]);

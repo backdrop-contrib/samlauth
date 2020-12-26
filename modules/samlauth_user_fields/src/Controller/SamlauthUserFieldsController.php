@@ -57,38 +57,29 @@ class SamlauthUserFieldsController extends ControllerBase {
    *   Renderable content array.
    */
   public function ssoMappings() {
-    // Load the mappings.
-    $mappings = $this->mappingConfig->get('field_mappings');
-    // Load the user fields.
-    $fields = $this->entityFieldManager->getFieldDefinitions('user', 'user');
-
-    // @todo make code that captures all attributes from a SAML authentication
-    //   message (only if enabled here via a special temporary option) and
-    //   fills a list of possible attribute names. If said list is populated,
-    //   we can present a select element in the add/edit screen - though we
-    //   always want to keep the option for the user of entering an attribute
-    //   name manually, so this will complicate that add/edit screen a bit.
-    $output['message'] = [
-      '#type' => 'markup',
-      '#markup' => '<em>' . $this->t('At this moment, you need to know all SAML attribute names in order to be able to input them. This is possible, among others, by inspecting the SAML messages logged in the "Recent log messages", after enabling "Log incoming SAML messages".') . '</em>',
-    ];
-
-    // Set up the table.
     $output['table'] = [
       '#theme' => 'table',
       '#header' => [
         $this->t('SAML Attribute'),
         $this->t('User Field'),
+        $this->t('Use for linking'),
         $this->t('Operations'),
       ],
       '#sticky' => TRUE,
       '#empty' => t("There are no mappings. You can add one using the link above."),
     ];
 
-    // If there are mapping, process them.
+    $mappings = $this->mappingConfig->get('field_mappings');
     if ($mappings) {
+      $fields = $this->entityFieldManager->getFieldDefinitions('user', 'user');
+      // We're identifying individual mappings by their numeric indexes in the
+      // configuration value (which is defined as a 'sequence' in the config
+      // schema). These are not renumbered while saving a mapping, so the
+      // danger of using them is acceptable. (URLs would only pointing to a
+      // different mapping if we delete the highest numbered mapping and re-add
+      // one. Maybe things are renumbered arter exporting configuration, I
+      // haven't tested, but that's also an acceptable risk.)
       foreach ($mappings as $id => $mapping) {
-        // Set up the operations dropbutton.
         $operations = [
           '#type' => 'dropbutton',
           '#links' => [
@@ -103,12 +94,12 @@ class SamlauthUserFieldsController extends ControllerBase {
           ],
         ];
 
-        // Add the row to the table.
         $user_field = isset($fields[$mapping['field_name']])
           ? $fields[$mapping['field_name']]->getLabel() : $this->t('Unknown field %name', ['%name' => $mapping['field_name']]);
         $output['table']['#rows'][$id] = [
           'saml_attribute' => $mapping['attribute_name'],
           'user_field' => $user_field,
+          'link_user_order' => $mapping['link_user_order'] ?? '',
           'operations' => render($operations),
         ];
       }

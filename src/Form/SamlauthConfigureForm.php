@@ -293,7 +293,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['user_info']['map_users'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Attempt to link SAML data to existing local users'),
-      '#description' => $this->t('If the unique ID in the SAML assertion is not linked to a Drupal user, and the name / e-mail attribute matches an existing non-linked Drupal user, that user will be linked and logged in. (By default, a new user is created with the same data depending on the next option - which may result in an error about a duplicate or missing user.)'),
+      '#description' => $this->t('If the unique ID in the SAML assertion is not linked to a Drupal user, and the name / e-mail attribute matches an existing Drupal user, that user will be linked and logged in. (By default, a new user is created with the same data depending on the next option - which may result in an error about a duplicate or missing user.)'),
       '#default_value' => $config->get('map_users'),
     ];
 

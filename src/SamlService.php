@@ -225,7 +225,10 @@ class SamlService {
         $event = new SamlauthUserLinkEvent($this->getAttributes());
         $this->eventDispatcher->dispatch(SamlauthEvents::USER_LINK, $event);
         $account = $event->getLinkedAccount();
-        if (!$account) {
+        if ($account) {
+          $this->logger->info('Existing user @name (@uid) was newly matched to SAML login attributes; linking user and logging in.', ['@name' => $account->getAccountName(), '@uid' => $account->id()]);
+        }
+        else {
           // The linking by name / e-mail cannot be bypassed at this point
           // because it makes no sense to create a new account from the SAML
           // attributes if one of these two basic properties is already in use.
@@ -235,13 +238,13 @@ class SamlService {
           $name = $this->getAttributeByConfig('user_name_attribute');
           if ($name && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
             $account = reset($account_search);
-            $this->logger->info('Matching local user @uid found for name @name (as provided in a SAML attribute); associating user and logging in.', ['@name' => $name, '@uid' => $account->id()]);
+            $this->logger->info('Matching local user @uid found for name @name (as provided in a SAML attribute); linking user and logging in.', ['@name' => $name, '@uid' => $account->id()]);
           }
           else {
             $mail = $this->getAttributeByConfig('user_mail_attribute');
             if ($mail && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
               $account = reset($account_search);
-              $this->logger->info('Matching local user @uid found for e-mail @mail (as provided in a SAML attribute); associating user and logging in.', ['@mail' => $mail, '@uid' => $account->id()]);
+              $this->logger->info('Matching local user @uid found for e-mail @mail (as provided in a SAML attribute); linking user and logging in.', ['@mail' => $mail, '@uid' => $account->id()]);
             }
           }
         }
@@ -253,7 +256,7 @@ class SamlService {
         // unique ID). If that happens, it does not matter much to us; we will
         // just log the account in anyway. Next time the same not-yet-linked
         // user logs in, we will again try to link the account in the same way
-        // and (falsely) log that we are associating the user.
+        // and (falsely) log that we are linking the user.
         $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
       }
     }

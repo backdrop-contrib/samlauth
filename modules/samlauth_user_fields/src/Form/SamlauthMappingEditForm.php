@@ -16,9 +16,9 @@ class SamlauthMappingEditForm extends FormBase {
   /**
    * The set of 'core' entity fields that are mappable.
    *
-   * (Name and e-mail are too, but not from this form.)
+   * (Name and email are too, but not from this form.)
    */
-  const MAPPABLE_CORE_FIELDS = ['langcode'];
+  const MAPPABLE_CORE_FIELDS = ['langcode', 'timezone'];
 
   /**
    * A configuration object containing mapping settings.
@@ -79,24 +79,28 @@ class SamlauthMappingEditForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
     $user_fields = $this->entityFieldManager->getFieldDefinitions('user', 'user');
-    $saml_attribute = '';
-    $field_name = '';
+    $mappings = $this->mappingConfig->get('field_mappings');
+    $field_name = NULL;
     if ($mapping_id !== NULL) {
-      $mappings = $this->mappingConfig->get('field_mappings');
-      $saml_attribute = $mappings[$mapping_id]['attribute_name'];
       $field_name = $mappings[$mapping_id]['field_name'];
       if (!isset($user_fields[$field_name])) {
         $this->messenger()->addError('Currently mapped user field %name is unknown. Saving this form will change the mepping.', ['%name' => $field_name]);
-        $field_name = '';
+        $field_name = NULL;
       }
     }
 
+    // @todo make code that captures all attributes from a SAML authentication
+    //   message (only if enabled here via a special temporary option) and
+    //   fills a list of possible attribute names. If said list is populated,
+    //   we can present a select element in the add/edit screen - though we
+    //   always want to keep the option for the user of entering an attribute
+    //   name manually, so this will complicate the screen a bit.
     $form['attribute_name'] = [
       '#type' => 'textfield',
       '#title' => $this->t('SAML Attribute'),
       '#description' => $this->t('The name of the SAML attribute you want to sync to the user profile.'),
       '#required' => TRUE,
-      '#default_value' => $saml_attribute,
+      '#default_value' => $mappings[$mapping_id]['attribute_name'] ?? NULL,
     ];
 
     $options = ['' => $this->t('- Select -')];
@@ -114,9 +118,20 @@ class SamlauthMappingEditForm extends FormBase {
       '#default_value' => $field_name,
     ];
 
+    // The huge description isn't very good UX, but we'll postpone thinking
+    // about it until we integrate this mapping with the mapping for
+    // name + email - or until someone else sends in a fix for this.
+    $form['link_user_order'] = [
+      '#type' => 'number',
+      '#size' => 2,
+      '#title' => $this->t('Link user?'),
+      '#description' => $this->t("Provide a value here if a first login should attempt to match an existing non-linked Drupal user on the basis of this field's value. The exact value only matters when multiple link attempts are defined (to determine order of attempts and/or combination with other fields). See the help text with the list for more info."),
+      '#default_value' => $mappings[$mapping_id]['link_user_order'] ?? NULL,
+    ];
+
     // Add this value so we know if it's an add or an edit.
     $form['mapping_id'] = [
-      '#type' => 'hidden',
+      '#type' => 'value',
       '#value' => $mapping_id,
     ];
 
@@ -134,11 +149,22 @@ class SamlauthMappingEditForm extends FormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     $mappings = $this->mappingConfig->get('field_mappings');
 
-    // If this is a new mapping, check to make sure the same one isn't already
+    // If this is a new mapping, check to make sure a 'same' one isn't already
     // defined.
-    if ($mappings && !$form_state->getValue('mapping_id')) {
-      foreach ($mappings as $mapping) {
-        if ($mapping['attribute_name'] === $form_state->getValue('attribute_name') && $mapping['field_name'] === $form_state->getValue('field_name')) {
+    $our_mapping_id = $form_state->getValue('mapping_id');
+    $our_match_id = $form_state->getValue('link_user_order');
+    foreach ($mappings as $mapping_id => $mapping) {
+      if ($mapping_id != $our_mapping_id || $our_mapping_id === '') {
+        if ($our_match_id !== '' && isset($mapping['link_user_order']) && $our_match_id == $mapping['link_user_order']
+            && $mapping['field_name'] === $form_state->getValue('field_name')) {
+          $form_state->setErrorByName('field_name', $this->t("This user field is already used for the same 'Link' value."));
+        }
+        // Allow mappings from/to the same attribute/field if both are used in
+        // a different match/link expression. It's far fetched, but the
+        // duplicate doesn't make a difference for the mapping in practice.
+        if (($our_match_id === '' || !isset($mapping['link_user_order']) || $our_match_id == $mapping['link_user_order'])
+            && $mapping['field_name'] === $form_state->getValue('field_name')
+            && $mapping['attribute_name'] === $form_state->getValue('attribute_name')) {
           $form_state->setErrorByName('field_name', $this->t('This SAML attribute has already been mapped to this field.'));
         }
       }
@@ -155,6 +181,7 @@ class SamlauthMappingEditForm extends FormBase {
     $mapping = [
       'attribute_name' => $form_state->getValue('attribute_name'),
       'field_name' => $form_state->getValue('field_name'),
+      'link_user_order' => $form_state->getValue('link_user_order'),
     ];
 
     // If we're editing, update the value, if we're adding, add it.
