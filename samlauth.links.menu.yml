@@ -1,5 +1,5 @@
 samlauth.samlauth_configure_form:
-  title: 'SAML Authentication'
+  title: 'SAML authentication'
   parent: user.admin_index
   description: 'Configure SAML authentication behaviors'
   weight: -10

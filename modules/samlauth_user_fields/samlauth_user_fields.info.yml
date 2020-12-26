@@ -1,0 +1,8 @@
+name: 'SAML Auth User Fields Mapping'
+type: module
+description: 'Maps custom SAML SSO attributes to user fields.'
+package: 'User Authentication'
+core_version_requirement: ^8 || ^9
+core: 8.x
+dependencies:
+  - samlauth:samlauth
