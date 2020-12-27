@@ -81,13 +81,14 @@ on their side. If you're curious and/or know details about what the IdP
 expects, you can go through the "SAML Message Construction" / "SAML Response
 Validation" sections first, to get details of the XML exactly right, but those
 details are very likely unneeded. When in doubt, this is the point at which you
-can provide information to the IdP:
+can provide information to the (people administering the) IdP:
 
-- save the XML file from the metadata URL (/saml/metadata) and hand it to (the
-  person administering) the IdP
-- or: go to admin/people/permissions#module-samlauth to enable permission to
-  view the metadata, and give the URL to the IdP
-- or: just give them the Entity ID and public certificate (the file sp.crt)
+- go to admin/people/permissions#module-samlauth to enable permission to view
+  the metadata, and pass on the metadata URL
+- or: save the XML file from the metadata URL (/saml/metadata) and pass it on
+- or: just give them the Entity ID, the public certificate (the file sp.crt)
+  and the URLs displayed in the "Service Provider" section of the configuration
+  screen.
 
 ### Identity Provider:
 
@@ -109,7 +110,7 @@ adjust. (For instance, if some validation of signatures fails, try to turn
 strictness/validation settings off. But please fix validation issues and turn
 them back on later, for improved security.)
 
-### USER INFO AND SYNCING
+### User info and syncing
 
 The most important configuration value to get right from the start, is the
 "Unique ID attribute". Each user logging in through SAML needs to be identified
@@ -135,6 +136,13 @@ side.
 
 Other settings / checkboxes are hopefully self-explanatory.
 
+If you enable the "Create users from SAML data" option, it is quite possible
+that you'll want to add more data to the users than just name and email.
+Synchronizing other fields and/or roles is done with optional modules, so that
+their behavior can be more easily replaced with custom code. See the modules/
+subdirectory and enable the shipped submodules as desired; their configuration
+is exposed in extra tabs next to the "Configuration" tab.
+
 ### SAML Message Construction / SAML Response Validation
 
 This ever expanding section of advanced configuration won't be discussed here
@@ -150,9 +158,17 @@ in detail; hopefully the setting descriptions give a clue. Just some hints:
 DEBUGGING
 ---------
 
-Besides the debugging options available in the configuration screen, you can 
-use third party tools to help debug your SSO flow with SAML. The following are
-browser extensions that can be used on Linux, macOS and Windows:
+Hopefully the 'Debugging' options in the configuration screen are of enough
+support to be able to get SAML login working. In particular, turn on "Log
+incoming SAML messages" to be able to inspect the contents of SAML assertions
+for the names of attributes containing data that needs to be written into
+Drupal user accounts. (After trying to log in through the IdP, Drupal's "Recent
+log messages" should contain the XML message that contains the assertion /
+attributes.)
+
+If needed, you can use third party tools to help debug your SSO flow with SAML.
+The following are browser extensions that can be used on Linux, macOS and
+Windows:
 
 Google Chrome:
 - SAML Chrome Panel: https://chrome.google.com/webstore/detail/saml-chrome-panel/paijfdbeoenhembfhkhllainmocckace

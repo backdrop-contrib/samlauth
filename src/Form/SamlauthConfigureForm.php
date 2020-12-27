@@ -17,6 +17,11 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class SamlauthConfigureForm extends ConfigFormBase {
 
   /**
+   * Name of the configuration object containing the setting used by this form.
+   */
+  const CONFIG_OBJECT_NAME = 'samlauth.authentication';
+
+  /**
    * The PathValidator service.
    *
    * @var \Drupal\Core\Path\PathValidatorInterface
@@ -61,9 +66,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    return [
-      'samlauth.authentication',
-    ];
+    // I'm using ConfigFormBase for the unified save button / message, but
+    // don't want to use ConfigFormBase::config(), to keep a unified way of
+    // getting config values in forms / not obfuscate call structures and get
+    // confused later. So this method/value is unneeded, but ConfigFormBase
+    // requires it. Let's make it empty.
+    return [];
   }
 
   /**
@@ -77,7 +85,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $config = $this->config('samlauth.authentication');
+    $config = $this->configFactory()->get(self::CONFIG_OBJECT_NAME);
 
     $form['saml_login_logout'] = [
       '#type' => 'fieldset',
@@ -611,8 +619,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    parent::submitForm($form, $form_state);
-
     // Only store variables related to the sp_cert_type value. (If the user
     // switched from fields to folder, the cert/key values always get cleared
     // so no unused security sensitive data gets saved in the database.)
@@ -628,7 +634,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $sp_private_key =  $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
     }
 
-    $this->config('samlauth.authentication')
+    $this->configFactory()->getEditable(self::CONFIG_OBJECT_NAME)
       ->set('login_menu_item_title', $form_state->getValue('login_menu_item_title'))
       ->set('logout_menu_item_title', $form_state->getValue('logout_menu_item_title'))
       ->set('drupal_saml_login', $form_state->getValue('drupal_saml_login'))
@@ -672,6 +678,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('debug_log_in', $form_state->getValue('debug_log_in'))
       ->set('debug_phpsaml', $form_state->getValue('debug_phpsaml'))
       ->save();
+
+    parent::submitForm($form, $form_state);
   }
 
   /**

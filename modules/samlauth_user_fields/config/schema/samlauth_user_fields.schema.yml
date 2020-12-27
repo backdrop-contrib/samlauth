@@ -15,3 +15,7 @@ samlauth_user_fields.mappings:
       type: sequence
       sequence:
         type: samlauth_user_fields.field_mapping
+    link_first_user:
+      type: boolean
+    ignore_blocked:
+      type: boolean

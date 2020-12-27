@@ -14,7 +14,6 @@ use Drupal\samlauth\UserVisibleException;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Psr\Log\LoggerInterface;
-use RuntimeException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\ConstraintViolation;
 
@@ -74,7 +73,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    * {@inheritdoc}
    */
   public static function getSubscribedEvents() {
-    $events[SamlauthEvents::USER_LINK][] = ['onUserLink'];;
+    $events[SamlauthEvents::USER_LINK][] = ['onUserLink'];
     $events[SamlauthEvents::USER_SYNC][] = ['onUserSync'];
     return $events;
   }
@@ -89,6 +88,9 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     $match_expressions = $this->getMatchExpressions($event->getAttributes());
     foreach ($match_expressions as $match_expression) {
       $query = $this->entityTypeManager->getStorage('user')->getQuery();
+      if ($this->config->get('ignore_blocked')) {
+        $query->condition('status', 1);
+      }
       foreach ($match_expression as $field_name => $value) {
         $query->condition($field_name, $value);
       }
@@ -106,27 +108,38 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
       //   outstanding issues which will influence its behavior.)
       // @todo when we change that, change "existing (local|Drupal)? user" to
       //   "existing non-linked (local|Drupal)? user" in descriptions.
-      // @todo more options:
-      //   - take first user if we get multiple
-      //   - exclude blocked users. (They are included by default so we don't
-      //     create new duplicate-ish users.)
       $count = count($results);
       if ($count) {
         if ($count > 1) {
-          // If we don't want to choose the wrong user, and we also don't want
-          // to create yet another user, we have no option but to throw an
-          // exception (which will abort login) and let the user figure it out.
-          throw new UserVisibleException(count($results) . ' existing Drupal users can be linked to the user authenticated by the SAML IDP. This should be fixed before the user can log in.');
+          $query = [];
+          foreach ($match_expression as $field_name => $value) {
+            $query[] = "$field_name=$value";
+          }
+          if ($this->config->get('ignore_blocked')) {
+            $query[] = "status=1";
+          }
+          if (!$this->config->get('link_first_user')) {
+            $this->logger->error(
+              "Denying login because SAML data match is ambiguous: @count matching users (@uids) found for @query", [
+                '@count' => $count,
+                '@uids' => implode(',', $results),
+                '@query' => implode(',', $query),
+              ]);
+            throw new UserVisibleException('It is unclear which user should be logged in. Please contact an administrator.');
+          }
+          $this->logger->notice("Selecting first of @count matching users to link (@uids) for @query", [
+            '@count' => $count,
+            '@uids' => implode(',', $results),
+            '@query' => implode(',', $query),
+          ]);
         }
         $account = User::load(reset($results));
-        if ($account) {
-          // Found an account; we're done.
-          $event->setLinkedAccount($account);
-          break;
+        if (!$account) {
+          throw new \RuntimeException('Found user %uid to link on login, but it cannot be loaded.');
         }
-        else {
-          throw new RuntimeException('Found user %uid to link on login, but it cannot be loaded.');
-        }
+
+        $event->setLinkedAccount($account);
+        break;
       }
     }
   }
@@ -156,7 +169,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
           $match_fields[$match_id] = FALSE;
         }
         if (!isset($match_fields[$match_id])) {
-          $match_fields[$match_id] = [$mapping['field_name'] => $mapping['attribute_name']];
+          $match_fields[$match_id] = [$mapping['field_name'] => $value];
         }
         elseif ($match_fields[$match_id]) {
           if (isset($match_fields[$match_id][$mapping['field_name']])) {
@@ -168,7 +181,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
             ]);
           }
           else {
-            $match_fields[$match_id][$mapping['field_name']] = $mapping['attribute_name'];
+            $match_fields[$match_id][$mapping['field_name']] = $value;
           }
         }
       }

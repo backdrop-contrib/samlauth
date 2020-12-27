@@ -2,7 +2,7 @@ samlauth_user_fields.list:
   path: 'admin/config/people/saml/user-fields'
   defaults:
     _title: 'SAML user fields attribute mapping'
-    _controller: '\Drupal\samlauth_user_fields\Controller\SamlauthUserFieldsController::ssoMappings'
+    _form: '\Drupal\samlauth_user_fields\Form\SamlauthMappingListForm'
   requirements:
     _permission: 'configure saml'
 

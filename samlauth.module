@@ -6,6 +6,7 @@
  */
 
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Url;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\user\UserInterface;
 
@@ -16,9 +17,11 @@ function samlauth_help($route_name, RouteMatchInterface $route_match) {
   switch ($route_name) {
     // Main module help for the samlauth module.
     case 'help.page.samlauth':
-      $output = '';
-      $output .= '<h3>' . t('About') . '</h3>';
+      $module_path = \Drupal::moduleHandler()->getModule('samlauth')->getPath();
+      $eh = Url::fromUri("base:$module_path/README.md")->toString();
+      $output = '<h3>' . t('About') . '</h3>';
       $output .= '<p>' . t('Allows users to authenticate against an external SAML identity provider.') . '</p>';
+      $output .= '<p>' . t('Most information on how to configure this module is in the <a href=":url">README.md file</a>.', [':url' => Url::fromUri("base:$module_path/README.md")->toString()]) . '</p>';
       return $output;
 
     default:

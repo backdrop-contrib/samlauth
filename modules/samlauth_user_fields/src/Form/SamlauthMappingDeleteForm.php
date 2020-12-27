@@ -2,7 +2,6 @@
 
 namespace Drupal\samlauth_user_fields\Form;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfirmFormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -15,11 +14,9 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class SamlauthMappingDeleteForm extends ConfirmFormBase {
 
   /**
-   * A configuration object containing mapping settings.
-   *
-   * @var \Drupal\Core\Config\Config
+   * Name of the configuration object containing the setting used by this form.
    */
-  protected $mappingConfig;
+  const CONFIG_OBJECT_NAME = 'samlauth_user_fields.mappings';
 
   /**
    * The entity field manager service.
@@ -45,13 +42,10 @@ class SamlauthMappingDeleteForm extends ConfirmFormBase {
   /**
    * SamlauthMappingDeleteForm constructor.
    *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The config factory.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager) {
-    $this->mappingConfig = $config_factory->getEditable('samlauth_user_fields.mappings');
+  public function __construct(EntityFieldManagerInterface $entity_field_manager) {
     $this->entityFieldManager = $entity_field_manager;
   }
 
@@ -60,7 +54,6 @@ class SamlauthMappingDeleteForm extends ConfirmFormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('config.factory'),
       $container->get('entity_field.manager')
     );
   }
@@ -87,7 +80,7 @@ class SamlauthMappingDeleteForm extends ConfirmFormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
     if ($mapping_id !== NULL) {
-      $mappings = $this->mappingConfig->get('field_mappings');
+      $mappings = $this->configFactory()->get(self::CONFIG_OBJECT_NAME)->get('field_mappings');
 
       // Set these values for the confirm message to pick up on them.
       $this->attributeName = $mappings[$mapping_id]['attribute_name'];
@@ -125,15 +118,11 @@ class SamlauthMappingDeleteForm extends ConfirmFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $mappings = $this->mappingConfig->get('field_mappings');
-
-    // Remove the mapping from the array.
+    $config = $this->configFactory()->getEditable(self::CONFIG_OBJECT_NAME);
+    $mappings = $config->get('field_mappings');
     unset($mappings[$form_state->get('mapping_id')]);
+    $config->set('field_mappings', $mappings)->save();
 
-    // Save the new config.
-    $this->mappingConfig->set('field_mappings', $mappings)->save();
-
-    // Go back to the list page.
     $form_state->setRedirect('samlauth_user_fields.list');
   }
 

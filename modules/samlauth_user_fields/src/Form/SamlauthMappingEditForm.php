@@ -2,7 +2,6 @@
 
 namespace Drupal\samlauth_user_fields\Form;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -14,18 +13,45 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 class SamlauthMappingEditForm extends FormBase {
 
   /**
-   * The set of 'core' entity fields that are mappable.
-   *
-   * (Name and email are too, but not from this form.)
+   * Name of the configuration object containing the setting used by this form.
    */
-  const MAPPABLE_CORE_FIELDS = ['langcode', 'timezone'];
+  const CONFIG_OBJECT_NAME = 'samlauth_user_fields.mappings';
 
   /**
-   * A configuration object containing mapping settings.
-   *
-   * @var \Drupal\Core\Config\Config
+   * Field types that can be mapped.
    */
-  protected $mappingConfig;
+  const MAP_FIELD_TYPES = [
+    'boolean',
+    'email',
+    'float',
+    'integer',
+    'language',
+    'link',
+    'list_float',
+    'list_integer',
+    'list_string',
+    'string',
+    'telephone',
+    'timestamp',
+  ];
+
+  /**
+   * User fields (of mappable types) that should not be mappable.
+   */
+  const PREVENT_MAP_FIELS = [
+    // Name and email are mappable, but not from this form.
+    'name',
+    'mail',
+    'uid',
+    'status',
+    'access',
+    'login',
+    'init',
+    // preferred(_admin)_langcode is mappable. (default_)langcode seem to be
+    // standard fields on entities.
+    'langcode',
+    'default_langcode',
+  ];
 
   /**
    * The entity field manager service.
@@ -37,13 +63,10 @@ class SamlauthMappingEditForm extends FormBase {
   /**
    * SamlauthMappingEditForm constructor.
    *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The config factory.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager) {
-    $this->mappingConfig = $config_factory->getEditable('samlauth_user_fields.mappings');
+  public function __construct(EntityFieldManagerInterface $entity_field_manager) {
     $this->entityFieldManager = $entity_field_manager;
   }
 
@@ -52,7 +75,6 @@ class SamlauthMappingEditForm extends FormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('config.factory'),
       $container->get('entity_field.manager')
     );
   }
@@ -79,15 +101,7 @@ class SamlauthMappingEditForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
     $user_fields = $this->entityFieldManager->getFieldDefinitions('user', 'user');
-    $mappings = $this->mappingConfig->get('field_mappings');
-    $field_name = NULL;
-    if ($mapping_id !== NULL) {
-      $field_name = $mappings[$mapping_id]['field_name'];
-      if (!isset($user_fields[$field_name])) {
-        $this->messenger()->addError('Currently mapped user field %name is unknown. Saving this form will change the mepping.', ['%name' => $field_name]);
-        $field_name = NULL;
-      }
-    }
+    $mappings = $this->configFactory()->get(self::CONFIG_OBJECT_NAME)->get('field_mappings');
 
     // @todo make code that captures all attributes from a SAML authentication
     //   message (only if enabled here via a special temporary option) and
@@ -105,8 +119,17 @@ class SamlauthMappingEditForm extends FormBase {
 
     $options = ['' => $this->t('- Select -')];
     foreach ($user_fields as $name => $field) {
-      if (substr($name, 0, 6) === 'field_' || in_array($name, static::MAPPABLE_CORE_FIELDS, TRUE)) {
+      if (in_array($field->getType(), static::MAP_FIELD_TYPES, TRUE)
+          && !in_array($name, static::PREVENT_MAP_FIELS, TRUE)) {
         $options[$name] = $field->getLabel();
+      }
+    }
+    $field_name = NULL;
+    if ($mapping_id !== NULL) {
+      $field_name = $mappings[$mapping_id]['field_name'];
+      if (!isset($options[$field_name])) {
+        $this->messenger()->addError('Currently mapped user field %name is unknown. Saving this form will change the mapping.', ['%name' => $field_name]);
+        $field_name = NULL;
       }
     }
     $form['field_name'] = [
@@ -147,7 +170,7 @@ class SamlauthMappingEditForm extends FormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $mappings = $this->mappingConfig->get('field_mappings');
+    $mappings = $this->configFactory()->get(self::CONFIG_OBJECT_NAME)->get('field_mappings');
 
     // If this is a new mapping, check to make sure a 'same' one isn't already
     // defined.
@@ -175,28 +198,24 @@ class SamlauthMappingEditForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $mappings = $this->mappingConfig->get('field_mappings');
+    $config = $this->configFactory()->getEditable(self::CONFIG_OBJECT_NAME);
+    $mappings = $config->get('field_mappings');
 
-    // Set up the new mapping to add to the array.
-    $mapping = [
+    $new_mapping = [
       'attribute_name' => $form_state->getValue('attribute_name'),
       'field_name' => $form_state->getValue('field_name'),
       'link_user_order' => $form_state->getValue('link_user_order'),
     ];
 
-    // If we're editing, update the value, if we're adding, add it.
     $mapping_id = $form_state->getValue('mapping_id');
-    if (is_numeric($mapping_id)) {
-      $mappings[$mapping_id] = $mapping;
+    if ($mapping_id !== NULL) {
+      $mappings[$mapping_id] = $new_mapping;
     }
     else {
-      $mappings[] = $mapping;
+      $mappings[] = $new_mapping;
     }
+    $config->set('field_mappings', $mappings)->save();
 
-    // Save the config with the new mappings.
-    $this->mappingConfig->set('field_mappings', $mappings)->save();
-
-    // Go back to the listing page.
     $form_state->setRedirect('samlauth_user_fields.list');
   }
 
