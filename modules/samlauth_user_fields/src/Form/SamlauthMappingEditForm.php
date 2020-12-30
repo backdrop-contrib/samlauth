@@ -5,17 +5,13 @@ namespace Drupal\samlauth_user_fields\Form;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\samlauth_user_fields\EventSubscriber\UserFieldsEventSubscriber;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Form for adding a mapped SAML attribute -> user field.
  */
 class SamlauthMappingEditForm extends FormBase {
-
-  /**
-   * Name of the configuration object containing the setting used by this form.
-   */
-  const CONFIG_OBJECT_NAME = 'samlauth_user_fields.mappings';
 
   /**
    * Field types that can be mapped.
@@ -38,7 +34,7 @@ class SamlauthMappingEditForm extends FormBase {
   /**
    * User fields (of mappable types) that should not be mappable.
    */
-  const PREVENT_MAP_FIELS = [
+  const PREVENT_MAP_FIELDS = [
     // Name and email are mappable, but not from this form.
     'name',
     'mail',
@@ -101,7 +97,7 @@ class SamlauthMappingEditForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
     $user_fields = $this->entityFieldManager->getFieldDefinitions('user', 'user');
-    $mappings = $this->configFactory()->get(self::CONFIG_OBJECT_NAME)->get('field_mappings');
+    $mappings = $this->configFactory()->get(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)->get('field_mappings');
 
     // @todo make code that captures all attributes from a SAML authentication
     //   message (only if enabled here via a special temporary option) and
@@ -120,7 +116,7 @@ class SamlauthMappingEditForm extends FormBase {
     $options = ['' => $this->t('- Select -')];
     foreach ($user_fields as $name => $field) {
       if (in_array($field->getType(), static::MAP_FIELD_TYPES, TRUE)
-          && !in_array($name, static::PREVENT_MAP_FIELS, TRUE)) {
+          && !in_array($name, static::PREVENT_MAP_FIELDS, TRUE)) {
         $options[$name] = $field->getLabel();
       }
     }
@@ -170,7 +166,7 @@ class SamlauthMappingEditForm extends FormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $mappings = $this->configFactory()->get(self::CONFIG_OBJECT_NAME)->get('field_mappings');
+    $mappings = $this->configFactory()->get(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)->get('field_mappings');
 
     // If this is a new mapping, check to make sure a 'same' one isn't already
     // defined.
@@ -198,7 +194,7 @@ class SamlauthMappingEditForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $config = $this->configFactory()->getEditable(self::CONFIG_OBJECT_NAME);
+    $config = $this->configFactory()->getEditable(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME);
     $mappings = $config->get('field_mappings');
 
     $new_mapping = [
@@ -208,6 +204,9 @@ class SamlauthMappingEditForm extends FormBase {
     ];
 
     $mapping_id = $form_state->getValue('mapping_id');
+    if (!is_array($mappings)) {
+      $mappings = [];
+    }
     if ($mapping_id !== NULL) {
       $mappings[$mapping_id] = $new_mapping;
     }

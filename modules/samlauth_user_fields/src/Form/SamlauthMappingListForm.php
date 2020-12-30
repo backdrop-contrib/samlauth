@@ -7,17 +7,13 @@ use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Drupal\samlauth_user_fields\EventSubscriber\UserFieldsEventSubscriber;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Displays the list of attribute-field mappings; edits related configuration.
  */
 class SamlauthMappingListForm extends ConfigFormBase {
-
-  /**
-   * Name of the configuration object containing the setting used by this form.
-   */
-  const CONFIG_OBJECT_NAME = 'samlauth_user_fields.mappings';
 
   /**
    * The entity field manager service.
@@ -82,28 +78,29 @@ class SamlauthMappingListForm extends ConfigFormBase {
    *   The form structure.
    */
   public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
-    $config = $this->configFactory()->get(self::CONFIG_OBJECT_NAME);
+    $config = $this->configFactory()->get(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME);
 
     // The bulk of this page is not a form at all, but a table. We're putting
     // that on the same page as the form options, because we have only two
     // checkboxes - which govern behavior related to the total of those table
     // rows. If this configuration form somehow grows, we'll split the table +
     // form off into separate pages/routes.
-    $form = $this->listMappings($config->get('field_mappings'));
+    $mappings = $config->get('field_mappings');
+    $form = $this->listMappings(is_array($mappings) ? $mappings : []);
 
-    $form['form_title'] = [
-      '#type' => 'markup',
-      '#markup' => '<h2>' . $this->t('Configuration for linking') . '</h2>',
+    $form['config'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Configuration for linking'),
     ];
 
-    $form['link_first_user'] = [
+    $form['config']['link_first_user'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Link first user if multiple found'),
       '#description' => $this->t("If a link attempt matches multiple/'duplicate' users, link the first one and ignore the others. By default, login is denied and a Drupal administrator needs to decide what to do. (This never happens if matching is done on unique fields only, which is hopefully the case.)"),
       '#default_value' => $config->get('link_first_user'),
     ];
 
-    $form['ignore_blocked'] = [
+    $form['config']['ignore_blocked'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Ignore blocked users'),
       '#description' => $this->t("Never match/link blocked users. This may result in creating new users equal to a blocked user and granting them access - but enabling it (temporarily?) could help linking a correct user if 'duplicates' are matched. By default, if a blocked user is matched, it is linked then denied access."),
@@ -111,7 +108,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
     ];
 
     // Add this value so we know if it's an add or an edit.
-    $form['mapping_id'] = [
+    $form['config']['mapping_id'] = [
       '#type' => 'value',
       '#value' => $mapping_id,
     ];
@@ -123,7 +120,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $this->configFactory()->getEditable(self::CONFIG_OBJECT_NAME)
+    $this->configFactory()->getEditable(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)
       ->set('link_first_user', $form_state->getValue('link_first_user'))
       ->set('ignore_blocked', $form_state->getValue('ignore_blocked'))
       ->save();

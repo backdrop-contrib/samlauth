@@ -6,17 +6,13 @@ use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfirmFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Drupal\samlauth_user_fields\EventSubscriber\UserFieldsEventSubscriber;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Form for deleting a mapping.
  */
 class SamlauthMappingDeleteForm extends ConfirmFormBase {
-
-  /**
-   * Name of the configuration object containing the setting used by this form.
-   */
-  const CONFIG_OBJECT_NAME = 'samlauth_user_fields.mappings';
 
   /**
    * The entity field manager service.
@@ -80,7 +76,7 @@ class SamlauthMappingDeleteForm extends ConfirmFormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
     if ($mapping_id !== NULL) {
-      $mappings = $this->configFactory()->get(self::CONFIG_OBJECT_NAME)->get('field_mappings');
+      $mappings = $this->configFactory()->get(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)->get('field_mappings');
 
       // Set these values for the confirm message to pick up on them.
       $this->attributeName = $mappings[$mapping_id]['attribute_name'];
@@ -118,7 +114,7 @@ class SamlauthMappingDeleteForm extends ConfirmFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $config = $this->configFactory()->getEditable(self::CONFIG_OBJECT_NAME);
+    $config = $this->configFactory()->getEditable(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME);
     $mappings = $config->get('field_mappings');
     unset($mappings[$form_state->get('mapping_id')]);
     $config->set('field_mappings', $mappings)->save();

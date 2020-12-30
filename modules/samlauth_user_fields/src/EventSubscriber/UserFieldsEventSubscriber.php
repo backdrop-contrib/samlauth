@@ -23,11 +23,20 @@ use Symfony\Component\Validator\ConstraintViolation;
 class UserFieldsEventSubscriber implements EventSubscriberInterface {
 
   /**
-   * A configuration object containing mapping settings.
-   *
-   * @var \Drupal\Core\Config\ImmutableConfig
+   * Name of the configuration object containing the setting used by this class.
    */
-  protected $config;
+  const CONFIG_OBJECT_NAME = 'samlauth_user_fields.mappings';
+
+  /**
+   * The configuration factory service.
+   *
+   * We're doing $configFactory->get() all over the place to access our
+   * configuration, which is actually a little more efficient than storing the
+   * config object in a variable in this class.
+   *
+   * @var \Drupal\Core\Config\ConfigFactoryInterface
+   */
+  protected $configFactory;
 
   /**
    * A logger instance.
@@ -54,7 +63,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    * UserFieldsEventSubscriber constructor.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The config factory.
+   *   The configuration factory service.
    * @param \Psr\Log\LoggerInterface $logger
    *   A logger instance.
    * @param \Drupal\Core\TypedData\TypedDataManagerInterface $typed_data_manager
@@ -63,7 +72,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    *   The entity type manager service.
    */
   public function __construct(ConfigFactoryInterface $config_factory, LoggerInterface $logger, TypedDataManagerInterface $typed_data_manager, EntityTypeManagerInterface $entity_type_manager) {
-    $this->config = $config_factory->get('samlauth_user_fields.mappings');
+    $this->configFactory = $config_factory;
     $this->logger = $logger;
     $this->typedDataManager = $typed_data_manager;
     $this->entityTypeManager = $entity_type_manager;
@@ -82,13 +91,14 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    * Tries to link an existing user based on SAML attribute values.
    *
    * @param \Drupal\samlauth\Event\SamlauthUserLinkEvent $event
-   *   The event.
+   *   The event being dispatched.
    */
   public function onUserLink(SamlauthUserLinkEvent $event) {
     $match_expressions = $this->getMatchExpressions($event->getAttributes());
+    $config = $this->configFactory->get(static::CONFIG_OBJECT_NAME);
     foreach ($match_expressions as $match_expression) {
       $query = $this->entityTypeManager->getStorage('user')->getQuery();
-      if ($this->config->get('ignore_blocked')) {
+      if ($config->get('ignore_blocked')) {
         $query->condition('status', 1);
       }
       foreach ($match_expression as $field_name => $value) {
@@ -115,10 +125,10 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
           foreach ($match_expression as $field_name => $value) {
             $query[] = "$field_name=$value";
           }
-          if ($this->config->get('ignore_blocked')) {
+          if ($config->get('ignore_blocked')) {
             $query[] = "status=1";
           }
-          if (!$this->config->get('link_first_user')) {
+          if (!$config->get('link_first_user')) {
             $this->logger->error(
               "Denying login because SAML data match is ambiguous: @count matching users (@uids) found for @query", [
                 '@count' => $count,
@@ -147,6 +157,8 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
   /**
    * Constructs expressions that should be used for user matching attempts.
    *
+   * Logs a warning if the configuration data is 'corrupt'.
+   *
    * @param array $attributes
    *   The complete set of SAML attributes in the assertion. (The attributes
    *   can currently be duplicated, keyed both by their name and friendly name.)
@@ -158,33 +170,42 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    *   only their order does.) Individual expressions are fieldname-value pairs.
    */
   protected function getMatchExpressions(array $attributes) {
+    $config = $this->configFactory->get(static::CONFIG_OBJECT_NAME);
+    $mappings = $config->get('field_mappings');
     $match_fields = [];
-    $mappings = $this->config->get('field_mappings');
-    foreach ($mappings as $mapping) {
-      if (isset($mapping['link_user_order']) && isset($mapping['field_name']) && isset($mapping['attribute_name'])) {
-        $match_id = $mapping['link_user_order'];
-        $value = $this->getAttribute($mapping['attribute_name'], $attributes);
-        if (!isset($value)) {
-          // Skip this match; ignore other mappings that are part of it.
-          $match_fields[$match_id] = FALSE;
-        }
-        if (!isset($match_fields[$match_id])) {
-          $match_fields[$match_id] = [$mapping['field_name'] => $value];
-        }
-        elseif ($match_fields[$match_id]) {
-          if (isset($match_fields[$match_id][$mapping['field_name']])) {
-            // The same match cannot define two attributes/values for the same
-            // user field. Spam logs until the site owner fixes configuration.
-            $this->logger->debug("Match attempt %id for linking users has multiple SAML attributes tied to the same user field, which is impossible. We'll ignore attribute %attribute.", [
-              '%id' => $match_id,
-              '%attribute' => $mapping['attribute_name'],
-            ]);
+    if (is_array($mappings)) {
+      foreach ($mappings as $mapping) {
+        if (isset($mapping['link_user_order']) && isset($mapping['field_name']) && isset($mapping['attribute_name'])) {
+          $match_id = $mapping['link_user_order'];
+          $value = $this->getAttribute($mapping['attribute_name'], $attributes);
+          if (!isset($value)) {
+            // Skip this match; ignore other mappings that are part of it.
+            $match_fields[$match_id] = FALSE;
           }
-          else {
-            $match_fields[$match_id][$mapping['field_name']] = $value;
+          if (!isset($match_fields[$match_id])) {
+            $match_fields[$match_id] = [$mapping['field_name'] => $value];
           }
+          elseif ($match_fields[$match_id]) {
+            if (isset($match_fields[$match_id][$mapping['field_name']])) {
+              // The same match cannot define two attributes/values for the same
+              // user field. Spam logs until the site owner fixes configuration.
+              $this->logger->debug("Match attempt %id for linking users has multiple SAML attributes tied to the same user field, which is impossible. We'll ignore attribute %attribute.", [
+                '%id' => $match_id,
+                '%attribute' => $mapping['attribute_name'],
+              ]);
+            }
+            else {
+              $match_fields[$match_id][$mapping['field_name']] = $value;
+            }
+          }
+        }
+        else {
+          $this->logger->warning('Partially invalid %name configuration value; user linking may be partially skipped.', ['%name' => 'field_mappings']);
         }
       }
+    }
+    elseif (isset($mappings)) {
+      $this->logger->warning('Invalid %name configuration value; skipping user linking.', ['%name' => 'field_mappings']);
     }
     ksort($match_fields);
 
@@ -195,50 +216,56 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    * Saves configured SAML attribute values into user fields.
    *
    * @param \Drupal\samlauth\Event\SamlauthUserSyncEvent $event
-   *   The event.
+   *   The event being dispatched.
    */
   public function onUserSync(SamlauthUserSyncEvent $event) {
     $account = $event->getAccount();
-    $mappings = $this->config->get('field_mappings');
+    $config = $this->configFactory->get(static::CONFIG_OBJECT_NAME);
+    $mappings = $config->get('field_mappings');
     $validation_errors = [];
-    foreach ($mappings as $id => $mapping) {
-      // If the attribute name is invalid, or the field does not exist, spam
-      // the logs on every login until the mapping is fixed.
-      if (empty($mapping['attribute_name']) || !is_string($mapping['attribute_name'])) {
-        $this->logger->warning('Invalid SAML attribute %attribute detected in mapping; the mapping must be fixed.');
-      }
-      elseif (empty($mapping['field_name']) || !is_string($mapping['field_name'])) {
-        $this->logger->warning('Invalid user field mapped from SAML attribute %attribute; the mapping must be fixed.', ['%attribute' => $mapping['attribute_name']]);
-      }
-      elseif (!$account->hasField($mapping['field_name'])) {
-        $this->logger->warning('User field %field is mapped from SAML attribute %attribute, but does not exist; the mapping must be fixed.', [
-          '%field' => $mapping['field_name'],
-          '%attribute' => $mapping['attribute_name'],
-        ]);
-      }
-      else {
-        // Skip if the attribute name does not exist in the set of SAML
-        // attributes. Or the value is NULL, which we assume does not happen.
-        // We'll likely also skip empty strings, but that's determined by
-        // isInputValueUpdatable().
-        $value = $this->getAttribute($mapping['attribute_name'], $event->getAttributes());
-        if (isset($value)
-            && $this->isInputValueUpdatable($value, $account, $mapping['field_name'])) {
-          $valid = $this->validateAccountFieldValue($value, $account, $mapping['field_name']);
-          if ($valid) {
-            $account->set($mapping['field_name'], $value);
-            $event->markAccountChanged();
-          }
-          else {
-            // Collect values to include below. Supposedly we have scalar
-            // values; var_export() shows their type. And identifier should
-            // include both source and destination because we can have
-            // multiple mappings defined for either.
-            $validation_errors[] = $mapping['attribute_name'] . ' (' . var_export($value, TRUE)
-              . ') > ' . $mapping['field_name'];
+    if (is_array($mappings)) {
+      foreach ($mappings as $id => $mapping) {
+        // If the attribute name is invalid, or the field does not exist, spam
+        // the logs on every login until the mapping is fixed.
+        if (empty($mapping['attribute_name']) || !is_string($mapping['attribute_name'])) {
+          $this->logger->warning('Invalid SAML attribute %attribute detected in mapping; the mapping must be fixed.');
+        }
+        elseif (empty($mapping['field_name']) || !is_string($mapping['field_name'])) {
+          $this->logger->warning('Invalid user field mapped from SAML attribute %attribute; the mapping must be fixed.', ['%attribute' => $mapping['attribute_name']]);
+        }
+        elseif (!$account->hasField($mapping['field_name'])) {
+          $this->logger->warning('User field %field is mapped from SAML attribute %attribute, but does not exist; the mapping must be fixed.', [
+            '%field' => $mapping['field_name'],
+            '%attribute' => $mapping['attribute_name'],
+          ]);
+        }
+        else {
+          // Skip if the attribute name does not exist in the set of SAML
+          // attributes. Or the value is NULL, which we assume does not happen.
+          // We'll likely also skip empty strings, but that's determined by
+          // isInputValueUpdatable().
+          $value = $this->getAttribute($mapping['attribute_name'], $event->getAttributes());
+          if (isset($value)
+              && $this->isInputValueUpdatable($value, $account, $mapping['field_name'])) {
+            $valid = $this->validateAccountFieldValue($value, $account, $mapping['field_name']);
+            if ($valid) {
+              $account->set($mapping['field_name'], $value);
+              $event->markAccountChanged();
+            }
+            else {
+              // Collect values to include below. Supposedly we have scalar
+              // values; var_export() shows their type. And identifier should
+              // include both source and destination because we can have
+              // multiple mappings defined for either.
+              $validation_errors[] = $mapping['attribute_name'] . ' (' . var_export($value, TRUE)
+                . ') > ' . $mapping['field_name'];
+            }
           }
         }
       }
+    }
+    elseif (isset($mappings)) {
+      $this->logger->warning('Invalid %name configuration value; skipping user synchronization.', ['%name' => 'field_mappings']);
     }
 
     if ($validation_errors) {
@@ -254,7 +281,9 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    *
    * This returns FALSE if the value is already equal in the user account. This
    * is abstracted into a separate method because the definition of "equals" is
-   * not fully clear / is easier to override if necessary.
+   * not fully clear / so it's easier to override if necessary. This standard
+   * implementation treats empty strings as "no value" rather than "an empty
+   * value".
    *
    * @param mixed $input_value
    *   The value to (maybe) update / write into the user account field.
@@ -287,7 +316,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    * Checks if an input value is equal to a user account field value.
    *
    * This is abstracted into a separate method because the definition of
-   * "equals" is not fully clear / is easier to override if necessary.
+   * "equals" is not fully clear / so it's easier to override if necessary.
    *
    * @param mixed $input_value
    *   The input value.
@@ -302,8 +331,8 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
   protected function isInputValueEqual($input_value, $field_value, $account_field_name = '') {
     // This represents what is most likely for values from an unknown source:
     // - string values are equal to their numeric equivalent.
-    // - NULL is equal to ''... because our default assumption is that an empty
-    //   string represents a/the 'empty' value.)
+    // - NULL is equal to '', because our default assumption is that an empty
+    //   string means "no value" rather than "an empty value".
     // - 0/"0"/0.00 are equal, but not equal to ''/NULL and not equal to "00"
     //   or "0x".
     return (is_scalar($input_value) || $input_value === NULL) && (is_scalar($field_value) || $field_value === NULL)
