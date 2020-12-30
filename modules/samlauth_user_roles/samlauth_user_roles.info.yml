@@ -1,0 +1,9 @@
+name: 'SAML Auth User Role Assignment'
+type: module
+description: 'Assigns roles to users on login.'
+package: 'User authentication'
+core_version_requirement: ^8 || ^9
+core: 8.x
+configure: samlauth_user_roles.configure_form
+dependencies:
+  - samlauth:samlauth
