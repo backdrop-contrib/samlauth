@@ -107,12 +107,11 @@ class SamlauthMappingListForm extends ConfigFormBase {
       '#default_value' => $config->get('ignore_blocked'),
     ];
 
-    // Add this value so we know if it's an add or an edit.
-    $form['config']['mapping_id'] = [
-      '#type' => 'value',
-      '#value' => $mapping_id,
-    ];
-
+    // @todo Do we also want a "Configuration for synchronization" section with
+    //   one checkbox "Only take action on first login", like we have for roles?
+    //   We also have separate checkboxes (but the inverse) for the name and
+    //   email values. We could implement this option per field, but would that
+    //   be overkill?
     return parent::buildForm($form, $form_state);
   }
 

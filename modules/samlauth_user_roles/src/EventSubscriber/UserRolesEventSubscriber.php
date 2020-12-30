@@ -76,11 +76,15 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
    *   The event being dispatched.
    */
   public function onUserSync(SamlauthUserSyncEvent $event) {
+    $config = $this->configFactory->get(static::CONFIG_OBJECT_NAME);
+    if ($config->get('only_first_login') && !$event->isFirstLogin()) {
+      return;
+    }
+
     /** @var \Drupal\user\Entity\Role[] $valid_roles */
     $valid_roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
     unset($valid_roles[UserInterface::ANONYMOUS_ROLE]);
     unset($valid_roles[UserInterface::AUTHENTICATED_ROLE]);
-    $config = $this->configFactory->get(static::CONFIG_OBJECT_NAME);
     $account = $event->getAccount();
     $changed_role_ids = $account_role_ids = $account->getRoles();
 

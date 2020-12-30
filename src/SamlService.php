@@ -215,6 +215,7 @@ class SamlService {
       throw new Exception('Configured unique ID is not present in SAML response.');
     }
 
+    $first_saml_login = FALSE;
     $account = $this->externalAuth->load($unique_id, 'samlauth');
     if (!$account) {
       $this->logger->debug('No matching local users found for unique SAML ID @saml_id.', ['@saml_id' => $unique_id]);
@@ -258,6 +259,7 @@ class SamlService {
         // user logs in, we will again try to link the account in the same way
         // and (falsely) log that we are linking the user.
         $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
+        $first_saml_login = TRUE;
       }
     }
 
@@ -289,7 +291,7 @@ class SamlService {
     }
     else {
       // Synchronize the user account with SAML attributes if needed.
-      $this->synchronizeUserAttributes($account);
+      $this->synchronizeUserAttributes($account, FALSE, $first_saml_login);
 
       $this->externalAuth->userLoginFinalize($account, $unique_id, 'samlauth');
     }
@@ -456,10 +458,12 @@ class SamlService {
    *   The Drupal user to synchronize attributes into.
    * @param bool $skip_save
    *   (optional) If TRUE, skip saving the user account.
+   * @param bool $first_login
+   *   (optional) Indicator of whether the account is newly registered/linked.
    */
-  public function synchronizeUserAttributes(UserInterface $account, $skip_save = FALSE) {
+  public function synchronizeUserAttributes(UserInterface $account, $skip_save = FALSE, $first_saml_login = FALSE) {
     // Dispatch a user_sync event.
-    $event = new SamlauthUserSyncEvent($account, $this->getAttributes());
+    $event = new SamlauthUserSyncEvent($account, $this->getAttributes(), $first_saml_login);
     $this->eventDispatcher->dispatch(SamlauthEvents::USER_SYNC, $event);
 
     if (!$skip_save && $event->isAccountChanged()) {

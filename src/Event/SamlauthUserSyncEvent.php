@@ -18,6 +18,13 @@ class SamlauthUserSyncEvent extends Event {
   protected $account;
 
   /**
+   * An indicator of whether the user account is newly registered/linked.
+   *
+   * @var bool
+   */
+  protected $firstSamlLogin;
+
+  /**
    * The SAML attributes received from the IdP.
    *
    * Single values are typically represented as one-element arrays.
@@ -27,7 +34,7 @@ class SamlauthUserSyncEvent extends Event {
   protected $attributes;
 
   /**
-   * A flag indicating that the account was changed.
+   * An indicator of whether the account was changed.
    *
    * @var bool
    */
@@ -40,10 +47,13 @@ class SamlauthUserSyncEvent extends Event {
    *   The Drupal user account.
    * @param array $attributes
    *   The SAML attributes received from the IdP.
+   * @param bool $first_saml_login
+   *   An indicator of whether the account is newly registered/linked.
    */
-  public function __construct(UserInterface $account, array $attributes) {
+  public function __construct(UserInterface $account, array $attributes, $first_saml_login = FALSE) {
     $this->account = $account;
     $this->attributes = $attributes;
+    $this->firstSamlLogin = $first_saml_login;
   }
 
   /**
@@ -64,6 +74,30 @@ class SamlauthUserSyncEvent extends Event {
    */
   public function setAccount(UserInterface $account) {
     $this->account = $account;
+  }
+
+  /**
+   * Indicates if the SAML login is happening for the first time.
+   *
+   * This can mean that the user account is new, but also that an existing
+   * Drupal user (which may have logged in through other means) was just linked
+   * to the SAML provider. Note this is not an indicator of whether the Drupal
+   * user logged in for the first time.
+   *
+   * There is no guarantee that the user or the link is already saved.
+   * (Specifically: if the user is being newly registered, it is not saved
+   * yet in practice. If an existing user was just linked, the authmap entry
+   * currently is likely already saved in the Drupal database but a future
+   * release will likely save the entry only after this event is dispatched.)
+   *
+   * @return bool
+   *   TRUE if the SAML login is happening for the first time.
+   */
+  public function isFirstLogin() {
+    // For backward compatibility with code other than the samlauth module that
+    // decided to dispatch this event for some reason and is not passing
+    // $first_login yet, we'll also check if the account is new.
+    return $this->firstSamlLogin || $this->account->isNew();
   }
 
   /**
@@ -109,7 +143,7 @@ class SamlauthUserSyncEvent extends Event {
   }
 
   /**
-   * Checks whether the user account was marked as changed.
+   * Indicates if the user account was marked as changed.
    *
    * This is typically done afterwards by the code that dispatches this.
    *
