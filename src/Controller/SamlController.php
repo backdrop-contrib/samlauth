@@ -196,6 +196,8 @@ class SamlController extends ControllerBase {
     try {
       $url = $this->saml->sls();
       if (!$url) {
+        // @todo fix: this + the createRedirectResponse() call can cause the
+        //   'leaked metadata' exception now that we allow external URLs.
         $url = $this->getRedirectUrlAfterProcessing();
       }
     }
@@ -224,20 +226,8 @@ class SamlController extends ControllerBase {
   /**
    * Constructs a full URL from the 'destination' parameter.
    *
-   * This is only considered suitable for feeding a URL string into php-saml's
-   * login() / logout() methods (or anything that does not care about cache
-   * contexts) because we explicitly unset the destination parameter and
-   * discard cacheability metadata generated along with the URL.
-   *
-   * (PSA for unsuspecting developers: A plain Url::toString() call performs
-   * cacheability related actions invisibly in the background, which are needed
-   * for outputting a URL as part of a rendered page, but which are likely to
-   * cause hard to trace exceptions to be thrown in other cases. I suspect this
-   * magic behavior was initially designed not to happen always; it only
-   * happens when the current code is executing in a 'render context'. However,
-   * Drupal creates a 'render context' super early in the HTTP stack, so in
-   * practice all Url::toString() calls cause this behavior. More info:
-   * #2630808 / #2638686 / https://www.lullabot.com/articles/early-rendering-a-lesson-in-debugging-drupal-8.)
+   * Also unsets the destination parameter. This is only considered suitable
+   * for feeding a URL string into php-saml's login() / logout() methods.
    *
    * @return string|null
    *   The full absolute URL (i.e. our hostname plus the path in the destination
@@ -254,21 +244,9 @@ class SamlController extends ControllerBase {
     if ($destination) {
       if (UrlHelper::isExternal($destination)) {
         // Disallow redirecting to an external URL after we log in.
-        throw new \RuntimeException("Destination URL query parameter must not be external: $destination");
+        throw new UserVisibleException("Destination URL query parameter must not be external: $destination");
       }
-      // The destination parameter is relative by convention but fromUserInput()
-      // requires it to start with '/'. (Note '#' and '?' don't make sense here
-      // because that would be expanded to the current URL, which is saml/*.)
-      if (strpos($destination, '/') !== 0) {
-        $destination = "/$destination";
-      }
-      // See the PSA in the PHPDoc. Details: toString(TRUE) returns an object
-      // which contains cacheability metadata (rather than storing it /
-      // 'bubbling it up' into an invisible render context in the background,
-      // which would cause an exception to be thrown by a caller). We discard
-      // it (and only use the URL string) because we don't render or cache
-      // anything; we only pass the URL to the SAML toolkit.
-      $destination_url = Url::fromUserInput($destination)->setAbsolute()->toString(TRUE)->getGeneratedUrl();
+      $destination_url = $GLOBALS['base_url'] . '/' . $destination;
 
       // After we return from this controller, Drupal immediately redirects to
       // the path set in the 'destination' parameter (for the current URL being
@@ -343,26 +321,33 @@ class SamlController extends ControllerBase {
    * @param bool $cacheable_and_can_be_external
    *   If TRUE, $url is allowed to be external. (By default, external URLs
    *   cause an exception to be thrown later on, saying they are disallowed.)
-   *   It's also cacheable. The downside to this is, code doing this MUST NOT
-   *   call any 'unknown' code (meaning: any calls to code that might call
-   *   hooks / fire events is disallowed), because that would open us up to the
-   *   dreaded 'leaked metadata' exception. We're overloading this parameter to
-   *   have two uses for as long as we can get away with it, because 1) it's a
-   *   protected 'internal' method, not bound to any interface; 2) we want as
-   *   few different return values as possible; it's been confusing enough
-   *   getting our code to this point where we can prevent any exceptions.
+   *   It's also cacheable. The downside to this is, code doing this
+   *   - either MUST NOT call any code external to the samlauth module - which
+   *     can only be guaranteed if the first parameter is a string
+   *   - or MUST wrap that code in its own render context.
+   *   The details are explained in comments inside the method.
+   *   We're overloading this parameter to have two uses for as long as we can
+   *   get away with it, because we want as few different return values as
+   *   possible; the code is confusing enough already (and changing every year
+   *   with every new discovery about cacheability/metadata errors).
    *
    * @return \Symfony\Component\HttpFoundation\RedirectResponse|\Drupal\Core\Routing\TrustedRedirectResponse
    *   A response object representing a redirect: a Symfony RedirectResponse by
    *   default; TrustedRedirectResponse (which is cacheable and can be
    *   external) if $cacheable_and_can_be_external is TRUE.
    */
-  protected function createRedirectResponse($url, $cacheable_and_can_be_external = FALSE) {
+  private function createRedirectResponse($url, $cacheable_and_can_be_external = FALSE) {
     if (is_object($url)) {
-      // This construct is needed to prevent exceptions; see comments at
-      // getUrlFromDestination(). The difference: in some cases we'll actually
-      // add the metadata into the response (because we can, and because we're
-      // returning a response object rather than a string).
+      // toString(TRUE) returns an object which contains cacheability metadata.
+      // PSA for unsuspecting developers: A plain Url::toString() call stores
+      // that data / 'bubbles it up' into an invisible render context in the
+      // background. This is needed for outputting a URL as part of a rendered
+      // page, but in our case it causes an exception to be thrown by a caller.
+      // I suspect this magic behavior was initially designed not to happen
+      // (execute in a 'render context') always - but Drupal creates a 'render
+      // context' super early in the HTTP stack, so in practice all
+      // Url::toString() calls cause this behavior. More info:
+      // #2630808 / #2638686 / https://www.lullabot.com/articles/early-rendering-a-lesson-in-debugging-drupal-8.
       $generated_url_object = $url->toString(TRUE);
       $url = $generated_url_object->getGeneratedUrl();
     }
@@ -371,35 +356,48 @@ class SamlController extends ControllerBase {
       // is prohibited from handling an external URL.
       $response = new TrustedRedirectResponse($url);
       if (isset($generated_url_object)) {
-        // We shouldn't have to add cacheability metadata to our response
-        // object when the route is configured to not cache responses in our
-        // routing.yml. Do it anyway to prevent future obscure bugs with new
-        // routes.
+        // In many cases, we shouldn't have to add cacheability metadata to our
+        // response object when the route is configured to not cache responses
+        // in our routing.yml. Do it anyway to prevent future obscure bugs with
+        // new routes.
         $response->addCacheableDependency($generated_url_object);
       }
     }
     else {
       // NOTE: all the above fussing over the use of toString() / handling of
       // cacheability metadata is about getting our own code to do the right
-      // thing. However we can't prevent 'external' code (called on user login/
-      // insert/update hooks or the events fired by SamlService) from doing the
-      // wrong thing, so we have to take measures to prevent that external code
+      // thing. However we can't prevent 'external' code from doing the wrong
+      // thing, so we have to take measures to prevent that external code
       // from causing the 'leaked metadata' exception when we issue a
       // redirect. There are several things we could do:
-      // - Patch Drupal to not throw exceptions if our response isn't cacheable
-      //   in the first place, as specified by our routing.yml ;-)
-      // - Create our own render context which 'catches' the cacheability
-      //   metadata that e.g. external toString() calls could have generated
-      //   in the background, so that the current render context (created by
-      //   our callers) does not see that metadata and throw an exception. This
-      //   could be done by e.g. adding the following code around our acs():
-      //   $RENDERER_SERVICE->executeInRenderContext(new RenderContext(), $this->acs());
-      //   This construct immediately discards the metadata; we don't need it
-      //   because our responses aren't cacheable anyway.
-      // - Use a Symfony RedirectResponse. Since that is not a cacheable
-      //   response, our callers won't check for unaccounted-for metadata and
-      //   therefore can't throw the related exception.
-      // We do the latter.
+      // 1. Patch Drupal to not throw exceptions if our response isn't
+      //    cacheable in the first place, as specified by our routing.yml...
+      //    (Reminder to self: it might be possible to open an issue for that?)
+      // 2. Create our own render context which 'catches' the cacheability
+      //    metadata that e.g. external toString() calls could have generated
+      //    in the background, so that the current render context (created by
+      //    our callers) does not see that metadata and throw an exception. This
+      //    could be done by e.g. adding the following code around our acs():
+      //    $RENDERER_SERVICE->executeInRenderContext(new RenderContext(), $this->acs());
+      //    This construct immediately discards the metadata; we don't need it
+      //    because our responses aren't cacheable anyway.
+      // 3. Use a Symfony RedirectResponse. Since that is not a cacheable
+      //    response, our callers won't check for unaccounted-for metadata and
+      //    therefore can't throw the related exception.
+      // We do 3 here, for now.
+      //
+      // For reference: 'external' code can be called from our own code
+      // - during user login/insert/update hooks;
+      // - during the user link/sync events that we fire;
+      // - during static Url::from*() /
+      //   PathValidator::getUrlIfValidWithoutAccessCheck($url) (see #3136339)
+      // - during Url::toString() / UrlGenerator::generateFromRoute() (see
+      //   #3160515-35)
+      // The latter mean that code that generates URLs in the 'wrong' way, is
+      // executed indirectly by code that generates URLs in the 'correct' way.
+      // Unfortunately this means we also have a callers that can execute
+      // 'external' code while needing an external URL created - which means
+      // those callers will need to implement 'method 2'.
       $response = new RedirectResponse($url);
     }
 
