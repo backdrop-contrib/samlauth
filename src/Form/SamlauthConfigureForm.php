@@ -8,6 +8,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Token;
+use Drupal\samlauth\Controller\SamlController;
 use OneLogin\Saml2\Utils as SamlUtils;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -15,11 +16,6 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Provides a configuration form for samlauth module settings and IdP/SP info.
  */
 class SamlauthConfigureForm extends ConfigFormBase {
-
-  /**
-   * Name of the configuration object containing the setting used by this form.
-   */
-  const CONFIG_OBJECT_NAME = 'samlauth.authentication';
 
   /**
    * The PathValidator service.
@@ -85,7 +81,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $config = $this->configFactory()->get(self::CONFIG_OBJECT_NAME);
+    $config = $this->configFactory()->get(SamlController::CONFIG_OBJECT_NAME);
 
     $form['saml_login_logout'] = [
       '#type' => 'fieldset',
@@ -634,7 +630,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $sp_private_key =  $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
     }
 
-    $this->configFactory()->getEditable(self::CONFIG_OBJECT_NAME)
+    $this->configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME)
       ->set('login_menu_item_title', $form_state->getValue('login_menu_item_title'))
       ->set('logout_menu_item_title', $form_state->getValue('logout_menu_item_title'))
       ->set('drupal_saml_login', $form_state->getValue('drupal_saml_login'))
