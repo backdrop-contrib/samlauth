@@ -14,10 +14,12 @@ use Drupal\Core\Utility\Error;
 use Drupal\Core\Utility\Token;
 use Drupal\samlauth\SamlService;
 use Drupal\samlauth\UserVisibleException;
+use OneLogin\Saml2\Metadata;
 use OneLogin\Saml2\Utils;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Returns responses for samlauth module routes.
@@ -176,8 +178,50 @@ class SamlController extends ControllerBase {
    * @return \Symfony\Component\HttpFoundation\Response
    */
   public function metadata() {
+    $config = $this->config(self::CONFIG_OBJECT_NAME);
     try {
-      $metadata = $this->saml->getMetadata();
+      // Things we need to take into account:
+      // - The validUntil and cacheDuration properties are optional in the
+      //   SAML spec, but the SAML PHP Toolkit always assigns values. (At the
+      //   time of checking: "2 days into the future" and "1 week",
+      //   respectively. No reason provided for these figures.)
+      // - The only info we can find so far is one hint at wiki.shibboleth.net
+      //   MetadataManagementBestPractices: "[cacheDuration] is merely a hint
+      //   but metadata expiration [validUntil] is absolute". This matches bug
+      //   reports: if we send a validUntil in the past, logins stop working.
+      // - We want the HTTP response (with XML contents) to be cacheable
+      //   (which, hand-wavy, means 2 things: the Drupal render cache which is
+      //   controlled by CacheableResponse, and whatever other HTTP proxies
+      //   there may be which are controlled by HTTP headers.) Unlike the
+      //   SAML validUntil, we can turn this off for testing.
+      // - Once a cacheable response is sent, (we'll assume) we cannot purge it.
+      //   Once any response is sent, we cannot purge data from the requester
+      //   (IdP).
+      // So:
+      // - We must make sure no validUntil date in a cached response is ever in
+      //   the past - i.e. it must be equal/larger than the response 'expires'
+      //   value.
+      // - For configuration values, let's make the 'validUntil period'
+      //   configurable, plus a checkbox for response caching. Let's set the
+      //   response expiry to (validUntil - 10 seconds) to sidestep weird
+      //   response delays.
+      // - For the cacheDuration value, we don't have much of an idea what is a
+      //   good value - except, given the above defaults, it apparently doesn't
+      //   matter much if it is a lot higher than validUntil. A cached response
+      //   on our side could in extreme circumstances indicate a 'validUntil'
+      //   of 10 seconds from now, and a 'cacheDuration' of a week. Is that
+      //   bad? Apparently not, if "validUntil is absolute".
+      $metadata_valid = $config->get('metadata_valid_secs') ?: Metadata::TIME_VALID;
+      $metadata = $this->saml->getMetadata(time() + $metadata_valid);
+
+      // Default is TRUE for existing installs.
+      if ($config->get('metadata_cache_http') ?? TRUE) {
+        $response = new CacheableResponse($metadata, 200, ['Content-Type' => 'text/xml']);
+        $response->setMaxAge($metadata_valid > 10 ? $metadata_valid - 10 : $metadata_valid);
+      }
+      else {
+        $response = new Response($metadata, 200, ['Content-Type' => 'text/xml']);
+      }
     }
     catch (\Exception $e) {
       // This (invoking the exception handling that executes inside a render
@@ -192,12 +236,10 @@ class SamlController extends ControllerBase {
       $function = function () use ($e) {
         throw $e;
       };
-      return $this->getTrustedRedirectResponse($function, 'processing SAML SP metadata', '<front>');
+      $response = $this->getTrustedRedirectResponse($function, 'processing SAML SP metadata', '<front>');
     }
 
-    // The metadata is a 'regular' response and should be cacheable.
-    // @todo debugging option: make it not cacheable.
-    return new CacheableResponse($metadata, 200, ['Content-Type' => 'text/xml']);
+    return $response;
   }
 
   /**

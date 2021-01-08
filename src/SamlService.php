@@ -122,13 +122,22 @@ class SamlService {
   /**
    * Show metadata about the local sp. Use this to configure your saml2 IdP.
    *
-   * @return mixed xml string representing metadata
+   * @param int|null $validity
+   *   (Optional) 'validUntil' property of the metadata (which is a date, not
+   *   an interval) will be this many seconds into the future. If left empty,
+   *   the SAML PHP Toolkit will assign a value.
+   * @param int|null $cache_duration
+   *   (Optional) number of seconds used for the 'cacheDuration' property of
+   *   the metadata. If left empty, the SAML PHP Toolkit will assign a value.
+   *
+   * @return mixed
+   *   XML string representing metadata.
    *
    * @throws \OneLogin\Saml2\Error
    */
-  public function getMetadata() {
+  public function getMetadata($validity = null, $cache_duration = null) {
     $settings = $this->getSamlAuth()->getSettings();
-    $metadata = $settings->getSPMetadata();
+    $metadata = $settings->getSPMetadata(FALSE, $validity, $cache_duration);
     $errors = $settings->validateMetadata($metadata);
 
     if (empty($errors)) {

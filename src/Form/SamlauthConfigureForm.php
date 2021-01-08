@@ -9,6 +9,7 @@ use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Token;
 use Drupal\samlauth\Controller\SamlController;
+use OneLogin\Saml2\Metadata;
 use OneLogin\Saml2\Utils as SamlUtils;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -148,7 +149,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
       '#empty' => [],
       '#list_type' => 'ul',
-      '#suffix' => $this->t("The info advertised at the metadata URL are influenced by this configuration section, as well as by some more advanced SAML message options below. Those options often don't matter for getting SAML login into Drupal to work."),
+      '#suffix' => $this->t("Metadata is not exposed by default; see <a href=\":permissions\">permissions</a>. The contents are influenced by this configuration section, as well as by some more advanced SAML message options below. Those options often don't matter for getting SAML login into Drupal to work.", [
+        ':permissions' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
+      ]),
     ];
 
     $form['service_provider']['sp_entity_id'] = [
@@ -209,6 +212,31 @@ class SamlauthConfigureForm extends ConfigFormBase {
           ':input[name="sp_cert_type"]' => ['value' => 'folder'],
         ],
       ],
+    ];
+
+    $form['service_provider']['caching'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Caching / Validity'),
+      '#description' => $this->t('These values are low for newly installed sites, and should be raised when login is working.'),
+    ];
+
+    $value = $config->get('metadata_valid_secs');
+    $default = $this->makeReadableDuration(Metadata::TIME_VALID);
+    $form['service_provider']['caching']['metadata_valid_secs'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Metadata validity'),
+      // Default is inside the translatable string; it will almost never change.
+      '#description' => $this->t("The maximum amount of time that the metadata (which is often cached by IdPs) should be considered valid, in readable format, e.g. \"1 day 8 hours\". As the XML expresses \"validUntil\" as a specific date, a HTTP cache will contain XML with slowly decreasing validity. The default (when left empty) is $default."),
+      '#default_value' => $value ? $this->makeReadableDuration($value) : NULL,
+    ];
+
+    $form['service_provider']['caching']['metadata_cache_http'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Cache HTTP responses containing metadata'),
+      '#description' => $this->t("This affects just (Drupal's and external) response caches, whereas the above also affects caching by the IdP. Caching is only important if the metadata URL can be reached by anonymous visitors. The Max-Age value is derived from the validity."),
+      // TRUE on existing installations where the checkbox didn't exist before;
+      // FALSE in new installations.
+      '#default_value' => $config->get('metadata_cache_http') ?? TRUE,
     ];
 
     $form['identity_provider'] = [
@@ -609,12 +637,22 @@ class SamlauthConfigureForm extends ConfigFormBase {
         $form_state->setErrorByName('sp_cert_folder', $this->t('The Certificate folder does not contain the required certs/sp.key or certs/sp.crt files.'));
       }
     }
+
+    $duration = $form_state->getValue('metadata_valid_secs');
+    if ($duration || $duration == '0') {
+      $duration = $this->parseReadableDuration($form_state->getValue('metadata_valid_secs'));
+      if (!$duration) {
+        $form_state->setErrorByName('metadata_valid_secs', $this->t('Invalid period value.'));
+      }
+    }
   }
 
   /**
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+    $config = $this->configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
+
     // Only store variables related to the sp_cert_type value. (If the user
     // switched from fields to folder, the cert/key values always get cleared
     // so no unused security sensitive data gets saved in the database.)
@@ -630,7 +668,17 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $sp_private_key =  $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
     }
 
-    $this->configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME)
+    // This is never 0 but can be ''. (NULL would mean same as ''.) Unlike
+    // others, this value needs to be unset if empty.
+    $metadata_valid = $form_state->getValue('metadata_valid_secs');
+    if ($metadata_valid) {
+      $config->set('metadata_valid_secs', $this->parseReadableDuration($metadata_valid));
+    }
+    else {
+      $config->clear('metadata_valid_secs');
+    }
+
+    $config
       ->set('login_menu_item_title', $form_state->getValue('login_menu_item_title'))
       ->set('logout_menu_item_title', $form_state->getValue('logout_menu_item_title'))
       ->set('drupal_saml_login', $form_state->getValue('drupal_saml_login'))
@@ -641,6 +689,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('sp_x509_certificate', $sp_x509_certificate)
       ->set('sp_private_key', $sp_private_key)
       ->set('sp_cert_folder', $sp_cert_folder)
+      ->set('metadata_cache_http', $form_state->getValue('metadata_cache_http'))
       ->set('idp_entity_id', $form_state->getValue('idp_entity_id'))
       ->set('idp_single_sign_on_service', $form_state->getValue('idp_single_sign_on_service'))
       ->set('idp_single_log_out_service', $form_state->getValue('idp_single_log_out_service'))
@@ -718,6 +767,91 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $path = rtrim($path, '/');
     }
     return $path;
+  }
+
+  /**
+   * Converts number of seconds into a human readable 'duration' string.
+   *
+   * @param int $seconds
+   *   Number of seconds.
+   *
+   * @return string
+   *   The human readable duration description (e.g. "5 hours 3 minutes").
+   */
+  protected function makeReadableDuration($seconds) {
+    $calculation = [
+      'week' => 3600 * 24 * 7,
+      'day' => 3600 * 24,
+      'hour' => 3600,
+      'minute' => 60,
+      'second' => 1,
+    ];
+
+    $duration = '';
+    foreach ($calculation as $unit => $unit_amount) {
+      $amount = (int) ($seconds / $unit_amount);
+      if ($amount) {
+        if ($duration) {
+          $duration .= ', ';
+        }
+        $duration .= "$amount $unit" . ($amount > 1 ? 's' : '');
+      }
+      $seconds -= $amount * $unit_amount;
+    }
+
+    return $duration;
+  }
+
+  /**
+   * Parses a human readable 'duration' string.
+   *
+   * @param string $expression
+   *   The human readable duration description (e.g. "5 hours 3 minutes").
+   *
+   * @return int
+   *   The number of seconds; 0 implies invalid duration.
+   */
+  protected function parseReadableDuration($expression) {
+    $calculation = [
+      'week' => 3600 * 24 * 7,
+      'day' => 3600 * 24,
+      'hour' => 3600,
+      'minute' => 60,
+      'second' => 1,
+    ];
+    $expression = strtolower(trim($expression));
+    if (substr($expression, -1) === '.') {
+      $expression = rtrim(substr($expression, 0, strlen($expression) - 1));
+    }
+    $seconds = 0;
+    $seen = [];
+    // Numbers must be numeric. Valid: "X hours Y minutes" possibly separated
+    // by comma or "and". Months/years are not accepted because their length is
+    // ambiguous.
+    $parts = preg_split('/(\s+|\s*,\s*|\s+and\s+)(?=\d)/', $expression);
+    foreach ($parts as $part) {
+      if (!preg_match('/^(\d+)\s*((?:week|day|hour|min(?:ute)?|sec(?:ond)?)s?)$/', $part, $matches)) {
+        return 0;
+      }
+      if (substr($matches[2], -1) === 's') {
+        $matches[2] = substr($matches[2], 0, strlen($matches[2]) - 1);
+      }
+      elseif ($matches[1] != 1 && !in_array($matches[2], ['min', 'sec'], TRUE)) {
+        // We allow "1 min", "1 mins", "2 min", not "2 minute".
+        return 0;
+      }
+      $unit = $matches[2] === 'min' ? 'minute' : ($matches[2] === 'sec' ? 'second' : $matches[2]);
+      if (!isset($calculation[$unit])) {
+        return 0;
+      }
+      if (isset($seen[$unit])) {
+        return 0;
+      }
+      $seen[$unit] = TRUE;
+      $seconds += $calculation[$unit] * $matches[1];
+    }
+
+    return $seconds;
   }
 
 }

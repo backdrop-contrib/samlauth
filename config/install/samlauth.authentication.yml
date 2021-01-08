@@ -1,5 +1,18 @@
-# Most of this module's configuration must be filled from scratch by the user,
-# but we will enable some security settings by default, since it is possible but
+# Much of this module's configuration must be filled from scratch by the
+# administrator - or provided in an install routine that sets dynamic values
+# for e.g. the SP Entity ID, if new site installation is automated. In the
+# latter case, change the 'caching / validity' settings to be production
+# defaults. Below values accommodate testing.
+#
+# This is TRUE on older installs; FALSE on new installs; doesn't matter much
+# if metadata.xml is not reachable to the public.
+metadata_cache_http: false
+# Not set on older installs; 1 minute on new installs. The default (not set)
+# is evaluated to 172800 == 2 days by the SAML Toolkit, so it's probably good
+# to set the same (or delete / not set this config value) on production systems.
+metadata_valid_secs: 60
+#
+# We will enable some security settings by default, since it is possible but
 # not recommended for the module to operate without them. This is a deviation
 # from the SAML Toolkit which does not set these values to True by default.
 security_authn_requests_sign: true
@@ -14,12 +27,12 @@ security_messages_sign: true
 # it be True.
 security_lowercase_url_encoding: true
 # The following are True by default in the SAML Toolkit. They have defaults in
-# the configuration screen's code to make sure existing installs were not
-# affected (i.e. values kept being True) when these configuration settings were
-# added. So those defaults in code should keep being set for backward
-# compatibility, even if we decide to set explicitly set these options to False
-# in this file, for new installations. (We may well want to do that for the
-# NameID options, once we're sure this has no adverse effects.)
+# the configuration screen's code to make sure older installs were not affected
+# (i.e. values kept being True) when these configuration settings were added.
+# So those defaults in code should keep being set for backward compatibility,
+# even if we decide to set explicitly set these options to False in this file,
+# for new installs. (We may well want to do that for the NameID options, once
+# we're sure this has no adverse effects.)
 request_set_name_id_policy: true
 security_want_name_id: true
 # The following option has existed since forever and has not been set to true
