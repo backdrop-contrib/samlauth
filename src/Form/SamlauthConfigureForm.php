@@ -239,6 +239,16 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('metadata_cache_http') ?? TRUE,
     ];
 
+    $form['service_provider']['caching']['requests_cache_http_secs'] = [
+      '#type' => 'number',
+      '#min' => 0,
+      '#title' => $this->t('Cache HTTP responses containing SAML requests'),
+      '#description' => $this->t('This is a number of seconds; 0 means "off"; suggested value is 600. The responses cached are redirects to the IdP at the start of login/logout flow, which contain a SAML request in the URL parameter.'),
+      // 0 on existing installations where the checkbox didn't exist before;
+      // 600 in new installations.
+      '#default_value' => $config->get('requests_cache_http_secs') ?? 0,
+    ];
+
     $form['identity_provider'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Identity Provider'),
@@ -690,6 +700,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('sp_private_key', $sp_private_key)
       ->set('sp_cert_folder', $sp_cert_folder)
       ->set('metadata_cache_http', $form_state->getValue('metadata_cache_http'))
+      ->set('requests_cache_http_secs', $form_state->getValue('requests_cache_http_secs'))
       ->set('idp_entity_id', $form_state->getValue('idp_entity_id'))
       ->set('idp_single_sign_on_service', $form_state->getValue('idp_single_sign_on_service'))
       ->set('idp_single_log_out_service', $form_state->getValue('idp_single_log_out_service'))

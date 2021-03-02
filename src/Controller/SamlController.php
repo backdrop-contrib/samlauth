@@ -147,7 +147,7 @@ class SamlController extends ControllerBase {
     };
     // This response redirects to an external URL in all/common cases. We count
     // on the routing.yml to specify that it's not cacheable.
-    return $this->getTrustedRedirectResponse($function, 'initiating SAML login', '<front>');
+    return $this->getShortenedRedirectResponse($function, 'initiating SAML login', '<front>', TRUE);
   }
 
   /**
@@ -169,7 +169,7 @@ class SamlController extends ControllerBase {
     };
     // This response redirects to an external URL in all/common cases. We count
     // on the routing.yml to specify that it's not cacheable.
-    return $this->getTrustedRedirectResponse($function, 'initiating SAML logout', '<front>');
+    return $this->getShortenedRedirectResponse($function, 'initiating SAML logout', '<front>', TRUE);
   }
 
   /**
@@ -281,7 +281,7 @@ class SamlController extends ControllerBase {
     // SP-initiated logout that was initially started from this SP, i.e.
     // through the logout() route). We count on the routing.yml to specify that
     // it's not cacheable.
-    return $this->getTrustedRedirectResponse($function, 'processing SAML single-logout response', '<front>');
+    return $this->getShortenedRedirectResponse($function, 'processing SAML single-logout response', '<front>');
   }
 
   /**
@@ -392,6 +392,55 @@ class SamlController extends ControllerBase {
     }
 
     return $url_object;
+  }
+
+  /**
+   * Gets a redirect response and modifies it a bit.
+   *
+   * Split off from getTrustedRedirectResponse() because that's in a trait.
+   *
+   * @param callable $callable
+   *  Callable.
+   * @param string $while
+   *   Description of when we're doing this, for error logging.
+   * @param string $redirect_route_on_exception
+   *   Drupal route name to redirect to on exception.
+   * @param bool $set_max_age
+   *   (Optional) Set configured max-age.
+   */
+  protected function getShortenedRedirectResponse($callable, $while, $redirect_route_on_exception, $set_max_age = FALSE) {
+    $response = $this->getTrustedRedirectResponse($callable, $while, $redirect_route_on_exception);
+    if ($set_max_age) {
+      // Sets configured max-age. (That doesn't mean that responses from
+      // callers which don't pass this parameters are not cached; that depends
+      // on the routing.yml. We just set our configurable value which is used
+      // for login/logout requests.)
+      $max_age = $this->config(self::CONFIG_OBJECT_NAME)->get('requests_cache_http_secs');
+      $response->setMaxAge($max_age > 0 ? $max_age : 0);
+    }
+    // Symfony RedirectResponses set a HTML document as content, which is going
+    // to be ugly with our long URLs. Almost noone sees this content for a
+    // HTTP redirect, but still: overwrite it with a similar HTML document that
+    // doesn't include the URL parameter blurb in the rendered parts.
+    $url = $response->getTargetUrl();
+    $pos = strpos($url, '?');
+    $shortened_url = $pos ? substr($url, 0, $pos) : $url;
+    // Almost literal copy from RedirectResponse::setTargetUrl():
+    $response->setContent(
+      sprintf('<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="refresh" content="0;url=%1$s" />
+
+        <title>Redirecting to %2$s</title>
+    </head>
+    <body>
+        Redirecting to <a href="%1$s">%2$s</a>.
+    </body>
+</html>', htmlspecialchars($url, ENT_QUOTES, 'UTF-8'), $shortened_url));
+
+    return $response;
   }
 
   /**
