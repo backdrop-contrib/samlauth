@@ -7,6 +7,8 @@
 
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Drupal\Component\Utility\UrlHelper;
+use Drupal\samlauth\Controller\SamlController;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\user\UserInterface;
 
@@ -40,9 +42,9 @@ function samlauth_form_user_login_form_alter(&$form, FormStateInterface $form_st
 function samlauth_check_saml_user($form, FormStateInterface $form_state) {
   if (!\Drupal::config('samlauth.authentication')->get('drupal_saml_login')) {
     if ($form_state->hasAnyErrors()) {
-      // If previous validation has already failed (name/pw incorrect or blocked),
-      // bail out so we don't disclose any details about a user that otherwise
-      // wouldn't be authenticated.
+      // If previous validation has already failed (name/pw incorrect or blocked
+      // ), bail out so we don't disclose any details about a user that otherwi-
+      // se wouldn't be authenticated.
       return;
     }
 
@@ -82,6 +84,47 @@ function samlauth_user_presave(UserInterface $account) {
     $saml_service = \Drupal::service('samlauth.saml');
     if ($saml_service->getAttributeByConfig('user_name_attribute')) {
       $saml_service->synchronizeUserAttributes($account, TRUE);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * For users that have been authenticated via SAML, hide the user password
+ * change field and provide a notice to the user about the user change service.
+ *
+ * @see https://www.drupal.org/project/samlauth/issues/3185846
+ */
+function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
+  if (\Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('drupal_saml_login')) {
+    return;
+  }
+
+  $account = $form_state->getBuildInfo()['callback_object']->getEntity();
+
+  /** @var \Drupal\externalauth\AuthmapInterface $authmap */
+  $authmap = \Drupal::service('externalauth.authmap');
+  $saml_id = $authmap->get($account->id(), 'samlauth');
+
+  // Only affect SAML authenticated users.
+  if ($saml_id !== FALSE) {
+    // Hide the change password field.
+    $form['account']['pass']['#access'] = FALSE;
+
+    // Display a notice with a link to the proper IdP password change service.
+    $idp_change_password_service_url = \Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('idp_change_password_service');
+
+    // Since the IdP change password service URL is optional, only display the
+    // notice if one has been set.
+    if (UrlHelper::isValid($idp_change_password_service_url, TRUE)) {
+      $form['account']['saml_notice'] = [
+        '#markup' => t(
+          '<strong>NOTE:</strong> E-mail address and password are controlled via SAML. Please visit <a href="@link">this link</a> to change.',
+          ['@link' => $idp_change_password_service_url]
+        ),
+        '#weight' => -1,
+      ];
     }
   }
 }
