@@ -36,7 +36,7 @@ samlauth.saml_controller_acs:
     _controller: '\Drupal\samlauth\Controller\SamlController::acs'
     _title: 'SAML ACS'
   requirements:
-    _user_is_logged_in: 'FALSE'
+    _access: 'TRUE'
   options:
     _maintenance_access: TRUE
     no_cache: TRUE

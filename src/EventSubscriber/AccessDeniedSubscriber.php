@@ -2,12 +2,11 @@
 
 namespace Drupal\samlauth\EventSubscriber;
 
-use Drupal\Core\Path\PathValidatorInterface;
-use Drupal\Core\Routing\LocalRedirectResponse;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Routing\RouteMatch;
 use Drupal\Core\Url;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 use Symfony\Component\HttpKernel\Event\KernelEvent;
@@ -16,19 +15,9 @@ use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
- * Redirects logged-in users when access is denied to /saml/login.
+ * Exception subscriber intercepting various "access denied" situations.
  */
 class AccessDeniedSubscriber implements EventSubscriberInterface {
-
-  /**
-   * Routes to check.
-   *
-   * @var array
-   */
-  const INTERNALROUTES = [
-    'samlauth.saml_controller_login',
-    'samlauth.saml_controller_acs',
-  ];
 
   /**
    * Routes which can throw TooManyRequestsHttpException.
@@ -48,23 +37,13 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
   protected $account;
 
   /**
-   * Path validator.
-   *
-   * @var \Drupal\Core\Path\PathValidatorInterface
-   */
-  protected $pathValidator;
-
-  /**
    * Constructs a new redirect subscriber.
    *
    * @param \Drupal\Core\Session\AccountInterface $account
    *   The current user.
-   * @param \Drupal\Core\Path\PathValidatorInterface $path_validator
-   *   Path validator.
    */
-  public function __construct(AccountInterface $account, PathValidatorInterface $path_validator) {
+  public function __construct(AccountInterface $account) {
     $this->account = $account;
-    $this->pathValidator = $path_validator;
   }
 
   /**
@@ -75,33 +54,28 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
    */
   public function onException(GetResponseForExceptionEvent $event) {
     $exception = $event->getException();
+    // If our own routes threw a TooManyRequestsHttpException, don't spend time
+    // redirecting to another page and rendering that. (Rendering would need to
+    // be done from scratch because the page needs to include includes the
+    // error message). Just a simple text string should do.
     if ($exception instanceof TooManyRequestsHttpException) {
       $route_name = $this->getCurrentRouteName($event);
       if (in_array($route_name, self::FLOOD_CONTROL_ROUTES)) {
-        // Don't spend time on a RedirectResponse (when the redirected page
-        // will need to spend time rendering the page that includes an error
-        // message). Just a simple text string should do.
         $event->setResponse(new Response($exception->getMessage(), $exception->getStatusCode()));
       }
     }
-    if ($exception instanceof AccessDeniedHttpException && $this->account->isAuthenticated()) {
-      $route_name = $this->getCurrentRouteName($event);
-      if (in_array($route_name, self::INTERNALROUTES)) {
-        // If a RelayState is provided the allow that redirection to happen,
-        // otherwise redirect an authenticated user to the profile page.
-        if ($relay_state = $event->getRequest()->request->get('RelayState')) {
-          /* @var $relay_url Url */
-          if ($relay_url = $this->pathValidator->getUrlIfValidWithoutAccessCheck($relay_state)) {
-            $url = $relay_url->toUriString();
-          }
-        }
-        else {
-          $url = Url::fromRoute('entity.user.canonical', ['user' => $this->account->id()])
-            ->toString(TRUE)
-            ->getGeneratedUrl();
-        }
-        $event->setResponse(new LocalRedirectResponse($url));
-      }
+    // Authenticated access to /saml/login redirets to the user profile. This
+    // is done in an event subscriber (rather than just opening up the route
+    // and returning a redirect response from the controller route) because
+    // this is what Core does for /user/login too. (Maybe it's a bit faster.
+    // Maybe it's easier to override.) All our other routes do their
+    // redirecting inside SamlController because there's more logic behind the
+    // decision where to route.
+    if ($exception instanceof AccessDeniedHttpException
+        && $this->account->isAuthenticated()
+        && $this->getCurrentRouteName($event) === 'samlauth.saml_controller_login') {
+      $redirect_url = Url::fromRoute('entity.user.canonical', ['user' => $this->account->id()], ['absolute' => TRUE]);
+      $event->setResponse(new RedirectResponse($redirect_url->toString()));
     }
   }
 

@@ -6,6 +6,10 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Flood\FloodInterface;
+use Drupal\Core\Messenger\MessengerInterface;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\Url;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\samlauth\Event\SamlauthEvents;
@@ -26,6 +30,7 @@ use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
  * Governs communication between the SAML toolkit and the IdP / login behavior.
  */
 class SamlService {
+  use StringTranslationTrait;
 
   /**
    * Indicates whether we're storing SAML session values in $_SESSION.
@@ -99,6 +104,20 @@ class SamlService {
   protected $flood;
 
   /**
+   * The current user service.
+   *
+   * @var \Drupal\Core\Session\AccountInterface
+   */
+  protected $currentUser;
+
+  /**
+   * The messenger service.
+   *
+   * @var \Drupal\Core\Messenger\MessengerInterface
+   */
+  protected $messenger;
+
+  /**
    * Constructs a new SamlService.
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
@@ -115,8 +134,14 @@ class SamlService {
    *   A temp data store factory object.
    * @param \Drupal\Core\Flood\FloodInterface $flood
    *   The flood service.
+   * @param \Drupal\Core\Session\AccountInterface $current_user
+   *   The current user service.
+   * @param \Drupal\Core\Messenger\MessengerInterface $messenger
+   *   The messenger service.
+   * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
+   *   The string translation service.
    */
-  public function __construct(ExternalAuth $external_auth, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood) {
+  public function __construct(ExternalAuth $external_auth, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
     $this->externalAuth = $external_auth;
     $this->configFactory = $config_factory;
     $this->entityTypeManager = $entity_type_manager;
@@ -124,6 +149,9 @@ class SamlService {
     $this->eventDispatcher = $event_dispatcher;
     $this->privateTempStore = $temp_store_factory->get('samlauth');
     $this->flood = $flood;
+    $this->currentUser = $current_user;
+    $this->messenger = $messenger;
+    $this->setStringTranslation($translation);
 
     if ($this->configFactory->get('samlauth.authentication')->get('use_proxy_headers')) {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
@@ -207,6 +235,19 @@ class SamlService {
         // Not sure if we should be more detailed...
         $this->logger->warning("HTTP request to ACS is not a POST request, or contains no 'SAMLResponse' parameter.");
       }
+    }
+
+    if ($this->currentUser->isAuthenticated()) {
+      // This message is modeled after the core message that is displayed if
+      // a user follows a one-time login link while logged in. Difference is,
+      // we don't know if the user making the login attempt is the same.
+      $this->messenger->addWarning($this->t('User %other_user is already logged into the site on this computer, but you tried to log in through an external authentication provider. If you are not this user, please <a href=":logout">log out</a> and try using the link again.', [
+        '%other_user' => $this->currentUser->getAccountName(),
+        // Point to /user/logout rather than /saml/logout because we don't want
+        // to make people log out from all their logged-in sites, for this.
+        ':logout' => Url::fromRoute('user.logout')->toString(),
+      ]));
+      return;
     }
 
     // Perform flood control. This is not to guard against failed login
@@ -603,7 +644,7 @@ class SamlService {
   protected function drupalLogoutHelper($delete_saml_session_data = TRUE) {
     $data = [];
 
-    if (\Drupal::currentUser()->isAuthenticated()) {
+    if ($this->currentUser->isAuthenticated()) {
       // Get data from our temp store which is not accessible after logout.
       // DEVELOPER NOTE: It depends on our session storage, whether we want to
       // try this for unauthenticated users too. At the moment, we are sure

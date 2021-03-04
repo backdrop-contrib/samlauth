@@ -349,13 +349,13 @@ class SamlController extends ControllerBase {
    * This should be called only after successfully processing an ACS/logout
    * response.
    *
-   * @param bool $logged_in
+   * @param bool $after_acs
    *   (optional) TRUE if an ACS request was just processed.
    *
    * @return \Drupal\Core\Url
    *   The URL to redirect to.
    */
-  protected function getRedirectUrlAfterProcessing($logged_in = FALSE) {
+  protected function getRedirectUrlAfterProcessing($after_acs = FALSE) {
     $relay_state = $this->requestStack->getCurrentRequest()->get('RelayState');
     if ($relay_state) {
       // We should be able to trust the RelayState parameter at this point
@@ -373,23 +373,28 @@ class SamlController extends ControllerBase {
 
     if (empty($url)) {
       // If no url was specified, we check if it was configured.
-      $url = $this->config(self::CONFIG_OBJECT_NAME)->get($logged_in ? 'login_redirect_url' : 'logout_redirect_url');
+      $url = $this->config(self::CONFIG_OBJECT_NAME)->get($after_acs ? 'login_redirect_url' : 'logout_redirect_url');
+      $url = $this->token->replace($url);
     }
 
     if ($url) {
-      $url = $this->token->replace($url);
       // We don't check access here. If a URL was explicitly specified, we
       // prefer returning a 403 over silently redirecting somewhere else.
       $url_object = $this->pathValidator->getUrlIfValidWithoutAccessCheck($url);
       if (empty($url_object)) {
-        $type = $logged_in ? 'Login' : 'Logout';
+        $type = $after_acs ? 'Login' : 'Logout';
         $this->logger->warning("The $type Redirect URL is not a valid path; falling back to default.");
       }
     }
 
     if (empty($url_object)) {
       // If no url was configured, fall back to a hardcoded route.
-      $url_object = Url::fromRoute($logged_in ? 'user.page' : '<front>');
+      if ($this->currentUser()->isAuthenticated()) {
+        $url_object = Url::fromRoute('entity.user.canonical', ['user' => $this->currentUser()->id()]);
+      }
+      else {
+        $url_object = Url::fromRoute('<front>');
+      }
     }
 
     return $url_object;
