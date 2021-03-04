@@ -8,8 +8,11 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Routing\RouteMatch;
 use Drupal\Core\Url;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
+use Symfony\Component\HttpKernel\Event\KernelEvent;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
@@ -25,6 +28,16 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
   const INTERNALROUTES = [
     'samlauth.saml_controller_login',
     'samlauth.saml_controller_acs',
+  ];
+
+  /**
+   * Routes which can throw TooManyRequestsHttpException.
+   *
+   * @var array
+   */
+  const FLOOD_CONTROL_ROUTES = [
+    'samlauth.saml_controller_acs',
+    'samlauth.saml_controller_sls',
   ];
 
   /**
@@ -62,9 +75,17 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
    */
   public function onException(GetResponseForExceptionEvent $event) {
     $exception = $event->getException();
+    if ($exception instanceof TooManyRequestsHttpException) {
+      $route_name = $this->getCurrentRouteName($event);
+      if (in_array($route_name, self::FLOOD_CONTROL_ROUTES)) {
+        // Don't spend time on a RedirectResponse (when the redirected page
+        // will need to spend time rendering the page that includes an error
+        // message). Just a simple text string should do.
+        $event->setResponse(new Response($exception->getMessage(), $exception->getStatusCode()));
+      }
+    }
     if ($exception instanceof AccessDeniedHttpException && $this->account->isAuthenticated()) {
-      $route_name = RouteMatch::createFromRequest($event->getRequest())
-        ->getRouteName();
+      $route_name = $this->getCurrentRouteName($event);
       if (in_array($route_name, self::INTERNALROUTES)) {
         // If a RelayState is provided the allow that redirection to happen,
         // otherwise redirect an authenticated user to the profile page.
@@ -82,6 +103,22 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
         $event->setResponse(new LocalRedirectResponse($url));
       }
     }
+  }
+
+  /**
+   * Gets the current route name.
+   *
+   * @param \Symfony\Component\HttpKernel\Event\KernelEvent $event
+   *   The event we're subscribed to.
+   *
+   * @return string
+   *   The current route name.
+   */
+  private function getCurrentRouteName(KernelEvent $event) {
+    // This method is just a reminder: we can either get the current request
+    // from the event, or we can inject the current_route_match service if ever
+    // necessary. There seems to be no consensus on what is 'better'.
+    return RouteMatch::createFromRequest($event->getRequest())->getRouteName();
   }
 
   /**

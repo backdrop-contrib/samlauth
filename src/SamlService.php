@@ -5,6 +5,7 @@ namespace Drupal\samlauth;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Url;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\samlauth\Event\SamlauthEvents;
@@ -19,6 +20,7 @@ use OneLogin\Saml2\Utils as SamlUtils;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
  * Governs communication between the SAML toolkit and the IdP / login behavior.
@@ -55,11 +57,11 @@ class SamlService {
   protected $externalAuth;
 
   /**
-   * A configuration object containing samlauth settings.
+   * The config factory.
    *
-   * @var \Drupal\Core\Config\ImmutableConfig
+   * @var \Drupal\Core\Config\ConfigFactoryInterface
    */
-  protected $config;
+  protected $configFactory;
 
   /**
    * The EntityTypeManager service.
@@ -90,6 +92,13 @@ class SamlService {
   protected $privateTempStore;
 
   /**
+   * The flood service.
+   *
+   * @var \Drupal\Core\Flood\FloodInterface
+   */
+  protected $flood;
+
+  /**
    * Constructs a new SamlService.
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
@@ -104,16 +113,19 @@ class SamlService {
    *   The event dispatcher.
    * @param \Drupal\Core\TempStore\PrivateTempStoreFactory $temp_store_factory
    *   A temp data store factory object.
+   * @param \Drupal\Core\Flood\FloodInterface $flood
+   *   The flood service.
    */
-  public function __construct(ExternalAuth $external_auth, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory) {
+  public function __construct(ExternalAuth $external_auth, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood) {
     $this->externalAuth = $external_auth;
-    $this->config = $config_factory->get('samlauth.authentication');
+    $this->configFactory = $config_factory;
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger;
     $this->eventDispatcher = $event_dispatcher;
     $this->privateTempStore = $temp_store_factory->get('samlauth');
+    $this->flood = $flood;
 
-    if ($this->config->get('use_proxy_headers')) {
+    if ($this->configFactory->get('samlauth.authentication')->get('use_proxy_headers')) {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
       SamlUtils::setProxyVars(TRUE);
     }
@@ -162,8 +174,9 @@ class SamlService {
    *   parameters.
    */
   public function login($return_to = NULL, $parameters = []) {
-    $url = $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $this->config->get('request_set_name_id_policy') ?? TRUE);
-    if ($this->config->get('debug_log_saml_out')) {
+    $config = $this->configFactory->get('samlauth.authentication');
+    $url = $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $config->get('request_set_name_id_policy') ?? TRUE);
+    if ($config->get('debug_log_saml_out')) {
       $this->logger->debug('Sending SAML login request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
     }
     return $url;
@@ -179,7 +192,8 @@ class SamlService {
    * @throws \Exception
    */
   public function acs() {
-    if ($this->config->get('debug_log_in')) {
+    $config = $this->configFactory->get('samlauth.authentication');
+    if ($config->get('debug_log_in')) {
       if (isset($_POST['SAMLResponse'])) {
         $response = base64_decode($_POST['SAMLResponse']);
         if ($response) {
@@ -195,28 +209,42 @@ class SamlService {
       }
     }
 
-    // This call can either set an error condition or throw a
-    // \OneLogin_Saml2_Error exception, depending on whether or not we are
-    // processing a POST request. Don't catch the exception.
-    // @todo should we check a Response against the ID of the request we sent
-    //   earlier? Seems to be not absolutely required on top of the validity /
-    //   signature checks which the library already does - but every extra
-    //   check is good. Maybe make it optional.
-    $this->getSamlAuth()->processResponse();
-
-    if ($this->config->get('debug_log_saml_in')) {
-      $this->logger->debug('ACS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastResponseXML()]);
+    // Perform flood control. This is not to guard against failed login
+    // attempts per se; that is the IdP's job. It's just protection against
+    // a flood of bogus (DDoS-like) requests because this route performs
+    // computationally expensive operations. So: just IP based flood control,
+    // using the limit / window values that Core uses for regular login.
+    $flood_config = $this->configFactory->get('user.flood');
+    if (!$this->flood->isAllowed('samlauth.failed_login_ip', $flood_config->get('ip_limit'), $flood_config->get('ip_window'))) {
+      throw new TooManyRequestsHttpException(NULL, 'Access is blocked because of IP based flood prevention.');
     }
-    // Now look if there were any errors and also throw.
-    $errors = $this->getSamlAuth()->getErrors();
-    if (!empty($errors)) {
-      // We have one or multiple error types / short descriptions, and one
-      // 'reason' for the last error.
-      throw new RuntimeException('Error(s) encountered during processing of ACS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $this->getSamlAuth()->getLastErrorReason());
-    }
+    try {
+      // This call can either set an error condition or throw a
+      // \OneLogin_Saml2_Error exception, depending on whether or not we are
+      // processing a POST request. Don't catch the exception.
+      // @todo should we check a Response against the ID of the request we sent
+      //   earlier? Seems to be not absolutely required on top of the validity /
+      //   signature checks which the library already does - but every extra
+      //   check is good. Maybe make it optional.
+      $this->getSamlAuth()->processResponse();
 
-    if (!$this->isAuthenticated()) {
-      throw new RuntimeException('Could not authenticate.');
+      if ($config->get('debug_log_saml_in')) {
+        $this->logger->debug('ACS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastResponseXML()]);
+      }
+      // Now look if there were any errors and also throw.
+      $errors = $this->getSamlAuth()->getErrors();
+      if (!empty($errors)) {
+        // We have one or multiple error types / short descriptions, and one
+        // 'reason' for the last error.
+        throw new RuntimeException('Error(s) encountered during processing of ACS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $this->getSamlAuth()->getLastErrorReason());
+      }
+      if (!$this->isAuthenticated()) {
+        throw new RuntimeException('Could not authenticate.');
+      }
+    }
+    catch (\Exception $e) {
+      $this->flood->register('samlauth.failed_login_ip', $flood_config->get('ip_window'));
+      throw $e;
     }
 
     $unique_id = $this->getAttributeByConfig('unique_id_attribute');
@@ -231,7 +259,7 @@ class SamlService {
 
       // Try to link an existing user: first through a custom event handler,
       // then by name, then by e-mail.
-      if ($this->config->get('map_users')) {
+      if ($config->get('map_users')) {
         $event = new SamlauthUserLinkEvent($this->getAttributes());
         $this->eventDispatcher->dispatch(SamlauthEvents::USER_LINK, $event);
         $account = $event->getLinkedAccount();
@@ -275,7 +303,7 @@ class SamlService {
     // If we haven't found an account to link, create one from the SAML
     // attributes.
     if (!$account) {
-      if ($this->config->get('create_users')) {
+      if ($config->get('create_users')) {
         // The register() call will save the account. We want to:
         // - add values from the SAML response into the user account;
         // - not save the account twice (because if the second save fails we do
@@ -378,7 +406,7 @@ class SamlService {
       TRUE,
       $saml_session_data['name_id_format'] ?? NULL
     );
-    if ($this->config->get('debug_log_saml_out')) {
+    if ($this->configFactory->get('samlauth.authentication')->get('debug_log_saml_out')) {
       $this->logger->debug('Sending SAML logout request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
     }
     return $url;
@@ -391,8 +419,9 @@ class SamlService {
    *   Usually returns nothing. May return a URL to redirect to.
    */
   public function sls() {
+    $config = $this->configFactory->get('samlauth.authentication');
     // We might at some point check if this code can be abstracted a bit...
-    if ($this->config->get('debug_log_in')) {
+    if ($config->get('debug_log_in')) {
       if (isset($_GET['SAMLResponse'])) {
         $response = base64_decode($_GET['SAMLResponse']);
         if ($response) {
@@ -417,20 +446,31 @@ class SamlService {
       }
     }
 
-    // Unlike the 'logout()' route, we only log the user out if we have a valid
-    // request/response, so first have the SAML Toolkit check things. Don't
-    // have it do any session actions, because nothing is needed besides our
-    // own logout actions (if any). This call can either set an error condition
-    // or throw a \OneLogin_Saml2_Error, depending on whether we are processing
-    // a POST request; don't catch anything.
-    // @todo should we check a LogoutResponse against the ID of the
-    //   LogoutRequest we sent earlier? Seems to be not absolutely required on
-    //   top of the validity / signature checks which the library already does
-    //   - but every extra check is good. Maybe make it optional.
-    $url = $this->getSamlAuth()->processSLO(TRUE, NULL, (bool) $this->config->get('security_logout_reuse_sigs'), NULL, TRUE);
+    // Perform flood control; see acs().
+    $flood_config = $this->configFactory->get('user.flood');
+    if (!$this->flood->isAllowed('samlauth.failed_logout_ip', $flood_config->get('ip_limit'), $flood_config->get('ip_window'))) {
+      throw new TooManyRequestsHttpException(NULL, 'Access is blocked because of IP based flood prevention.');
+    }
+    try {
+      // Unlike the 'logout()' route, we only log the user out if we have a
+      // valid request/response, so first have the SAML Toolkit check things.
+      // Don't have it do any session actions, because nothing is needed
+      // besides our own logout actions (if any). This call can either set an
+      // error condition or throw a \OneLogin_Saml2_Error, depending on whether
+      // we are processing a POST request; don't catch anything.
+      // @todo should we check a LogoutResponse against the ID of the
+      //   LogoutRequest we sent earlier? Seems to be not absolutely required on
+      //   top of the validity / signature checks which the library already does
+      //   - but every extra check is good. Maybe make it optional.
+      $url = $this->getSamlAuth()->processSLO(TRUE, NULL, (bool) $config->get('security_logout_reuse_sigs'), NULL, TRUE);
+    }
+    catch (\Exception $e) {
+      $this->flood->register('samlauth.failed_logout_ip', $flood_config->get('ip_window'));
+      throw $e;
+    }
 
-    if ($this->config->get('debug_log_saml_in')) {
-      // There should be no way we can get here if nether GET parameter is set;
+    if ($config->get('debug_log_saml_in')) {
+      // There should be no way we can get here if neither GET parameter is set;
       // if nothing gets logged, that's a bug.
       if (isset($_GET['SAMLResponse'])) {
         $this->logger->debug('SLS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastResponseXML()]);
@@ -511,7 +551,7 @@ class SamlService {
    *   key, was not found.
    */
   public function getAttributeByConfig($config_key) {
-    $attribute_name = $this->config->get($config_key);
+    $attribute_name = $this->configFactory->get('samlauth.authentication')->get($config_key);
     if ($attribute_name) {
       $attribute = $this->getSamlAuth()->getAttribute($attribute_name);
       if (!empty($attribute[0])) {
@@ -537,7 +577,7 @@ class SamlService {
    */
   protected function getSamlAuth() {
     if (!isset($this->samlAuth)) {
-      $this->samlAuth = new Auth(static::reformatConfig($this->config));
+      $this->samlAuth = new Auth(static::reformatConfig($this->configFactory->get('samlauth.authentication')));
     }
 
     return $this->samlAuth;

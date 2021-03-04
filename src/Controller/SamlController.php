@@ -20,6 +20,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
  * Returns responses for samlauth module routes.
@@ -455,6 +456,16 @@ class SamlController extends ControllerBase {
    *   (Optional) description of when the error was encountered.
    */
   protected function handleExceptionInRenderContext(\Exception $exception, $while = '') {
+    if ($exception instanceof TooManyRequestsHttpException) {
+      // If this ever happens, don't spend time on a RedirectResponse (when the
+      // redirected page will need to spend time rendering the page that
+      // includes an error message. Throwing an exception here will fall
+      // through to the Symfony HttpKernel - and unfortunately for us, Drupal's
+      // CustomPageExceptionHtmlSubscriber will intercept the response handling
+      // and redirect anyway, unless we intercept it first in our own
+      // AccessDeniedSubscriber.)
+      throw $exception;
+    }
     if ($exception instanceof UserVisibleException || $this->config(self::CONFIG_OBJECT_NAME)->get('debug_display_error_details')) {
       // Show the full error on screen; also log, but with lowered severity.
       // Assume we don't need the "while" part for a user visible error because

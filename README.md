@@ -45,6 +45,16 @@ During configuration,
   configure the other's identity/location. More details are in the respective
   configuration sections.
 
+Optional install: flood_control module. Flood control is applied to failed
+login attempts - which is Drupal Core functionality without a UI. Too
+many failed logins could result  in "Access is blocked because of IP based
+flood prevention." messages, though this is very unlikely to happen. If you
+want to make sure you'll have a UI to look at in those cases, rather than
+going into the 'flood' table, install the flood_control module. If you want to
+see all relevant information in the 'Flood Unblock' view, make sure issue
+https://www.drupal.org/project/flood_control/issues/3191346 is fixed, or apply
+the latest patch from it. (The module works without the patch, though.)
+
 CONFIGURATION AND TESTING
 -------------------------
 Testing SAML login is often a challenge to get right in one go. For those not
