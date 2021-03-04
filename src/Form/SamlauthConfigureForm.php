@@ -121,6 +121,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('drupal_saml_login'),
     ];
 
+    // This is false by default, to maintain parity with core user/reset links.
+    $form['saml_login_logout']['logout_different_user'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Log out different user upon re-authentication.'),
+      '#description' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed.)'),
+      '#default_value' => $config->get('logout_different_user'),
+    ];
+
     $form['saml_login_logout']['login_redirect_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Login redirect URL'),
@@ -692,6 +700,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('login_menu_item_title', $form_state->getValue('login_menu_item_title'))
       ->set('logout_menu_item_title', $form_state->getValue('logout_menu_item_title'))
       ->set('drupal_saml_login', $form_state->getValue('drupal_saml_login'))
+      ->set('logout_different_user', $form_state->getValue('logout_different_user'))
       ->set('login_redirect_url', $form_state->getValue('login_redirect_url'))
       ->set('logout_redirect_url', $form_state->getValue('logout_redirect_url'))
       ->set('sp_entity_id', $form_state->getValue('sp_entity_id'))

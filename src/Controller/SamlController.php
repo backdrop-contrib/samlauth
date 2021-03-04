@@ -260,8 +260,8 @@ class SamlController extends ControllerBase {
     // possible 'leaky' code. We count on the routing.yml to specify the
     // response is not cacheable.
     $function = function () {
-      $this->saml->acs();
-      return $this->getRedirectUrlAfterProcessing(TRUE);
+      $ok = $this->saml->acs();
+      return $this->getRedirectUrlAfterProcessing(TRUE, !$ok);
     };
     return $this->getTrustedRedirectResponse($function, 'processing SAML authentication response', '<front>');
   }
@@ -346,28 +346,32 @@ class SamlController extends ControllerBase {
   /**
    * Returns a URL to redirect to.
    *
-   * This should be called only after successfully processing an ACS/logout
-   * response.
+   * This should be called only after processing an ACS/logout response.
    *
    * @param bool $after_acs
-   *   (optional) TRUE if an ACS request was just processed.
+   *   (Optional) TRUE if an ACS request was just processed.
+   * @param bool $ignore_relay_state
+   *   (Optional) TRUE if the RelayState parameter in the current request
+   *   should not be used.
    *
    * @return \Drupal\Core\Url
    *   The URL to redirect to.
    */
-  protected function getRedirectUrlAfterProcessing($after_acs = FALSE) {
-    $relay_state = $this->requestStack->getCurrentRequest()->get('RelayState');
-    if ($relay_state) {
-      // We should be able to trust the RelayState parameter at this point
-      // because the response from the IdP was verified. Only validate general
-      // syntax.
-      if (!UrlHelper::isValid($relay_state, TRUE)) {
-        $this->logger->error('Invalid RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
-      }
-      // The SAML toolkit set a default RelayState to itself (saml/log(in|out))
-      // when starting the process; ignore this value.
-      elseif (strpos($relay_state, Utils::getSelfURLhost() . '/saml/') !== 0) {
-        $url = $relay_state;
+  protected function getRedirectUrlAfterProcessing($after_acs = FALSE, $ignore_relay_state = FALSE) {
+    if (!$ignore_relay_state) {
+      $relay_state = $this->requestStack->getCurrentRequest()->get('RelayState');
+      if ($relay_state) {
+        // We should be able to trust the RelayState parameter at this point
+        // because the response from the IdP was verified. Only validate general
+        // syntax.
+        if (!UrlHelper::isValid($relay_state, TRUE)) {
+          $this->logger->error('Invalid RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
+        }
+        // The SAML toolkit set a default RelayState to itself (saml/log(in|out))
+        // when starting the process; ignore this value.
+        elseif (strpos($relay_state, Utils::getSelfURLhost() . '/saml/') !== 0) {
+          $url = $relay_state;
+        }
       }
     }
 

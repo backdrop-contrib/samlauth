@@ -217,6 +217,11 @@ class SamlService {
    * Drupal user (logs in / maps existing / create new) depending on attributes
    * sent in the request and our module configuration.
    *
+   * @return bool
+   *   TRUE if the response was correctly processed; FALSE if an error was
+   *   encountered while processing but there's a currently logged-in user and
+   *   we decided not to throw an exception for this case.
+   *
    * @throws \Exception
    */
   public function acs() {
@@ -237,19 +242,6 @@ class SamlService {
       }
     }
 
-    if ($this->currentUser->isAuthenticated()) {
-      // This message is modeled after the core message that is displayed if
-      // a user follows a one-time login link while logged in. Difference is,
-      // we don't know if the user making the login attempt is the same.
-      $this->messenger->addWarning($this->t('User %other_user is already logged into the site on this computer, but you tried to log in through an external authentication provider. If you are not this user, please <a href=":logout">log out</a> and try using the link again.', [
-        '%other_user' => $this->currentUser->getAccountName(),
-        // Point to /user/logout rather than /saml/logout because we don't want
-        // to make people log out from all their logged-in sites, for this.
-        ':logout' => Url::fromRoute('user.logout')->toString(),
-      ]));
-      return;
-    }
-
     // Perform flood control. This is not to guard against failed login
     // attempts per se; that is the IdP's job. It's just protection against
     // a flood of bogus (DDoS-like) requests because this route performs
@@ -259,42 +251,130 @@ class SamlService {
     if (!$this->flood->isAllowed('samlauth.failed_login_ip', $flood_config->get('ip_limit'), $flood_config->get('ip_window'))) {
       throw new TooManyRequestsHttpException(NULL, 'Access is blocked because of IP based flood prevention.');
     }
+
+    // Process the ACS response message and check if we can derive a linked
+    // account, but don't process errors yet. (The following code is a kludge
+    // because we may need the linked account / want to ignore errors later.)
     try {
       // This call can either set an error condition or throw a
       // \OneLogin_Saml2_Error exception, depending on whether or not we are
-      // processing a POST request. Don't catch the exception.
+      // processing a POST request.
       // @todo should we check a Response against the ID of the request we sent
       //   earlier? Seems to be not absolutely required on top of the validity /
       //   signature checks which the library already does - but every extra
       //   check is good. Maybe make it optional.
       $this->getSamlAuth()->processResponse();
-
       if ($config->get('debug_log_saml_in')) {
         $this->logger->debug('ACS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastResponseXML()]);
       }
-      // Now look if there were any errors and also throw.
       $errors = $this->getSamlAuth()->getErrors();
-      if (!empty($errors)) {
+      if (!$errors && !$this->isAuthenticated()) {
+        $errors = TRUE;
+      }
+    }
+    catch (\Exception $acs_exception) {
+      $errors = TRUE;
+    }
+    $account = NULL;
+    if (!$errors) {
+      $unique_id = $this->getAttributeByConfig('unique_id_attribute');
+      if ($unique_id) {
+        $account = $this->externalAuth->load($unique_id, 'samlauth') ?: NULL;
+      }
+    }
+
+    $logout_different_user = $config->get('logout_different_user');
+    if ($this->currentUser->isAuthenticated()) {
+      // Either redirect or log out so that we can log a different user in.
+      // 'Redirecting' is done by the caller - so we can just return from here.
+      if ($account && $account->id() === $this->currentUser->id()) {
+        // Noting that we were already logged in probably isn't useful. (Core's
+        // user/reset link isn't a good case to compare: it always logs the
+        // user out and presents the "Reset password" form with a login button.
+        // 'drush uli' links, at least on D7, display an info message "please
+        // reset your password" because they land on the user edit form.)
+        return !$errors;
+      }
+      if (!$logout_different_user) {
+        // Message similar to when a user/reset link is followed.
+        $this->messenger->addWarning($this->t('Another user (%other_user) is already logged into the site on this computer, but you tried to log in as user %login_user through an external authentication provider. Please <a href=":logout">log out</a> and try again.', [
+          '%other_user' => $this->currentUser->getAccountName(),
+          '%login_user' => $account ? $account->getAccountName() : '?',
+          // Point to /user/logout rather than /saml/logout because we don't
+          // want to make people log out from all their logged-in sites.
+          ':logout' => Url::fromRoute('user.logout')->toString(),
+        ]));
+        return !$errors;
+      }
+      // If the SAML response indicates (/ if the processing generated) an
+      // error, we don't want to log the current user out but we want to
+      // clearly indicate that someone else is still logged in.
+      if ($errors) {
+        $this->messenger->addWarning($this->t('Another user (%other_user) is already logged into the site on this computer. You tried to log in through an external authentication provider, which failed, so the user is still logged in.', [
+          '%other_user' => $this->currentUser->getAccountName(),
+        ]));
+      }
+      else {
+        $this->drupalLogoutHelper();
+        $this->messenger->addStatus($this->t('Another user (%other_user) was already logged into the site on this computer, and has now been logged out.', [
+          '%other_user' => $this->currentUser->getAccountName(),
+        ]));
+      }
+    }
+
+    if ($errors) {
+      $this->flood->register('samlauth.failed_login_ip', $flood_config->get('ip_window'));
+      // @todo wrap above getErrors() / isAuthenticated() into a method that
+      //   returns a more consistent error return value.
+      if (isset($acs_exception)) {
+        throw $acs_exception;
+      }
+      if (is_array($errors)) {
         // We have one or multiple error types / short descriptions, and one
         // 'reason' for the last error.
         throw new RuntimeException('Error(s) encountered during processing of ACS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $this->getSamlAuth()->getLastErrorReason());
       }
-      if (!$this->isAuthenticated()) {
-        throw new RuntimeException('Could not authenticate.');
+      // @todo isAuthenticated feels like a misnomer; adjust message.
+      throw new RuntimeException('Could not authenticate.');
+    }
+    if (!$unique_id) {
+      throw new RuntimeException('Configured unique ID is not present in SAML response.');
+    }
+
+    $this->doLogin($unique_id, $account);
+
+    // Remember SAML session values that may be necessary for logout.
+    $values = [
+      'session_index' => $this->samlAuth->getSessionIndex(),
+      'session_expiration' => $this->samlAuth->getSessionExpiration(),
+      'name_id' => $this->samlAuth->getNameId(),
+      'name_id_format' => $this->samlAuth->getNameIdFormat(),
+    ];
+    foreach ($values as $key => $value) {
+      if (isset($value)) {
+        $this->setSamlSessionValue($key, $value);
+      }
+      else {
+        $this->deleteSamlSessionValue($key);
       }
     }
-    catch (\Exception $e) {
-      $this->flood->register('samlauth.failed_login_ip', $flood_config->get('ip_window'));
-      throw $e;
-    }
 
-    $unique_id = $this->getAttributeByConfig('unique_id_attribute');
-    if (!$unique_id) {
-      throw new Exception('Configured unique ID is not present in SAML response.');
-    }
+    return TRUE;
+  }
 
+  /**
+   * Logs a user in, creating / linking an account; synchronizes attributes.
+   *
+   * Split off from acs() to... have at least some kind of split.
+   *
+   * @param string $unique_id
+   *   The user account contained in the SAML response.
+   * @param \Drupal\Core\Session\AccountInterface|null $account
+   *   The user account derived from the SAML response.
+   */
+  protected function doLogin($unique_id, AccountInterface $account = NULL) {
+    $config = $this->configFactory->get('samlauth.authentication');
     $first_saml_login = FALSE;
-    $account = $this->externalAuth->load($unique_id, 'samlauth');
     if (!$account) {
       $this->logger->debug('No matching local users found for unique SAML ID @saml_id.', ['@saml_id' => $unique_id]);
 
@@ -372,21 +452,6 @@ class SamlService {
       $this->synchronizeUserAttributes($account, FALSE, $first_saml_login);
 
       $this->externalAuth->userLoginFinalize($account, $unique_id, 'samlauth');
-    }
-
-    // Remember SAML session values that may be necessary for logout.
-    foreach ([
-      'session_index' => $this->samlAuth->getSessionIndex(),
-      'session_expiration' => $this->samlAuth->getSessionExpiration(),
-      'name_id' => $this->samlAuth->getNameId(),
-      'name_id_format' => $this->samlAuth->getNameIdFormat(),
-    ] as $key => $value) {
-      if (isset($value)) {
-        $this->setSamlSessionValue($key, $value);
-      }
-      else {
-        $this->deleteSamlSessionValue($key);
-      }
     }
   }
 
