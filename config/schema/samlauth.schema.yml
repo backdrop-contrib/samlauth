@@ -23,6 +23,12 @@ samlauth.authentication:
       type: string
     sp_private_key:
       type: string
+    metadata_valid_secs:
+      type: integer
+    metadata_cache_http:
+      type: boolean
+    requests_cache_http_secs:
+      type: integer
     idp_entity_id:
       type: string
     idp_single_sign_on_service:
@@ -74,4 +80,16 @@ samlauth.authentication:
     security_lowercase_url_encoding:
       type: boolean
     security_logout_reuse_sigs:
+      type: boolean
+    debug_display_error_details:
+      type: boolean
+    debug_log_in:
+      type: boolean
+    debug_log_saml_in:
+      type: boolean
+    debug_log_saml_out:
+      type: boolean
+    debug_phpsaml:
+      type: boolean
+    use_proxy_headers:
       type: boolean

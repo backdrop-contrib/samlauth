@@ -6,7 +6,7 @@ samlauth_user_roles.value_mapping:
     role_machine_name:
       type: string
 
-samlauth_user_roles.settings:
+samlauth_user_roles.mapping:
   type: config_object
   mapping:
     only_first_login:
