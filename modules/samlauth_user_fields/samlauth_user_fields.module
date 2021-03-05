@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * @file
+ * Hook implementations for the samlauth_user_fields module.
+ */
+
 use Drupal\Core\Routing\RouteMatchInterface;
 
 /**
@@ -13,7 +18,5 @@ function samlauth_user_fields_help($route_name, RouteMatchInterface $route_match
       $output .= '<p>' . t('At this moment, you need to know all SAML attribute names in order to be able to input them in the "Add mapping" screen. This is possible, among others, by inspecting SAML messages logged in the "Recent log messages", after enabling "Log incoming SAML messages".') . '</p>';
       $output .= '<p>' . t('Any number in the "Use for linking" column (including 0) represents an attempt to match the value(s) in the SAML attributes to an existing Drupal user, if they are not linked to a user yet. The values/fields for each number are matched, in increasing order; if multiple mappings have the same number, the combination of both values must match the corresponding fields. Matching is only done if all corresponding SAML attributes actually have a value. This is done before trying to match on name or email address (as configured in the main configuration screen), independently of the "Attempt to link SAML data to existing local users" configuration value.') . '</p>';
       return $output;
-
-    default:
   }
 }

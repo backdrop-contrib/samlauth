@@ -138,6 +138,7 @@ class SamlController extends ControllerBase {
    * after authenticating the user.
    *
    * @return \Drupal\Core\Routing\TrustedRedirectResponse
+   *   The HTTP response to send back.
    */
   public function login() {
     // $function returns a string and supposedly never calls 'external' Drupal
@@ -160,6 +161,7 @@ class SamlController extends ControllerBase {
    * first). We do usually log out before redirecting, though.
    *
    * @return \Drupal\Core\Routing\TrustedRedirectResponse
+   *   The HTTP response to send back.
    */
   public function logout() {
     // $function returns a string and supposedly never calls 'external' Drupal
@@ -177,6 +179,7 @@ class SamlController extends ControllerBase {
    * Displays service provider metadata XML for iDP autoconfiguration.
    *
    * @return \Symfony\Component\HttpFoundation\Response
+   *   The HTTP response to send back.
    */
   public function metadata() {
     $config = $this->config(self::CONFIG_OBJECT_NAME);
@@ -250,6 +253,7 @@ class SamlController extends ControllerBase {
    * service on the IdP should redirect (or: execute a POST request to) here.
    *
    * @return \Symfony\Component\HttpFoundation\Response
+   *   The HTTP response to send back.
    */
   public function acs() {
     // We don't necessarily need to wrap our code in a render context: because
@@ -273,6 +277,7 @@ class SamlController extends ControllerBase {
    * IdP should redirect here.
    *
    * @return \Symfony\Component\HttpFoundation\Response
+   *   The HTTP response to send back.
    */
   public function sls() {
     $function = function () {
@@ -289,6 +294,7 @@ class SamlController extends ControllerBase {
    * Redirects to the 'Change Password' service.
    *
    * @return \Symfony\Component\HttpFoundation\RedirectResponse
+   *   The HTTP response to send back.
    */
   public function changepw() {
     $function = function () {
@@ -367,8 +373,9 @@ class SamlController extends ControllerBase {
         if (!UrlHelper::isValid($relay_state, TRUE)) {
           $this->logger->error('Invalid RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
         }
-        // The SAML toolkit set a default RelayState to itself (saml/log(in|out))
-        // when starting the process; ignore this value.
+        // Ignore (saml/log(in|out)) which will cause redirect loops between
+        // us and the IdP. (It is likely that the SAML toolkit set this for the
+        // default RelayState.)
         elseif (strpos($relay_state, Utils::getSelfURLhost() . '/saml/') !== 0) {
           $url = $relay_state;
         }
@@ -410,7 +417,7 @@ class SamlController extends ControllerBase {
    * Split off from getTrustedRedirectResponse() because that's in a trait.
    *
    * @param callable $callable
-   *  Callable.
+   *   Callable.
    * @param string $while
    *   Description of when we're doing this, for error logging.
    * @param string $redirect_route_on_exception
@@ -418,7 +425,7 @@ class SamlController extends ControllerBase {
    * @param bool $set_max_age
    *   (Optional) Set configured max-age.
    */
-  protected function getShortenedRedirectResponse($callable, $while, $redirect_route_on_exception, $set_max_age = FALSE) {
+  protected function getShortenedRedirectResponse(callable $callable, $while, $redirect_route_on_exception, $set_max_age = FALSE) {
     $response = $this->getTrustedRedirectResponse($callable, $while, $redirect_route_on_exception);
     if ($set_max_age) {
       // Sets configured max-age. (That doesn't mean that responses from
@@ -493,7 +500,7 @@ class SamlController extends ControllerBase {
       $error = Error::decodeException($exception);
       unset($error['severity_level']);
       $this->logger->critical("%type encountered$while: @message in %function (line %line of %file).", $error);
-      // Don't expose the error to prevent information leakage; the user probably
+      // Don't expose the error to prevent information leakage; the user likely
       // can't do much with it anyway. But hint that more details are available.
       $this->messenger->addError("Error encountered{$while}; details have been logged.");
     }

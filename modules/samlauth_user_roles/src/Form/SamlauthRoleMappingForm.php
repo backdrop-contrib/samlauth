@@ -126,7 +126,7 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
         if (!is_array($mapping)
           || !isset($mapping['attribute_value']) || !is_string($mapping['attribute_value'])
           || !isset($mapping['role_machine_name']) || !is_string($mapping['role_machine_name'])) {
-          $this->messenger->addWarning(t('Value mapping configuration is invalid and will be (partly?) wiped when a new mapping is added.'));
+          $this->messenger->addWarning($this->t('Value mapping configuration is invalid and will be (partly?) wiped when a new mapping is added.'));
         }
         else {
           if (!isset($roles[$mapping['role_machine_name']])) {

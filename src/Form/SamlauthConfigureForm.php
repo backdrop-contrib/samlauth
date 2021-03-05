@@ -151,9 +151,15 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['config_info'] = [
       '#theme' => 'item_list',
       '#items' => [
-        $this->t('Metadata URL') . ': ' . \Drupal::urlGenerator()->generateFromRoute('samlauth.saml_controller_metadata', [], ['absolute' => TRUE]),
-        $this->t('Assertion Consumer Service') . ': ' . Url::fromRoute('samlauth.saml_controller_acs', [], ['absolute' => TRUE])->toString(),
-        $this->t('Single Logout Service') . ': ' . Url::fromRoute('samlauth.saml_controller_sls', [], ['absolute' => TRUE])->toString(),
+        $this->t('Metadata URL: :url', [
+          ':url' => Url::fromRoute('samlauth.saml_controller_metadata', [], ['absolute' => TRUE])->toString(),
+        ]),
+        $this->t('Assertion Consumer Service: :url', [
+          ':url' => Url::fromRoute('samlauth.saml_controller_acs', [], ['absolute' => TRUE])->toString(),
+        ]),
+        $this->t('Single Logout Service: :url', [
+          ':url' => Url::fromRoute('samlauth.saml_controller_sls', [], ['absolute' => TRUE])->toString(),
+        ]),
       ],
       '#empty' => [],
       '#list_type' => 'ul',
@@ -263,12 +269,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
 
     // @TODO: Allow a user to automagically populate this by providing a metadata URL for the IdP.
-    //    $form['identity_provider']['idp_metadata_url'] = [
-    //      '#type' => 'url',
-    //      '#title' => $this->t('Metadata URL'),
-    //      '#description' => $this->t('URL of the XML metadata for the identity provider'),
-    //      '#default_value' => $config->get('idp_metadata_url'),
-    //    ];
+    // $form['identity_provider']['idp_metadata_url'] = [
+    // '#type' => 'url',
+    // '#title' => $this->t('Metadata URL'),
+    // '#description' => $this->t('URL of the XML metadata for the IdP.'),
+    // '#default_value' => $config->get('idp_metadata_url'),
+    // ];
     $form['identity_provider']['idp_entity_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Entity ID'),
@@ -453,8 +459,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['security']['request_set_name_id_policy'] = [
       '#type' => 'checkbox',
-      '#title' => t('Specify NameID policy'),
-      '#description' => t('A NameIDPolicy element is added in authentication requests. This is default behavior for the SAML Toolkit library, but may be unneeded. If checked, "NameID Format" may need to be specified too. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
+      '#title' => $this->t('Specify NameID policy'),
+      '#description' => $this->t('A NameIDPolicy element is added in authentication requests. This is default behavior for the SAML Toolkit library, but may be unneeded. If checked, "NameID Format" may need to be specified too. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
       // This is one of the few checkboxes that must be TRUE on existing
       // installations where the checkbox didn't exist before (in older module
       // versions). Others get their default only from the config/install file.
@@ -538,12 +544,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'fieldset',
     ];
 
-    $form['other']['use_proxy_headers'] = array(
+    $form['other']['use_proxy_headers'] = [
       '#type' => 'checkbox',
       '#title' => $this->t("Use 'X-Forwarded-*' headers."),
       '#description' => $this->t("The SAML Toolkit will use 'X-Forwarded-*' HTTP headers (if present) for constructing/identifying the SP URL in sent/received messages. This is likely necessary if your SP is behind a reverse proxy, and your Drupal installation is not already <a href=\"https://www.drupal.org/node/425990\" target=\"_blank\">dealing with this</a>."),
       '#default_value' => $config->get('use_proxy_headers'),
-    );
+    ];
 
     $form['debugging'] = [
       '#title' => $this->t('Debugging'),
@@ -569,7 +575,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // @TODO change default to TRUE; amend description (and d.o issue, and README
     $form['debugging']['security_lowercase_url_encoding'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t("'Raw' encoding of SAML messages"),
+      '#title' => $this->t("'Raw' encode signatures when signing messages"),
       '#description' => $this->t("If there is ever a reason to turn this option off, a bug report is greatly appreciated. (The module author believes this option is unnecessary and plans for a PR to the SAML Toolkit to re-document it / phase it out. If you installed this module prior to 8.x-3.0-alpha2 and this option is turned off already, that's fine - changing it should make no difference.)"),
       '#default_value' => $config->get('security_lowercase_url_encoding'),
       '#states' => [
@@ -678,12 +684,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $sp_x509_certificate = '';
     $sp_private_key = '';
     $sp_cert_folder = '';
-    if ($sp_cert_type == 'folder') {
+    if ($sp_cert_type === 'folder') {
       $sp_cert_folder = $this->fixFolderPath($form_state->getValue('sp_cert_folder'));
     }
     else {
-      $sp_x509_certificate =  $this->formatKeyOrCert($form_state->getValue('sp_x509_certificate'), FALSE);
-      $sp_private_key =  $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
+      $sp_x509_certificate = $this->formatKeyOrCert($form_state->getValue('sp_x509_certificate'), FALSE);
+      $sp_private_key = $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
     }
 
     // This is never 0 but can be ''. (NULL would mean same as ''.) Unlike
@@ -757,8 +763,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * textbox and not have to remove all the newlines manually, if we got them
    * delivered this way.
    *
-   * The side effect is that certificates/keys are re--un-formatted on every
-   * save operation, but that should be OK.
+   * The side effect is that certificates/keys are re- and un-formatted on
+   * every save operation, but that should be OK.
    *
    * @param string|null $value
    *   A certificate or private key, either with or without head/footer.
@@ -768,10 +774,11 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * @param bool $key
    *   (optional) True if this is a private key rather than a certificate.
    *
-   * @return string $rsaKey Formatted private key
+   * @return string
+   *   (Un)formatted key or cert.
    */
   protected function formatKeyOrCert($value, $heads, $key = FALSE) {
-    if (is_string($value)) { //@TODO FIX LIKELY BUG test
+    if (is_string($value)) {
       $value = $key ?
         SamlUtils::formatPrivateKey($value, $heads) :
         SamlUtils::formatCert($value, $heads);

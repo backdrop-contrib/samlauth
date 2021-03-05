@@ -39,7 +39,7 @@ class SamlauthUserLinkEvent extends Event {
   /**
    * Gets the Drupal user account to link.
    *
-   * @return \Drupal\user\UserInterface|NULL
+   * @return \Drupal\user\UserInterface|null
    *   The Drupal user account.
    */
   public function getLinkedAccount() {

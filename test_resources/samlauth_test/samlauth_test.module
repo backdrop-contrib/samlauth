@@ -3,11 +3,7 @@
 /**
  * @file
  * Helper module for SAML Authentication tests.
- */
-
-use Drupal\Core\Url;
-
-/**
+ *
  * We haven't actually implemented any real tests yet. For now, this module
  * enables us to test (by manually enabling this module and setting state)
  * whether outside modules can break login functionality by rendering an URL
@@ -19,6 +15,8 @@ use Drupal\Core\Url;
  * Once we start implementing real automated tests, this module might move to
  * another location.
  */
+
+use Drupal\Core\Url;
 
 /**
  * Implements hook_user_login().

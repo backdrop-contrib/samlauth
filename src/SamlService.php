@@ -17,17 +17,22 @@ use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\user\UserInterface;
-use Exception;
 use OneLogin\Saml2\Auth;
 use OneLogin\Saml2\Error as SamlError;
 use OneLogin\Saml2\Utils as SamlUtils;
 use Psr\Log\LoggerInterface;
-use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
  * Governs communication between the SAML toolkit and the IdP / login behavior.
+ *
+ * There's no formal interface here, only a promise to not change things in
+ * breaking ways in the 3.x releases. The division in responsibilities between
+ * this class and SamlController (which calls most of its public methods) is
+ * partly arbitrary. It's roughly "Controller contains code dealing with
+ * redirects; SamlService contains the other logic". Code will likely be moved
+ * around to new classes in 4.x.
  */
 class SamlService {
   use StringTranslationTrait;
@@ -159,8 +164,9 @@ class SamlService {
    *   XML string representing metadata.
    *
    * @throws \OneLogin\Saml2\Error
+   *   If the metatdad is invalid.
    */
-  public function getMetadata($validity = null, $cache_duration = null) {
+  public function getMetadata($validity = NULL, $cache_duration = NULL) {
     $settings = $this->getSamlAuth()->getSettings();
     $metadata = $settings->getSPMetadata(FALSE, $validity, $cache_duration);
     $errors = $settings->validateMetadata($metadata);
@@ -186,7 +192,7 @@ class SamlService {
    *   The URL of the single sign-on service to redirect to, including query
    *   parameters.
    */
-  public function login($return_to = NULL, $parameters = []) {
+  public function login($return_to = NULL, array $parameters = []) {
     $config = $this->configFactory->get('samlauth.authentication');
     $url = $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $config->get('request_set_name_id_policy') ?? TRUE);
     if ($config->get('debug_log_saml_out')) {
@@ -296,7 +302,7 @@ class SamlService {
       throw $acs_exception;
     }
     if (!$unique_id) {
-      throw new RuntimeException('Configured unique ID is not present in SAML response.');
+      throw new \RuntimeException('Configured unique ID is not present in SAML response.');
     }
 
     $this->doLogin($unique_id, $account);
@@ -347,14 +353,14 @@ class SamlService {
     if ($errors) {
       // We have one or multiple error types / short descriptions, and one
       // 'reason' for the last error.
-      throw new RuntimeException('Error(s) encountered during processing of SLS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $auth->getLastErrorReason());
+      throw new \RuntimeException('Error(s) encountered during processing of login response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $auth->getLastErrorReason());
     }
     if (!$auth->isAuthenticated()) {
       // Looking at the current code, isAuthenticated() just means "response
       // is valid" because it is mutually exclusive with $errors and exceptions
       // being thrown. So we should never get here. We're just checking it in
       // case the library code changes - in which case we should reevaluate.
-      throw new RuntimeException('SAML login response was apparently not fully validated even when no error was provided.');
+      throw new \RuntimeException('SAML login response was apparently not fully validated even when no error was provided.');
     }
   }
 
@@ -454,7 +460,7 @@ class SamlService {
   /**
    * Initiates a SAML2 logout flow and redirects to the IdP.
    *
-   * @param null $return_to
+   * @param string $return_to
    *   (optional) The path to return the user to after successful processing by
    *   the IdP.
    * @param array $parameters
@@ -464,7 +470,7 @@ class SamlService {
    *   The URL of the single logout service to redirect to, including query
    *   parameters.
    */
-  public function logout($return_to = NULL, $parameters = []) {
+  public function logout($return_to = NULL, array $parameters = []) {
     // Log the Drupal user out at the start of the process if they were still
     // logged in. Official SAML documentation usually specifies (as far as it
     // does) that we should log the user out after getting redirected from the
@@ -586,7 +592,7 @@ class SamlService {
     if (!empty($errors)) {
       // We have one or multiple error types / short descriptions, and one
       // 'reason' for the last error.
-      throw new RuntimeException('Error(s) encountered during processing of SLS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $this->getSamlAuth()->getLastErrorReason());
+      throw new \RuntimeException('Error(s) encountered during processing of SLS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $this->getSamlAuth()->getLastErrorReason());
     }
 
     // Remove SAML session data, log the user out of Drupal, and return a
@@ -609,7 +615,7 @@ class SamlService {
    *   The Drupal user to synchronize attributes into.
    * @param bool $skip_save
    *   (optional) If TRUE, skip saving the user account.
-   * @param bool $first_login
+   * @param bool $first_saml_login
    *   (optional) Indicator of whether the account is newly registered/linked.
    */
   public function synchronizeUserAttributes(UserInterface $account, $skip_save = FALSE, $first_saml_login = FALSE) {
@@ -705,7 +711,13 @@ class SamlService {
       // only authenticated users have any SAML session data - and trying to
       // get() a value from our privateTempStore can unnecessarily start a new
       // PHP session for unauthenticated users.
-      foreach (['session_index', 'session_expiration', 'name_id', 'name_id_format'] as $key) {
+      $keys = [
+        'session_index',
+        'session_expiration',
+        'name_id',
+        'name_id_format',
+      ];
+      foreach ($keys as $key) {
         $data[$key] = $this->privateTempStore->get($key);
         if ($delete_saml_session_data) {
           $this->privateTempStore->delete($key);

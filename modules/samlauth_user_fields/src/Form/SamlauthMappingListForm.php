@@ -146,7 +146,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
         $this->t('Operations'),
       ],
       '#sticky' => TRUE,
-      '#empty' => t("There are no mappings. You can add one using the link above."),
+      '#empty' => $this->t("There are no mappings. You can add one using the link above."),
     ];
 
     if ($mappings) {

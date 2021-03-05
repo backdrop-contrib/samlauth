@@ -11,7 +11,6 @@ use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\samlauth\UserVisibleException;
-use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -143,7 +142,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
             '@query' => implode(',', $query),
           ]);
         }
-        $account = User::load(reset($results));
+        $account = $this->entityTypeManager->getStorage('user')->load(reset($results));
         if (!$account) {
           throw new \RuntimeException('Found user %uid to link on login, but it cannot be loaded.');
         }
@@ -224,7 +223,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     $mappings = $config->get('field_mappings');
     $validation_errors = [];
     if (is_array($mappings)) {
-      foreach ($mappings as $id => $mapping) {
+      foreach ($mappings as $mapping) {
         // If the attribute name is invalid, or the field does not exist, spam
         // the logs on every login until the mapping is fixed.
         if (empty($mapping['attribute_name']) || !is_string($mapping['attribute_name'])) {

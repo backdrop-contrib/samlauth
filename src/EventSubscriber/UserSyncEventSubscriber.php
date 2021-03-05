@@ -5,6 +5,9 @@ namespace Drupal\samlauth\EventSubscriber;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\Messenger\MessengerInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\TypedData\TypedDataManagerInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
@@ -24,6 +27,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * etc.)
  */
 class UserSyncEventSubscriber implements EventSubscriberInterface {
+  use StringTranslationTrait;
 
   /**
    * The EntityTypeManager service.
@@ -61,12 +65,21 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
   protected $config;
 
   /**
+   * The messenger service.
+   *
+   * @var \Drupal\Core\Messenger\MessengerInterface
+   */
+  protected $messenger;
+
+  /**
    * Constructs a new SamlauthUserSyncSubscriber.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The EntityTypeManager service.
+   * @param \Drupal\Core\TypedData\TypedDataManagerInterface $typed_data_manager
+   *   The typed data manager.
    * @param \Drupal\Component\Utility\EmailValidatorInterface $email_validator
    *   The email validator. Note the code defines it as
    *   \Egulias\EmailValidator\EmailValidator for the time being; reason:
@@ -79,17 +92,20 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
    *   We already typehint the interface in comments, otherwise the call to
    *   isValid() will appear to contain errors. But we don't want to mandate
    *   Core >= 8.7 just yet, so the 'use' statement is still not updated.
-   * @param \Drupal\Core\TypedData\TypedDataManagerInterface $typed_data_manager
-   *   The typed data manager.
    * @param \Psr\Log\LoggerInterface $logger
    *   A logger instance.
+   * @param \Drupal\Core\Messenger\MessengerInterface $messenger
+   *   The messenger service.
+   * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
+   *   The string translation service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, TypedDataManagerInterface $typed_data_manager, EmailValidator $email_validator, LoggerInterface $logger) {
+  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, TypedDataManagerInterface $typed_data_manager, EmailValidator $email_validator, LoggerInterface $logger, MessengerInterface $messenger, TranslationInterface $translation) {
     $this->entityTypeManager = $entity_type_manager;
     $this->emailValidator = $email_validator;
     $this->logger = $logger;
     $this->typedDataManager = $typed_data_manager;
     $this->config = $config_factory->get('samlauth.authentication');
+    $this->setStringTranslation($translation);
   }
 
   /**
@@ -131,7 +147,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
         // Invalid names will cancel the login / account creation. The code is
         // copied from user_validate_name().
         $definition = BaseFieldDefinition::create('string')->addConstraint('UserName', []);
-        $data = \Drupal::typedDataManager()->create($definition);
+        $data = $this->typedDataManager->create($definition);
         $data->setValue($name);
         $violations = $data->validate();
         if ($violations) {
@@ -152,15 +168,14 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
           else {
             $error = 'An account with the username @username already exists.';
             if ($account->isNew()) {
-              $fatal_errors[] = t($error, ['@username' => $name]);
+              $fatal_errors[] = $this->t($error, ['@username' => $name]);
             }
             else {
               // We continue and keep the old name. A DSM should be OK here
-              // since login only happens interactively. (And we're ignoring
-              // the law of dependency injection for this.)
+              // since login only happens interactively.
               $error = "Error updating user name from SAML attribute: $error";
               $this->logger->error($error, ['@username' => $name]);
-              \Drupal::messenger()->addError(t($error, ['@username' => $name]));
+              $this->messenger->addError($this->t($error, ['@username' => $name]));
             }
           }
         }
@@ -183,19 +198,19 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
             $event->markAccountChanged();
           }
           else {
-            $fatal_errors[] = t('Invalid e-mail address @mail', ['@mail' => $mail]);
+            $fatal_errors[] = $this->t('Invalid e-mail address @mail', ['@mail' => $mail]);
           }
         }
       }
       elseif ($account->isNew()) {
         // We won't allow new accounts with empty e-mail.
-        $fatal_errors[] = t('Email address is not provided in SAML attribute.');
+        $fatal_errors[] = $this->t('Email address is not provided in SAML attribute.');
       }
     }
 
     if ($fatal_errors) {
       // Cancel the whole login process and/or account creation.
-      throw new \RuntimeException('Error(s) encountered during SAML attribute synchronization: ' . join(' // ', $fatal_errors));
+      throw new \RuntimeException('Error(s) encountered during SAML attribute synchronization: ' . implode(' // ', $fatal_errors));
     }
   }
 

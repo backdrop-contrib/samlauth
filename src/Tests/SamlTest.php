@@ -13,12 +13,9 @@ use Drupal\Component\Serialization\Yaml;
 class SamlTest extends BrowserTestBase {
 
   /**
-   * We don't need a strict schema. There *isn't* one.
-   */
-  protected $strictConfigSchema = FALSE;
-
-  /**
    * Modules to Enable.
+   *
+   * @var array
    */
   public static $modules = ['samlauth'];
 

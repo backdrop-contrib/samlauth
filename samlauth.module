@@ -25,7 +25,6 @@ function samlauth_help($route_name, RouteMatchInterface $route_match) {
       $output .= '<p>' . t('Most information on how to configure this module is in the <a href=":url">README.md file</a>.', [':url' => Url::fromUri("base:$module_path/README.md")->toString()]) . '</p>';
       return $output;
 
-    default:
   }
 }
 
