@@ -254,29 +254,13 @@ class SamlService {
 
     // Process the ACS response message and check if we can derive a linked
     // account, but don't process errors yet. (The following code is a kludge
-    // because we may need the linked account / want to ignore errors later.)
+    // because we may need the linked account / may ignore errors later.)
     try {
-      // This call can either set an error condition or throw a
-      // \OneLogin_Saml2_Error exception, depending on whether or not we are
-      // processing a POST request.
-      // @todo should we check a Response against the ID of the request we sent
-      //   earlier? Seems to be not absolutely required on top of the validity /
-      //   signature checks which the library already does - but every extra
-      //   check is good. Maybe make it optional.
-      $this->getSamlAuth()->processResponse();
-      if ($config->get('debug_log_saml_in')) {
-        $this->logger->debug('ACS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastResponseXML()]);
-      }
-      $errors = $this->getSamlAuth()->getErrors();
-      if (!$errors && !$this->isAuthenticated()) {
-        $errors = TRUE;
-      }
+      $this->processLoginResponse();
     }
     catch (\Exception $acs_exception) {
-      $errors = TRUE;
     }
-    $account = NULL;
-    if (!$errors) {
+    if (!isset($acs_exception)) {
       $unique_id = $this->getAttributeByConfig('unique_id_attribute');
       if ($unique_id) {
         $account = $this->externalAuth->load($unique_id, 'samlauth') ?: NULL;
@@ -287,13 +271,13 @@ class SamlService {
     if ($this->currentUser->isAuthenticated()) {
       // Either redirect or log out so that we can log a different user in.
       // 'Redirecting' is done by the caller - so we can just return from here.
-      if ($account && $account->id() === $this->currentUser->id()) {
+      if (isset($account) && $account->id() === $this->currentUser->id()) {
         // Noting that we were already logged in probably isn't useful. (Core's
         // user/reset link isn't a good case to compare: it always logs the
         // user out and presents the "Reset password" form with a login button.
         // 'drush uli' links, at least on D7, display an info message "please
         // reset your password" because they land on the user edit form.)
-        return !$errors;
+        return !isset($acs_exception);
       }
       if (!$logout_different_user) {
         // Message similar to when a user/reset link is followed.
@@ -304,12 +288,12 @@ class SamlService {
           // want to make people log out from all their logged-in sites.
           ':logout' => Url::fromRoute('user.logout')->toString(),
         ]));
-        return !$errors;
+        return !isset($acs_exception);
       }
       // If the SAML response indicates (/ if the processing generated) an
       // error, we don't want to log the current user out but we want to
       // clearly indicate that someone else is still logged in.
-      if ($errors) {
+      if (isset($acs_exception)) {
         $this->messenger->addWarning($this->t('Another user (%other_user) is already logged into the site on this computer. You tried to log in through an external authentication provider, which failed, so the user is still logged in.', [
           '%other_user' => $this->currentUser->getAccountName(),
         ]));
@@ -322,20 +306,9 @@ class SamlService {
       }
     }
 
-    if ($errors) {
+    if (isset($acs_exception)) {
       $this->flood->register('samlauth.failed_login_ip', $flood_config->get('ip_window'));
-      // @todo wrap above getErrors() / isAuthenticated() into a method that
-      //   returns a more consistent error return value.
-      if (isset($acs_exception)) {
-        throw $acs_exception;
-      }
-      if (is_array($errors)) {
-        // We have one or multiple error types / short descriptions, and one
-        // 'reason' for the last error.
-        throw new RuntimeException('Error(s) encountered during processing of ACS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $this->getSamlAuth()->getLastErrorReason());
-      }
-      // @todo isAuthenticated feels like a misnomer; adjust message.
-      throw new RuntimeException('Could not authenticate.');
+      throw $acs_exception;
     }
     if (!$unique_id) {
       throw new RuntimeException('Configured unique ID is not present in SAML response.');
@@ -360,6 +333,44 @@ class SamlService {
     }
 
     return TRUE;
+  }
+
+  /**
+   * Processes a SAML login response; throws an exception if it isn't valid.
+   *
+   * The mechanics of checking whether there are any errors are not so
+   * straightforward, so this helper function hopes to abstract that away.
+   *
+   * @todo should we also check a Response against the ID of the request we
+   *   sent earlier? Seems to be not absolutely required on top of the validity
+   *   / signature checks which the library already does - but every extra
+   *   check is good. Maybe make it optional.
+   */
+  protected function processLoginResponse() {
+    $config = $this->configFactory->get('samlauth.authentication');
+    $auth = $this->getSamlAuth();
+    // This call can throw various kinds of exceptions if the 'SAMLResponse'
+    // request parameter is not present or cannot be decoded into a valid SAML
+    // (XML) message, and can also set error conditions instead - if the XML
+    // contains data that is not considered valid. We should likely treat all
+    // error conditions the same.
+    $auth->processResponse();
+    if ($config->get('debug_log_saml_in')) {
+      $this->logger->debug('ACS received SAML response: <pre>@message</pre>', ['@message' => $auth->getLastResponseXML()]);
+    }
+    $errors = $auth->getErrors();
+    if ($errors) {
+      // We have one or multiple error types / short descriptions, and one
+      // 'reason' for the last error.
+      throw new RuntimeException('Error(s) encountered during processing of SLS response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $auth->getLastErrorReason());
+    }
+    if (!$auth->isAuthenticated()) {
+      // Looking at the current code, isAuthenticated() just means "response
+      // is valid" because it is mutually exclusive with $errors and exceptions
+      // being thrown. So we should never get here. We're just checking it in
+      // case the library code changes - in which case we should reevaluate.
+      throw new RuntimeException('SAML login response was apparently not fully validated even when no error was provided.');
+    }
   }
 
   /**
@@ -669,13 +680,6 @@ class SamlService {
         return $friendly_attribute[0];
       }
     }
-  }
-
-  /**
-   * @return bool if a valid user was fetched from the saml assertion this request.
-   */
-  protected function isAuthenticated() {
-    return $this->getSamlAuth()->isAuthenticated();
   }
 
   /**
