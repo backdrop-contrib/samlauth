@@ -33,21 +33,6 @@ class SamlService {
   use StringTranslationTrait;
 
   /**
-   * Indicates whether we're storing SAML session values in $_SESSION.
-   *
-   * This is just to aid testing during development. No practical use has yet
-   * emerged. ($_SESSION is still available during PHP execution after
-   * user_logout() is called, but that's not of any real use to us. What would
-   * make a difference is keeping SAML session data for future HTTP requests
-   * after the user logs out, so our logout() also has it available for users
-   * who previously logged out of Drupal locally. Neither supported way of
-   * storing the SAML session does this, so far. Also, we don't actually know
-   * of any practical implications (yet) of not being able to forward the SAML
-   * session ID in the LogoutRequest sent to the IdP, so we don't care much.
-   */
-  const SAML_SESSION_IN_GLOBAL_SESSION = FALSE;
-
-  /**
    * An Auth object representing the current request state.
    *
    * @var \OneLogin\Saml2\Auth
@@ -325,10 +310,10 @@ class SamlService {
     ];
     foreach ($values as $key => $value) {
       if (isset($value)) {
-        $this->setSamlSessionValue($key, $value);
+        $this->privateTempStore->set($key, $value);
       }
       else {
-        $this->deleteSamlSessionValue($key);
+        $this->privateTempStore->delete($key);
       }
     }
 
@@ -721,68 +706,17 @@ class SamlService {
       // get() a value from our privateTempStore can unnecessarily start a new
       // PHP session for unauthenticated users.
       foreach (['session_index', 'session_expiration', 'name_id', 'name_id_format'] as $key) {
-        $data[$key] = $this->getSamlSessionValue($key);
+        $data[$key] = $this->privateTempStore->get($key);
         if ($delete_saml_session_data) {
-          $this->deleteSamlSessionValue($key);
+          $this->privateTempStore->delete($key);
         }
       }
 
+      // @todo properly inject this... after #2012976 lands.
       user_logout();
     }
 
     return $data;
-  }
-
-  /**
-   * Retrieves a value from the SAML session for a given key.
-   *
-   * @param string $key
-   *   The key of the data to retrieve.
-   *
-   * @param $name
-   *
-   * @return mixed|null
-   */
-  protected function getSamlSessionValue($key) {
-    if (static::SAML_SESSION_IN_GLOBAL_SESSION) {
-      return $_SESSION['samlauth'][$key] ?? NULL;
-    }
-    return $this->privateTempStore->get($key);
-  }
-
-  /**
-   * Stores a particular key/value pair in this PrivateTempStore.
-   *
-   * @param string $key
-   *   The key of the data to store.
-   * @param mixed $value
-   *   The data to store.
-   */
-  protected function setSamlSessionValue($key, $value) {
-    if (static::SAML_SESSION_IN_GLOBAL_SESSION) {
-      $_SESSION['samlauth'][$key] = $value;
-    }
-    else {
-      $this->privateTempStore->set($key, $value);
-    }
-  }
-
-  /**
-   * Deletes data from the SAML session.
-   *
-   * @param string $key
-   *   The key of the data to delete.
-   */
-  protected function deleteSamlSessionValue($key) {
-    if (static::SAML_SESSION_IN_GLOBAL_SESSION) {
-      unset($_SESSION['samlauth'][$key]);
-      if (empty($_SESSION['samlauth'])) {
-        unset($_SESSION['samlauth']);
-      }
-    }
-    else {
-      $this->privateTempStore->delete($key);
-    }
   }
 
   /**
