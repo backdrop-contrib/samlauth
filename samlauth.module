@@ -24,12 +24,54 @@ function samlauth_help($route_name, RouteMatchInterface $route_match) {
       $output .= '<p>' . t('Allows users to authenticate against an external SAML identity provider.') . '</p>';
       $output .= '<p>' . t('Most information on how to configure this module is in the <a href=":url">README.md file</a>.', [':url' => Url::fromUri("base:$module_path/README.md")->toString()]) . '</p>';
       return $output;
-
   }
 }
 
 /**
- * Implements hook_form_FORM_ID_alter().
+ * Implements hook_form_FORM_ID_alter() for the user edit form.
+ */
+function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
+  // Only affect SAML-linked users without the 'bypass' permission; see also
+  // samlauth_check_saml_user().
+  /** @var \Drupal\user\Entity\User $account */
+  $account = $form_state->getBuildInfo()['callback_object']->getEntity();
+  if ($account->id() == \Drupal::currentUser()->id() && !$account->hasPermission('bypass saml login')) {
+    /** @var \Drupal\externalauth\AuthmapInterface $authmap */
+    $authmap = \Drupal::service('externalauth.authmap');
+    if ($authmap->get($account->id(), 'samlauth')) {
+      // Hide the change password field, because the password has no function
+      // for users who cannot log in directly.
+      $form['account']['pass']['#access'] = FALSE;
+      // Also lock the e-mail field. We could leave it as-is because the user
+      // is very likely to not know their current password and therefore unable
+      // to change the e-mail anyway. Locking the field and removing the
+      // "current password" field just makes things more understandable for the
+      // average user. (This is the '>80% use case'; it is actually possible
+      // for a user whose account was created locally and linked to a SAML
+      // login afterwards, to know their password. If not being able to change
+      // their e-mail is a concern, then this needs to be solved by role /
+      // permission tweaking, by custom code or by an issue in the samlauth
+      // module queue that makes a clear case for solving this in a general
+      // manner.)
+      $form['account']['mail']['#disabled'] = TRUE;
+      $form['account']['current_pass']['#access'] = FALSE;
+
+      $form['account']['saml_notice'] = [
+        '#markup' => t('<strong>NOTE:</strong> E-mail address and password are controlled via SAML.'),
+        '#weight' => -1,
+      ];
+      $url = \Drupal::config(SamlController::CONFIG_OBJECT_NAME)
+        ->get('idp_change_password_service');
+      if ($url && UrlHelper::isValid($url, TRUE)) {
+        $form['account']['saml_notice']['#markup'] .= ' '
+          . t('Please visit <a href="@link">this link</a> to change.', ['@link' => $url]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for the login form.
  */
 function samlauth_form_user_login_form_alter(&$form, FormStateInterface $form_state) {
   $form['#validate'][] = 'samlauth_check_saml_user';
@@ -39,29 +81,24 @@ function samlauth_form_user_login_form_alter(&$form, FormStateInterface $form_st
  * Validation callback for SAML users logging in through the normal methods.
  */
 function samlauth_check_saml_user($form, FormStateInterface $form_state) {
-  if (!\Drupal::config('samlauth.authentication')->get('drupal_saml_login')) {
-    if ($form_state->hasAnyErrors()) {
-      // If previous validation has already failed (name/pw incorrect or blocked
-      // ), bail out so we don't disclose any details about a user that otherwi-
-      // se wouldn't be authenticated.
-      return;
+  // If previous validation has already failed (name/pw incorrect or blocked),
+  // bail out so we don't disclose any details about a user that otherwise
+  // wouldn't be authenticated. Also skip unworkable form state.
+  if (!$form_state->hasAnyErrors() && $form_state->hasValue('name')) {
+    // If the user has logged into the site using samlauth before, block them
+    // depending on a permission. (There is no option to disallow _any_ user
+    // without that permission from logging in locally; that's not considered
+    // the business of this module.)
+    /** @var \Drupal\user\Entity\User $account */
+    $account = user_load_by_name($form_state->getValue('name'));
+    if (!$account) {
+      $form_state->setErrorByName('name', t('Could not load user to do a validation check.'));
     }
-
-    // If the user has logged into the site using samlauth before, block them.
-    // (There is no option to disallow _any_ user from logging in locally;
-    // that's not considered the business of this module.) Account for modules
-    // that change the login form, only in the sense that we check whether the
-    // 'name' element actually exists. If modules change the login form (by
-    // e.g. having a 'mail' element instead, or having the 'name' field contain
-    // an e-mail address) and need this blocking to work (differently), that
-    // should be solved by a custom module to make both work together. (Or a
-    // well thought out suggestion in the issue queue.)
-    if ($form_state->hasValue('name') && $account = user_load_by_name($form_state->getValue('name'))) {
+    elseif (!$account->hasPermission('bypass saml login')) {
       /** @var \Drupal\externalauth\AuthmapInterface $authmap */
       $authmap = \Drupal::service('externalauth.authmap');
-      $saml_id = $authmap->get($account->id(), 'samlauth');
-      if ($saml_id !== FALSE) {
-        $form_state->setErrorByName('name', t('SAML users must sign in with SSO'));
+      if ($authmap->get($account->id(), 'samlauth')) {
+        $form_state->setErrorByName('name', t('This user is only allowed to log in through an external authentication provider.'));
       }
     }
   }
@@ -83,47 +120,6 @@ function samlauth_user_presave(UserInterface $account) {
     $saml_service = \Drupal::service('samlauth.saml');
     if ($saml_service->getAttributeByConfig('user_name_attribute')) {
       $saml_service->synchronizeUserAttributes($account, TRUE);
-    }
-  }
-}
-
-/**
- * Implements hook_form_FORM_ID_alter().
- *
- * For users that have been authenticated via SAML, hide the user password
- * change field and provide a notice to the user about the user change service.
- *
- * @see https://www.drupal.org/project/samlauth/issues/3185846
- */
-function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
-  if (\Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('drupal_saml_login')) {
-    return;
-  }
-
-  $account = $form_state->getBuildInfo()['callback_object']->getEntity();
-
-  /** @var \Drupal\externalauth\AuthmapInterface $authmap */
-  $authmap = \Drupal::service('externalauth.authmap');
-  $saml_id = $authmap->get($account->id(), 'samlauth');
-
-  // Only affect SAML authenticated users.
-  if ($saml_id !== FALSE) {
-    // Hide the change password field.
-    $form['account']['pass']['#access'] = FALSE;
-
-    // Display a notice with a link to the proper IdP password change service.
-    $idp_change_password_service_url = \Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('idp_change_password_service');
-
-    // Since the IdP change password service URL is optional, only display the
-    // notice if one has been set.
-    if (UrlHelper::isValid($idp_change_password_service_url, TRUE)) {
-      $form['account']['saml_notice'] = [
-        '#markup' => t(
-          '<strong>NOTE:</strong> E-mail address and password are controlled via SAML. Please visit <a href="@link">this link</a> to change.',
-          ['@link' => $idp_change_password_service_url]
-        ),
-        '#weight' => -1,
-      ];
     }
   }
 }

@@ -5,8 +5,6 @@ samlauth.authentication:
       type: string
     logout_menu_item_title:
       type: string
-    drupal_saml_login:
-      type: boolean
     login_redirect_url:
       type: string
     logout_redirect_url:

@@ -114,13 +114,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('logout_menu_item_title'),
     ];
 
-    $form['saml_login_logout']['drupal_saml_login'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Allow SAML users to log in directly'),
-      '#description' => $this->t('Drupal users who have previously logged in through the SAML Identity Provider can also log in through the standard Drupal login screen. (By default, they must always log in through the Identity Provider. This option does not affect Drupal user acounts that are never linked to a SAML login.)'),
-      '#default_value' => $config->get('drupal_saml_login'),
-    ];
-
     // This is false by default, to maintain parity with core user/reset links.
     $form['saml_login_logout']['logout_different_user'] = [
       '#type' => 'checkbox',
@@ -705,7 +698,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $config
       ->set('login_menu_item_title', $form_state->getValue('login_menu_item_title'))
       ->set('logout_menu_item_title', $form_state->getValue('logout_menu_item_title'))
-      ->set('drupal_saml_login', $form_state->getValue('drupal_saml_login'))
       ->set('logout_different_user', $form_state->getValue('logout_different_user'))
       ->set('login_redirect_url', $form_state->getValue('login_redirect_url'))
       ->set('logout_redirect_url', $form_state->getValue('logout_redirect_url'))

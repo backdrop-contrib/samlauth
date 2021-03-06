@@ -1,0 +1,29 @@
+<?php
+
+/**
+ * @file
+ * Update and uninstall functions for the samlauth module.
+ */
+
+use Drupal\samlauth\Controller\SamlController;
+use Drupal\user\Entity\Role;
+use Drupal\user\RoleInterface;
+
+/**
+ * Migrate 'Allow SAML users to log in directly' config value to permission.
+ */
+function samlauth_update_8301() {
+  $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
+  if ($config->get('drupal_saml_login')) {
+    $roles = Role::loadMultiple();
+    foreach ($roles as $role) {
+      /** @var \Drupal\user\Entity\Role $role */
+      if (!$role->hasPermission('bypass saml login') && !$role->id() != RoleInterface::ANONYMOUS_ID) {
+        $role->grantPermission('bypass saml login');
+        $role->save();
+      }
+    }
+  }
+  $config->clear('drupal_saml_login');
+  $config->save(TRUE);
+}
