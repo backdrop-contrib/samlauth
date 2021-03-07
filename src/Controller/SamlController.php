@@ -373,10 +373,13 @@ class SamlController extends ControllerBase {
         if (!UrlHelper::isValid($relay_state, TRUE)) {
           $this->logger->error('Invalid RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
         }
-        // Ignore (saml/log(in|out)) which will cause redirect loops between
-        // us and the IdP. (It is likely that the SAML toolkit set this for the
-        // default RelayState.)
-        elseif (strpos($relay_state, Utils::getSelfURLhost() . '/saml/') !== 0) {
+        // The SAML toolkit set a default RelayState to itself
+        // (saml/log(in|out)) when starting the process, which will just cause
+        // an unnecessary intermediary redirect before AccessDeniedSubscriber
+        // routes us to the same place. Or, if the Drupal site has multiple
+        // domains and the user still isn't logged in on the domain in the
+        // RelayState, we'll have a redirect loop between us and the IdP.
+        elseif (!preg_match('|//[^/]+/saml/log|', $relay_state)) {
           $url = $relay_state;
         }
       }
