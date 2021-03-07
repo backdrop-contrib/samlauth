@@ -438,7 +438,8 @@ class SamlService {
         // hook into the save operation of the user account object that is
         // created by register(). It seems we can only do this by implementing
         // hook_user_presave() - which calls our synchronizeUserAttributes().
-        $account = $this->externalAuth->register($unique_id, 'samlauth');
+        $account_data = ['name' => $this->getAttributeByConfig('user_name_attribute')];
+        $account = $this->externalAuth->register($unique_id, 'samlauth', $account_data);
 
         $this->externalAuth->userLoginFinalize($account, $unique_id, 'samlauth');
       }

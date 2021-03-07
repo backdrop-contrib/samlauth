@@ -124,7 +124,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
    */
   public function onUserSync(SamlauthUserSyncEvent $event) {
     // If the account is new, we are in the middle of a user save operation;
-    // the current user name is 'samlauth_AUTHNAME' (as set by externalauth) and
+    // the current user name is the authname as set by externalauth, and
     // e-mail is not set yet.
     $account = $event->getAccount();
     $fatal_errors = [];

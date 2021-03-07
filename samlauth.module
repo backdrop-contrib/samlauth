@@ -108,17 +108,32 @@ function samlauth_check_saml_user($form, FormStateInterface $form_state) {
  * Implements hook_user_presave().
  */
 function samlauth_user_presave(UserInterface $account) {
-  // Hook into the user creation process from ExternalAuth::register() so that
-  // we don't need to save the new user a second time to add our SAML attribute
-  // values into the new user object. The way externalauth prefixes account
-  // names acts as a recursion stop, in case any called code (e.g. event) saves
-  // the account.
-  if ($account->isNew() && strpos($account->getAccountName(), 'samlauth_') === 0) {
-    // Doublecheck that we're actually processing an ACS request, which we can
-    // do by checking the request for presence of a user name attribute.
+  static $recursion_detection = FALSE;
+  // Synchronize user attributes for a new user before saving an account
+  // (instead of subscribing to the externalauth.register event), so we don't
+  // need to save the new user a second time to add our SAML attribute values.
+  // This also means that if attribute synchronization throws an exception, we
+  // don't end up with a half baked user saved in the database.
+  if (!$recursion_detection && $account->isNew()) {
+    // Check that we're processing a valid ACS request, by checking the user
+    // name attribute in the OneLogin'Saml2\Auth object. Note we get the
+    // SamlService and construct a OneLogin\Saml2\Auth object on every first
+    // user save in a request, which is not ideal but not too wasteful since
+    // user saves don't happen often.
     /** @var \Drupal\samlauth\SamlService $saml_service */
     $saml_service = \Drupal::service('samlauth.saml');
     if ($saml_service->getAttributeByConfig('user_name_attribute')) {
+      // This code assumes that the first save operation of a new user is
+      // connected to SAML attributes found in a request. That's a safe bet;
+      // those attributes are really only set if a SAML response was just
+      // processed and validated by the ACS. No other code can come in between
+      // processing that request and saving a new user. (If a
+      // externalauth.authmap_alter or samlauth.user_link event feels the need
+      // to independently create and save a user... we have bigger issues.) A
+      // samlauth.user_sync event listener, which we will dispatch now, could
+      // accidentally call user_save() again on this account... which is why we
+      // implement $recursion_detection.
+      $recursion_detection = TRUE;
       $saml_service->synchronizeUserAttributes($account, TRUE);
     }
   }
