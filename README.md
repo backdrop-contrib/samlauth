@@ -32,10 +32,10 @@ When users log in for the first time through the SAML IdP, they can get:
   creating a new user would lead to a duplicate username / e-mail.)
 
 If an organization wants to restrict the users who can log in to a new Drupal
-site to a known set, they can keep the "create new users" option, turn on the
-"link existing users" option and pre-create that set of users. Either the
-username or the e-mail of the pre-created user must be known to the IdP and
-sent along with the login.
+site to a known set, they can keep the "create new users" option turned off,
+turn on the "link existing users" option and pre-create that set of users.
+Either the username or the e-mail of the pre-created user must be known to the
+IdP and sent along with the login.
 
 After users have logged in through the SAML IdP, the link between that
 particular login and the Drupal user gets remembered. From this point on,

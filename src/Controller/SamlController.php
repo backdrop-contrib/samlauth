@@ -15,7 +15,6 @@ use Drupal\Core\Utility\Token;
 use Drupal\samlauth\SamlService;
 use Drupal\samlauth\UserVisibleException;
 use OneLogin\Saml2\Metadata;
-use OneLogin\Saml2\Utils;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
