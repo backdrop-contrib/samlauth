@@ -374,7 +374,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     if ($field_definition) {
       $data = $this->typedDataManager->create($field_definition, $input_value);
       $violations = $data->validate();
-      $valid = !(bool) $violations;
+      $valid = !$violations->count();
       if ($violations) {
         // Don't cancel; just skip setting the value and log.
         foreach ($violations as $violation) {
