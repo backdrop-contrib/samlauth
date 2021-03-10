@@ -374,7 +374,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     if ($field_definition) {
       $data = $this->typedDataManager->create($field_definition, $input_value);
       $violations = $data->validate();
-      // Don't cancel; just skip setting the value and log.
+      // Don't cancel; just log.
       foreach ($violations as $violation) {
         // We have the following options:
         // - Log just the validation message. This makes it unclear where the
