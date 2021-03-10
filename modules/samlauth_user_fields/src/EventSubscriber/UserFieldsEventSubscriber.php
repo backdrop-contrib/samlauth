@@ -374,29 +374,27 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     if ($field_definition) {
       $data = $this->typedDataManager->create($field_definition, $input_value);
       $violations = $data->validate();
-      $valid = !$violations->count();
-      if ($violations) {
-        // Don't cancel; just skip setting the value and log.
-        foreach ($violations as $violation) {
-          // We have the following options:
-          // - Log just the validation message. This makes it unclear where the
-          //   message comes from: it does not include the account, attribute
-          //   or field name.
-          // - Concatenate extra info into the validation message. This is
-          //   bad for translatability of the original message.
-          // - Log a second message mentioning the account and attribute name.
-          //   This spams logs and isn't very clear.
-          // We'll do the first, and hope that a caller will log extra info if
-          // necessary, so it can choose whether or not to be 'spammy'.
-          if ($violation instanceof ConstraintViolation) {
-            [$message, $context] = $this->getLoggableParameters($violation);
-            $this->logger->warning($message, $context);
-          }
-          else {
-            $this->logger->debug('Validation for user field %field encountered unloggable error (which points to an internal code error).', ['%field' => $account_field_name]);
-          }
+      // Don't cancel; just skip setting the value and log.
+      foreach ($violations as $violation) {
+        // We have the following options:
+        // - Log just the validation message. This makes it unclear where the
+        //   message comes from: it does not include the account, attribute
+        //   or field name.
+        // - Concatenate extra info into the validation message. This is
+        //   bad for translatability of the original message.
+        // - Log a second message mentioning the account and attribute name.
+        //   This spams logs and isn't very clear.
+        // We'll do the first, and hope that a caller will log extra info if
+        // necessary, so it can choose whether or not to be 'spammy'.
+        if ($violation instanceof ConstraintViolation) {
+          [$message, $context] = $this->getLoggableParameters($violation);
+          $this->logger->warning($message, $context);
+        }
+        else {
+          $this->logger->debug('Validation for user field %field encountered unloggable error (which points to an internal code error).', ['%field' => $account_field_name]);
         }
       }
+      $valid = !$violations->count();
     }
 
     return $valid;
