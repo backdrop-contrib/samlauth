@@ -463,17 +463,18 @@ class SamlController extends ControllerBase {
   }
 
   /**
-   * Displays and/or logs exception message if a wrapped callable fails.
+   * {@inheritdoc}
    *
-   * Only called by getTrustedRedirectResponse() so far. Can be overridden to
-   * implement other ways of logging.
-   *
-   * @param \Exception $exception
-   *   The exception thrown.
-   * @param string $while
-   *   (Optional) description of when the error was encountered.
+   * @todo reevaluate: do we actually want to always redirect from here? Or
+   *   would we provide sites with more flexibility if we threw a
+   *   AccessDeniedHttpException so they can handle errors in an event
+   *   subscriber? (It feels like there are contrib modules to help with that
+   *   which could have more flexible settings, like e.g. customerror /
+   *   error_redirect - analogous to the reason why we don't have any "auto
+   *   redirect when not logged in" functionality built into this module.) In
+   *   that case we would remove the 'error_redirect_url' setting.
    */
-  protected function handleExceptionInRenderContext(\Exception $exception, $while = '') {
+  protected function handleExceptionInRenderContext(\Exception $exception, $default_redirect_route, $while = '') {
     if ($exception instanceof TooManyRequestsHttpException) {
       // If this ever happens, don't spend time on a RedirectResponse (when the
       // redirected page will need to spend time rendering the page that
@@ -506,6 +507,22 @@ class SamlController extends ControllerBase {
       // can't do much with it anyway. But hint that more details are available.
       $this->messenger->addError("Error encountered{$while}; details have been logged.");
     }
+
+    // Get error URL.
+    $url = $this->config(self::CONFIG_OBJECT_NAME)->get('error_redirect_url');
+    $url_object = NULL;
+    if ($url) {
+      $url = $this->token->replace($url);
+      $url_object = $this->pathValidator->getUrlIfValidWithoutAccessCheck($url);
+      if (empty($url_object)) {
+        $this->getLogger('samlauth')->warning("The Error Redirect URL is not a valid path; falling back to provided route @route.", ['@route' => $default_redirect_route]);
+      }
+    }
+
+    if (empty($url_object)) {
+      $url_object = Url::fromRoute($default_redirect_route);
+    }
+    return $url_object;
   }
 
 }

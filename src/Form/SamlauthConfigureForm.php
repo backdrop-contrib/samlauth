@@ -136,6 +136,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('logout_redirect_url'),
     ];
 
+    $form['saml_login_logout']['error_redirect_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Error redirect URL'),
+      '#description' => $this->t("The default URL to redirect the user to after an error occurred. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page."),
+      '#default_value' => $config->get('error_redirect_url'),
+    ];
+
     $form['service_provider'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Service Provider'),
@@ -641,6 +648,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
         $form_state->setErrorByName('logout_redirect_url', $this->t('The Logout Redirect URL is not a valid path.'));
       }
     }
+    $error_redirect_url = $form_state->getValue('error_redirect_url');
+    if ($error_redirect_url) {
+      $error_redirect_url = $this->token->replace($error_redirect_url);
+      $error_url = $this->pathValidator->getUrlIfValidWithoutAccessCheck($error_redirect_url);
+      if (!$error_url) {
+        $form_state->setErrorByName('error_redirect_url', $this->t('The Error redirect URL is not a valid path.'));
+      }
+    }
 
     // Validate certs folder. Don't allow the user to save an empty folder; if
     // they want to save incomplete config data, they can switch to 'fields'.
@@ -701,6 +716,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('logout_different_user', $form_state->getValue('logout_different_user'))
       ->set('login_redirect_url', $form_state->getValue('login_redirect_url'))
       ->set('logout_redirect_url', $form_state->getValue('logout_redirect_url'))
+      ->set('error_redirect_url', $form_state->getValue('error_redirect_url'))
       ->set('sp_entity_id', $form_state->getValue('sp_entity_id'))
       ->set('sp_name_id_format', $form_state->getValue('sp_name_id_format'))
       ->set('sp_x509_certificate', $sp_x509_certificate)

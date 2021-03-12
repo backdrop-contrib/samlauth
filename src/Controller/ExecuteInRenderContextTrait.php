@@ -155,8 +155,8 @@ trait ExecuteInRenderContextTrait {
    * consequences of caching the response are probably easy enough to predict.
    *
    * @param callable $callable
-   *   A callable that must return a URL to redirect to, in the form of a Url
-   *   object or a string containing a full absolute URL.
+   *   A callable that must return a URL to redirect to, in the form of a
+   *   GeneratedUrl object or a string containing a full absolute URL.
    * @param string $while
    *   (Optional) description of when we're doing this, for error logging.
    * @param string $redirect_route_on_exception
@@ -196,8 +196,13 @@ trait ExecuteInRenderContextTrait {
         }
         catch (\Exception $e) {
           // If this call throws any kind of exception, that's a fatal error.
-          $this->handleExceptionInRenderContext($e, $while);
-          $url = Url::fromRoute($redirect_route_on_exception)->toString(TRUE);
+          $url = $this->handleExceptionInRenderContext($e, $redirect_route_on_exception, $while);
+          if (is_object($url)) {
+            if (!($url instanceof Url)) {
+              throw new \RuntimeException('Object handleExceptionInRenderContext() callable is not a Url.');
+            }
+            $url = $url->toString(TRUE);
+          }
         }
 
         return $url;
@@ -235,20 +240,28 @@ trait ExecuteInRenderContextTrait {
    * Displays and/or logs exception message if the wrapped callable fails.
    *
    * Only called by getTrustedRedirectResponse() so far. Can be overridden to
-   * implement other ways of logging.
+   * implement other ways of logging and redirect to other paths. (Yes, those
+   * are two separate functions that are just stuck together for convenient
+   * overriding...)
    *
    * @param \Exception $exception
    *   The exception thrown.
+   * @param string $default_redirect_route
+   *   The route to redirect to, by default.
    * @param string $while
    *   (Optional) description of when the error was encountered.
+   *
+   * @return \Drupal\Core\Url|string
+   *   URL to redirect to.
    */
-  protected function handleExceptionInRenderContext(\Exception $exception, $while = '') {
+  protected function handleExceptionInRenderContext(\Exception $exception, $default_redirect_route, $while = '') {
     if (isset($this->logger)) {
       $this->logger->error($exception->getMessage());
     }
     if (isset($this->messenger)) {
       $this->messenger->addError($exception->getMessage());
     }
+    return Url::fromRoute($default_redirect_route);
   }
 
 }
