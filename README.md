@@ -19,45 +19,6 @@ module
 
 For more information about SAML, see: https://en.wikipedia.org/wiki/SAML_2.0
 
-CONSIDERATIONS REGARDING YOUR DRUPAL USERS
-------------------------------------------
-
-When users log in for the first time through the SAML IdP, they can get:
-* linked to an existing Drupal user (based on certain attribute values sent
-  along with the login; the attribute names need to be set up during
-  configuration);
-* a new Drupal user created (based on those attribute values);
-* denied - if the options for linking and/or creating a new user were not
-  enabled in configuration. (Or: if the option for linking was not enabled, and
-  creating a new user would lead to a duplicate username / e-mail.)
-
-If an organization wants to restrict the users who can log in to a new Drupal
-site to a known set, they can keep the "create new users" option turned off,
-turn on the "link existing users" option and pre-create that set of users.
-Either the username or the e-mail of the pre-created user must be known to the
-IdP and sent along with the login.
-
-After users have logged in through the SAML IdP, the link between that
-particular login and the Drupal user gets remembered. From this point on,
-users are treated differently if they do not have the "Use Drupal login,
-bypassing SAML IdP" permission:
-* They cannot log into Drupal directly anymore. Remember that if your Drupal
-  site has existing locally (pre-)created users who know their password, this
-  means there is an 'invisible' distinction with users who have not logged in
-  through the IdP (yet): they can still log in locally.
-* They cannot change their password or e-mail in the user's edit form. The
-  password is hidden and the e-mail field is locked.
-
-This last thing is slightly arbitrary but is the best thing we know to do for
-a consistent and non-confusing UI. Users who can only log in through the IdP
-don't need their password for anything. They also cannot change their e-mail if
-they don't know their current password - and it is unlikely that they do. If
-your use case involves existing Drupal users who know their password, then log
-in through the IdP _and_ should be barred from logging in through Drupal after
-that, but should still be able to change their e-mail... Please either file an
-issue for a clear use case, or re-override the user edit screen using custom
-code.
-
 INSTALLATION
 ------------
 Install as you would normally install a contributed drupal module. See:
@@ -235,3 +196,53 @@ OneLogin's Decrypt XML tool at https://www.samltool.com/decrypt.php.
 
 You can also find more debugging tools located at
 https://www.samltool.com/saml_tools.php.
+
+OCCASIONALLY ASKED QUESTIONS
+----------------------------
+
+Q: Does this module have an option to redirect all not-logged-in users to the
+   IdP login screen?
+
+A: No. This is something that a separate module like 'require_login' could do,
+   with more fine grained configuration options that we don't want to duplicate.
+   If there is a reason that this module cannot be used together with the
+   samlauth module, feel free to open an issue that clearly states why.
+
+CONSIDERATIONS REGARDING YOUR DRUPAL USERS
+------------------------------------------
+
+When users log in for the first time through the SAML IdP, they can get:
+* linked to an existing Drupal user (based on certain attribute values sent
+  along with the login; the attribute names need to be set up during
+  configuration);
+* a new Drupal user created (based on those attribute values);
+* denied - if the options for linking and/or creating a new user were not
+  enabled in configuration. (Or: if the option for linking was not enabled, and
+  creating a new user would lead to a duplicate username / e-mail.)
+
+If an organization wants to restrict the users who can log in to a new Drupal
+site to a known set, they can keep the "create new users" option turned off,
+turn on the "link existing users" option and pre-create that set of users.
+Either the username or the e-mail of the pre-created user must be known to the
+IdP and sent along with the login.
+
+After users have logged in through the SAML IdP, the link between that
+particular login and the Drupal user gets remembered. From this point on,
+users are treated differently if they do not have the "Use Drupal login,
+bypassing SAML IdP" permission:
+* They cannot log into Drupal directly anymore. Remember that if your Drupal
+  site has existing locally (pre-)created users who know their password, this
+  means there is an 'invisible' distinction with users who have not logged in
+  through the IdP (yet): they can still log in locally.
+* They cannot change their password or e-mail in the user's edit form. The
+  password is hidden and the e-mail field is locked.
+
+This last thing is slightly arbitrary but is the best thing we know to do for
+a consistent and non-confusing UI. Users who can only log in through the IdP
+don't need their password for anything. They also cannot change their e-mail if
+they don't know their current password - and it is unlikely that they do. If
+your use case involves existing Drupal users who know their password, then log
+in through the IdP _and_ should be barred from logging in through Drupal after
+that, but should still be able to change their e-mail... Please either file an
+issue for a clear use case, or re-override the user edit screen using custom
+code.

@@ -155,8 +155,8 @@ trait ExecuteInRenderContextTrait {
    * consequences of caching the response are probably easy enough to predict.
    *
    * @param callable $callable
-   *   A callable that must return a URL to redirect to, in the form of a
-   *   GeneratedUrl object or a string containing a full absolute URL.
+   *   A callable that must return a URL to redirect to, in the form of a Url
+   *   object or a string containing a full absolute URL.
    * @param string $while
    *   (Optional) description of when we're doing this, for error logging.
    * @param string $redirect_route_on_exception
