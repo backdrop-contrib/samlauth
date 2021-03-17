@@ -27,6 +27,7 @@ class SamlauthMappingEditForm extends FormBase {
     'list_integer',
     'list_string',
     'string',
+    'string_long',
     'telephone',
     'timestamp',
   ];
