@@ -171,21 +171,23 @@ class SamlauthMappingEditForm extends FormBase {
 
     // If this is a new mapping, check to make sure a 'same' one isn't already
     // defined.
-    $our_mapping_id = $form_state->getValue('mapping_id');
-    $our_match_id = $form_state->getValue('link_user_order');
-    foreach ($mappings as $mapping_id => $mapping) {
-      if ($mapping_id != $our_mapping_id || $our_mapping_id === '') {
-        if ($our_match_id !== '' && isset($mapping['link_user_order']) && $our_match_id == $mapping['link_user_order']
-            && $mapping['field_name'] === $form_state->getValue('field_name')) {
-          $form_state->setErrorByName('field_name', $this->t("This user field is already used for the same 'Link' value."));
-        }
-        // Allow mappings from/to the same attribute/field if both are used in
-        // a different match/link expression. It's far fetched, but the
-        // duplicate doesn't make a difference for the mapping in practice.
-        if (($our_match_id === '' || !isset($mapping['link_user_order']) || $our_match_id == $mapping['link_user_order'])
-            && $mapping['field_name'] === $form_state->getValue('field_name')
-            && $mapping['attribute_name'] === $form_state->getValue('attribute_name')) {
-          $form_state->setErrorByName('field_name', $this->t('This SAML attribute has already been mapped to this field.'));
+    if (is_array($mappings)) {
+      $our_mapping_id = $form_state->getValue('mapping_id');
+      $our_match_id = $form_state->getValue('link_user_order');
+      foreach ($mappings as $mapping_id => $mapping) {
+        if ($mapping_id != $our_mapping_id || $our_mapping_id === '') {
+          if ($our_match_id !== '' && isset($mapping['link_user_order']) && $our_match_id == $mapping['link_user_order']
+              && $mapping['field_name'] === $form_state->getValue('field_name')) {
+            $form_state->setErrorByName('field_name', $this->t("This user field is already used for the same 'Link' value."));
+          }
+          // Allow mappings from/to the same attribute/field if both are used in
+          // a different match/link expression. It's far fetched, but the
+          // duplicate doesn't make a difference for the mapping in practice.
+          if (($our_match_id === '' || !isset($mapping['link_user_order']) || $our_match_id == $mapping['link_user_order'])
+              && $mapping['field_name'] === $form_state->getValue('field_name')
+              && $mapping['attribute_name'] === $form_state->getValue('attribute_name')) {
+            $form_state->setErrorByName('field_name', $this->t('This SAML attribute has already been mapped to this field.'));
+          }
         }
       }
     }
