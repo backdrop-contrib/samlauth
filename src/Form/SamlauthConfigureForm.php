@@ -141,6 +141,18 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Error redirect URL'),
       '#description' => $this->t("The default URL to redirect the user to after an error occurred. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page."),
       '#default_value' => $config->get('error_redirect_url'),
+      '#states' => [
+        'disabled' => [
+          ':input[name="error_throw"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $form['saml_login_logout']['error_throw'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Bypass error handling"),
+      '#description' => $this->t("No redirection or meaningful logging is done. This better enables custom code to handle errors."),
+      '#default_value' => $config->get('error_throw'),
     ];
 
     $form['service_provider'] = [
@@ -717,6 +729,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('login_redirect_url', $form_state->getValue('login_redirect_url'))
       ->set('logout_redirect_url', $form_state->getValue('logout_redirect_url'))
       ->set('error_redirect_url', $form_state->getValue('error_redirect_url'))
+      ->set('error_throw', $form_state->getValue('error_throw'))
       ->set('sp_entity_id', $form_state->getValue('sp_entity_id'))
       ->set('sp_name_id_format', $form_state->getValue('sp_name_id_format'))
       ->set('sp_x509_certificate', $sp_x509_certificate)

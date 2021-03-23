@@ -19,6 +19,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
@@ -465,14 +466,14 @@ class SamlController extends ControllerBase {
   /**
    * {@inheritdoc}
    *
-   * @todo reevaluate: do we actually want to always redirect from here? Or
-   *   would we provide sites with more flexibility if we threw a
-   *   AccessDeniedHttpException so they can handle errors in an event
-   *   subscriber? (It feels like there are contrib modules to help with that
-   *   which could have more flexible settings, like e.g. customerror /
-   *   error_redirect - analogous to the reason why we don't have any "auto
-   *   redirect when not logged in" functionality built into this module.) In
-   *   that case we would remove the 'error_redirect_url' setting.
+   * @todo in 4.x, always throw; move our own error handling into
+   *   AccessDeniedSubscriber. This means the situation of error_throw=TRUE
+   *   will become standard.
+   *   It would be nice to first do some investigation if contrib modules doing
+   *   error redirection (customerror / error_redirect?) are mature / have good
+   *   code, before doing this. If so, we can safely get rid of the
+   *   'error_redirect_url' setting and recommend installing a module if this
+   *   functionality is needed.
    */
   protected function handleExceptionInRenderContext(\Exception $exception, $default_redirect_route, $while = '') {
     if ($exception instanceof TooManyRequestsHttpException) {
@@ -485,7 +486,19 @@ class SamlController extends ControllerBase {
       // AccessDeniedSubscriber.)
       throw $exception;
     }
-    if ($exception instanceof UserVisibleException || $this->config(self::CONFIG_OBJECT_NAME)->get('debug_display_error_details')) {
+
+    $config = $this->config(self::CONFIG_OBJECT_NAME);
+    // This config value (possibly together with 'error_redirect_url') will
+    // likely be removed in the 4.x version of the module - and we'll always
+    // throw an exception for errors. (This module's default error handling
+    // will then be in an event subscriber which can more easily be
+    // overridden. For now, explicitly set 'error_throw' if you want to
+    // have your own event subscriber catch handle the error on a
+    // KernelEvents::EXCEPTION event - see AccessDeniedSubscriber for example.)
+    if ($config->get('error_throw')) {
+      throw new AccessDeniedHttpException($exception->getMessage(), $exception);
+    }
+    if ($exception instanceof UserVisibleException || $config->get('debug_display_error_details')) {
       // Show the full error on screen; also log, but with lowered severity.
       // Assume we don't need the "while" part for a user visible error because
       // it's likely not fully correct.
@@ -509,7 +522,7 @@ class SamlController extends ControllerBase {
     }
 
     // Get error URL.
-    $url = $this->config(self::CONFIG_OBJECT_NAME)->get('error_redirect_url');
+    $url = $config->get('error_redirect_url');
     $url_object = NULL;
     if ($url) {
       $url = $this->token->replace($url);

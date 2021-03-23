@@ -11,6 +11,8 @@ samlauth.authentication:
       type: string
     error_redirect_url:
       type: string
+    error_throw:
+      type: boolean
     logout_different_user:
       type: boolean
     sp_entity_id:

@@ -64,7 +64,7 @@ class AccessDeniedSubscriber implements EventSubscriberInterface {
         $event->setResponse(new Response($exception->getMessage(), $exception->getStatusCode()));
       }
     }
-    // Authenticated access to /saml/login redirets to the user profile. This
+    // Authenticated access to /saml/login redirects to the user profile. This
     // is done in an event subscriber (rather than just opening up the route
     // and returning a redirect response from the controller route) because
     // this is what Core does for /user/login too. (Maybe it's a bit faster.
