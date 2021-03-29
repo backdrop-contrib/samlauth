@@ -203,10 +203,10 @@ OCCASIONALLY ASKED QUESTIONS
 Q: Does this module have an option to redirect all not-logged-in users to the
    IdP login screen?
 
-A: No. This is something that a separate module like 'require_login' could do,
-   with more fine grained configuration options that we don't want to duplicate.
-   If there is a reason that this module cannot be used together with the
-   samlauth module, feel free to open an issue that clearly states why.
+A: No. This is something that a separate module like require_login / r4032login
+   could do, with more fine grained configuration options that we don't want to
+   duplicate. If there is a reason that this module cannot be used together
+   with the samlauth module, feel free to open an issue that clearly states why.
 
 CONSIDERATIONS REGARDING YOUR DRUPAL USERS
 ------------------------------------------
