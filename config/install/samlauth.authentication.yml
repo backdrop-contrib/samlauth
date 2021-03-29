@@ -11,10 +11,6 @@ metadata_cache_http: false
 # is evaluated to 172800 == 2 days by the SAML Toolkit, so it's probably good
 # to set the same (or delete / not set this config value) on production systems.
 metadata_valid_secs: 60
-# requests_cache_http_secs is not set on new installs. For production installs,
-# 600 seems like a good value, from casual googling. (Having it unset leaves
-# the system vulnerable to resource exhaustion attacks to a certain extent,
-# since every request does hash calculations.)
 #
 # We will enable some security settings by default, since it is possible but
 # not recommended for the module to operate without them. This is a deviation

@@ -29,8 +29,6 @@ samlauth.authentication:
       type: integer
     metadata_cache_http:
       type: boolean
-    requests_cache_http_secs:
-      type: integer
     idp_entity_id:
       type: string
     idp_single_sign_on_service:

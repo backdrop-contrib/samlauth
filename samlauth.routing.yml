@@ -7,6 +7,7 @@ samlauth.saml_controller_login:
     _user_is_logged_in: 'FALSE'
   options:
     _maintenance_access: TRUE
+    no_cache: TRUE
     default_url_options:
       path_processing: FALSE
 samlauth.saml_controller_logout:
@@ -18,6 +19,7 @@ samlauth.saml_controller_logout:
     _access: 'TRUE'
   options:
     _maintenance_access: TRUE
+    no_cache: TRUE
     default_url_options:
       path_processing: FALSE
 samlauth.saml_controller_metadata:

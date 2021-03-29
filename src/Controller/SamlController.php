@@ -149,7 +149,7 @@ class SamlController extends ControllerBase {
     };
     // This response redirects to an external URL in all/common cases. We count
     // on the routing.yml to specify that it's not cacheable.
-    return $this->getShortenedRedirectResponse($function, 'initiating SAML login', '<front>', TRUE);
+    return $this->getShortenedRedirectResponse($function, 'initiating SAML login', '<front>');
   }
 
   /**
@@ -172,7 +172,7 @@ class SamlController extends ControllerBase {
     };
     // This response redirects to an external URL in all/common cases. We count
     // on the routing.yml to specify that it's not cacheable.
-    return $this->getShortenedRedirectResponse($function, 'initiating SAML logout', '<front>', TRUE);
+    return $this->getShortenedRedirectResponse($function, 'initiating SAML logout', '<front>');
   }
 
   /**
@@ -425,19 +425,9 @@ class SamlController extends ControllerBase {
    *   Description of when we're doing this, for error logging.
    * @param string $redirect_route_on_exception
    *   Drupal route name to redirect to on exception.
-   * @param bool $set_max_age
-   *   (Optional) Set configured max-age.
    */
-  protected function getShortenedRedirectResponse(callable $callable, $while, $redirect_route_on_exception, $set_max_age = FALSE) {
+  protected function getShortenedRedirectResponse(callable $callable, $while, $redirect_route_on_exception) {
     $response = $this->getTrustedRedirectResponse($callable, $while, $redirect_route_on_exception);
-    if ($set_max_age) {
-      // Sets configured max-age. (That doesn't mean that responses from
-      // callers which don't pass this parameters are not cached; that depends
-      // on the routing.yml. We just set our configurable value which is used
-      // for login/logout requests.)
-      $max_age = $this->config(self::CONFIG_OBJECT_NAME)->get('requests_cache_http_secs');
-      $response->setMaxAge($max_age > 0 ? $max_age : 0);
-    }
     // Symfony RedirectResponses set a HTML document as content, which is going
     // to be ugly with our long URLs. Almost noone sees this content for a
     // HTTP redirect, but still: overwrite it with a similar HTML document that
