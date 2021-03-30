@@ -4,9 +4,13 @@ namespace Drupal\samlauth\Tests;
 
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Component\Serialization\Yaml;
+use Drupal\user\Entity\Role;
+use Drupal\user\RoleInterface;
 
 /**
- * Tests SAML authentication.
+ * Semi random tests for the samlauth module.
+ *
+ * The most important part (login functionality) isn't tested yet.
  *
  * @group samlauth
  */
@@ -77,6 +81,38 @@ class SamlTest extends BrowserTestBase {
     $this->drupalGet('saml/metadata');
     $this->assertResponse(200, 'SP metadata is accessible');
     $this->assertRaw('entityID="samlauth"', 'Entity ID found in the metadata');
+  }
+
+  /**
+   * Tests that the user is blocked from requesting a password reset in Drupal.
+   */
+  public function testPasswordReset() {
+    $core_msg_mail_sent = version_compare(\Drupal::VERSION, '9.2.0-dev') >= 0
+      ? 'an email will be sent with instructions to reset your password.'
+      : 'instructions have been sent to your email address.';
+
+    $web_user = $this->drupalCreateUser();
+
+    $this->drupalLogin($web_user);
+
+    // Baseline: un-linked users can still reset their password.
+    $this->drupalGet('user/password');
+    $this->submitForm([], 'Submit');
+    $this->assertSession()->responseContains($core_msg_mail_sent);
+
+    // Linked users cannot.
+    \Drupal::service('externalauth.authmap')->save($web_user, 'samlauth', $this->randomString());
+    $this->drupalGet('user/password');
+    $this->submitForm([], 'Submit');
+    $this->assertSession()->responseContains('This user is only allowed to log in through an external authentication provider.');
+    $this->assertSession()->responseNotContains($core_msg_mail_sent);
+
+    // ...unless they have the proper permission.
+    $this->grantPermissions(Role::load(RoleInterface::AUTHENTICATED_ID), [
+      'bypass saml login',
+    ]);
+    $this->submitForm([], 'Submit');
+    $this->assertSession()->responseContains($core_msg_mail_sent);
   }
 
 }

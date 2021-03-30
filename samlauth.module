@@ -78,6 +78,13 @@ function samlauth_form_user_login_form_alter(&$form, FormStateInterface $form_st
 }
 
 /**
+ * Implements hook_form_FORM_ID_alter() for the password reset form.
+ */
+function samlauth_form_user_pass_alter(&$form, FormStateInterface $form_state) {
+  $form['#validate'][] = 'samlauth_check_saml_user';
+}
+
+/**
  * Validation callback for SAML users logging in through the normal methods.
  */
 function samlauth_check_saml_user($form, FormStateInterface $form_state) {
@@ -88,9 +95,14 @@ function samlauth_check_saml_user($form, FormStateInterface $form_state) {
     // If the user has logged into the site using samlauth before, block them
     // depending on a permission. (There is no option to disallow _any_ user
     // without that permission from logging in locally; that's not considered
-    // the business of this module.)
+    // the business of this module.) The 'name' element may contain a user
+    // name or e-mail address; the latter happens for the password reset form,
+    // and for the login form if certain contrib modules are installed.
     /** @var \Drupal\user\Entity\User $account */
     $account = user_load_by_name($form_state->getValue('name'));
+    if (!$account) {
+      $account = user_load_by_mail($form_state->getValue('name'));
+    }
     if (!$account) {
       $form_state->setErrorByName('name', t('Could not load user to do a validation check.'));
     }

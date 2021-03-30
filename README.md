@@ -269,3 +269,8 @@ in through the IdP _and_ should be barred from logging in through Drupal after
 that, but should still be able to change their e-mail... Please either file an
 issue for a clear use case, or re-override the user edit screen using custom
 code.
+
+Users who have been created by the IdP login process get no password, so they
+can only log in locally after using Drupal's 'password reset e-mail'
+functionality. They only have acces to that if they have the "Use Drupal login"
+permission.
