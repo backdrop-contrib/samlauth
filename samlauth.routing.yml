@@ -73,3 +73,10 @@ samlauth.samlauth_configure_form:
     _title: 'SAML authentication'
   requirements:
     _permission: 'configure saml'
+samlauth.authmap_delete_form:
+  path: '/admin/config/people/saml/authmap/{uid}/delete'
+  defaults:
+    _form: '\Drupal\samlauth\Form\SamlauthAuthmapDeleteForm'
+    _title: 'Delete authmap entry'
+  requirements:
+    _permission: 'configure saml'
