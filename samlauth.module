@@ -105,6 +105,16 @@ function samlauth_check_saml_user($form, FormStateInterface $form_state) {
 }
 
 /**
+ * Implements hook_form_FORM_ID_alter() for the Core account settings form.
+ */
+function samlauth_form_user_admin_settings_alter(&$form, FormStateInterface $form_state) {
+  if (\Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('create_users')
+      && !isset($form['registration_cancellation']['#description'])) {
+    $form['registration_cancellation']['#description'] = t('Registration settings do not apply to accounts created by logging in through an external authentication provider.');
+  }
+}
+
+/**
  * Implements hook_user_presave().
  */
 function samlauth_user_presave(UserInterface $account) {
