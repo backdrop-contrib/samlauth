@@ -7,6 +7,7 @@ use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Drupal\samlauth\Controller\SamlController;
 use Drupal\samlauth_user_fields\EventSubscriber\UserFieldsEventSubscriber;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -88,24 +89,26 @@ class SamlauthMappingListForm extends ConfigFormBase {
     $mappings = $config->get('field_mappings');
     $form = $this->listMappings(is_array($mappings) ? $mappings : []);
 
-    $form['config'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('Configuration for linking'),
-    ];
+    if ($this->configFactory()->get(SamlController::CONFIG_OBJECT_NAME)->get('map_users')) {
+      $form['config'] = [
+        '#type' => 'fieldset',
+        '#title' => $this->t('Configuration for linking'),
+      ];
 
-    $form['config']['link_first_user'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Link first user if multiple found'),
-      '#description' => $this->t("If a link attempt matches multiple/'duplicate' users, link the first one and ignore the others. By default, login is denied and a Drupal administrator needs to decide what to do. (This never happens if matching is done on unique fields only, which is hopefully the case.)"),
-      '#default_value' => $config->get('link_first_user'),
-    ];
+      $form['config']['link_first_user'] = [
+        '#type' => 'checkbox',
+        '#title' => $this->t('Link first user if multiple found'),
+        '#description' => $this->t("If a link attempt matches multiple/'duplicate' users, link the first one and ignore the others. By default, login is denied and a Drupal administrator needs to decide what to do. (This never happens if matching is done on unique fields only, which is hopefully the case.)"),
+        '#default_value' => $config->get('link_first_user'),
+      ];
 
-    $form['config']['ignore_blocked'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Ignore blocked users'),
-      '#description' => $this->t("Never match/link blocked users. This may result in creating new users equal to a blocked user and granting them access - but enabling it (temporarily?) could help linking a correct user if 'duplicates' are matched. By default, if a blocked user is matched, it is linked then denied access."),
-      '#default_value' => $config->get('ignore_blocked'),
-    ];
+      $form['config']['ignore_blocked'] = [
+        '#type' => 'checkbox',
+        '#title' => $this->t('Ignore blocked users'),
+        '#description' => $this->t("Never match/link blocked users. This may result in creating new users equal to a blocked user and granting them access - but enabling it (temporarily?) could help linking a correct user if 'duplicates' are matched. By default, if a blocked user is matched, it is linked then denied access."),
+        '#default_value' => $config->get('ignore_blocked'),
+      ];
+    }
 
     // @todo Do we also want a "Configuration for synchronization" section with
     //   one checkbox "Only take action on first login", like we have for roles?
@@ -137,17 +140,21 @@ class SamlauthMappingListForm extends ConfigFormBase {
    *   A renderable content array.
    */
   public function listMappings(array $mappings) {
+    $linking_enabled = $this->configFactory()->get(SamlController::CONFIG_OBJECT_NAME)->get('map_users');
+
     $output['table'] = [
       '#theme' => 'table',
       '#header' => [
         $this->t('SAML Attribute'),
         $this->t('User Field'),
-        $this->t('Use for linking'),
         $this->t('Operations'),
       ],
       '#sticky' => TRUE,
       '#empty' => $this->t("There are no mappings. You can add one using the link above."),
     ];
+    if ($linking_enabled) {
+      array_splice($output['table']['#header'], 2, 0, [$this->t('Use for linking')]);
+    }
 
     if ($mappings) {
       $fields = $this->entityFieldManager->getFieldDefinitions('user', 'user');
@@ -176,11 +183,13 @@ class SamlauthMappingListForm extends ConfigFormBase {
         $user_field = isset($fields[$mapping['field_name']])
           ? $fields[$mapping['field_name']]->getLabel() : $this->t('Unknown field %name', ['%name' => $mapping['field_name']]);
         $output['table']['#rows'][$id] = [
-          'saml_attribute' => $mapping['attribute_name'],
-          'user_field' => $user_field,
-          'link_user_order' => $mapping['link_user_order'] ?? '',
-          'operations' => render($operations),
+          $mapping['attribute_name'],
+          $user_field,
+          render($operations),
         ];
+        if ($linking_enabled) {
+          array_splice($output['table']['#rows'][$id], 2, 0, [$mapping['link_user_order'] ?? '']);
+        }
       }
     }
 

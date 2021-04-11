@@ -51,6 +51,14 @@ samlauth.authentication:
       type: string
     map_users:
       type: boolean
+    map_users_name:
+      type: boolean
+    map_users_mail:
+      type: boolean
+    map_users_roles:
+      type: sequence
+      sequence:
+        type: string
     create_users:
       type: boolean
     sync_name:

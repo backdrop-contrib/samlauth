@@ -61,3 +61,15 @@ function samlauth_update_8302() {
   $config->set('drupal_login_roles', $config_role_names);
   $config->save(TRUE);
 }
+
+/**
+ * Copy setting 'Attempt to link SAML data' into more fine grained settings.
+ */
+function samlauth_update_8303() {
+  $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
+  if ($config->get('map_users')) {
+    $config->set('map_users_name', TRUE);
+    $config->set('map_users_mail', TRUE);
+    $config->save(TRUE);
+  }
+}

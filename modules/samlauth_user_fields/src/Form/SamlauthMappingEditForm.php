@@ -5,6 +5,7 @@ namespace Drupal\samlauth_user_fields\Form;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\samlauth\Controller\SamlController;
 use Drupal\samlauth_user_fields\EventSubscriber\UserFieldsEventSubscriber;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -138,16 +139,19 @@ class SamlauthMappingEditForm extends FormBase {
       '#default_value' => $field_name,
     ];
 
-    // The huge description isn't very good UX, but we'll postpone thinking
-    // about it until we integrate this mapping with the mapping for
-    // name + email - or until someone else sends in a fix for this.
-    $form['link_user_order'] = [
-      '#type' => 'number',
-      '#size' => 2,
-      '#title' => $this->t('Link user?'),
-      '#description' => $this->t("Provide a value here if a first login should attempt to match an existing non-linked Drupal user on the basis of this field's value. The exact value only matters when multiple link attempts are defined (to determine order of attempts and/or combination with other fields). See the help text with the list for more info."),
-      '#default_value' => $mappings[$mapping_id]['link_user_order'] ?? NULL,
-    ];
+    if ($this->config(SamlController::CONFIG_OBJECT_NAME)->get('map_users')) {
+      // The huge description isn't very good UX, but we'll postpone thinking
+      // about it until we integrate this mapping with the mapping for
+      // name + email - or until someone else sends in a fix for this.
+      $form['link_user_order'] = [
+        '#type' => 'number',
+        '#size' => 2,
+        '#title' => $this->t('Link user?'),
+        '#description' => $this->t("Provide a value here if a first login should attempt to match an existing non-linked Drupal user on the basis of this field's value. The exact value only matters when multiple link attempts are defined (to determine order of attempts and/or combination with other fields). See the help text with the list for more info.")
+        . '<br><em>' . $this->t('Warning: if this attribute can be changed by the IdP user, this has security implications; it enables a user to influence which Drupal user they take over.') . '</em>',
+        '#default_value' => $mappings[$mapping_id]['link_user_order'] ?? NULL,
+      ];
+    }
 
     // Add this value so we know if it's an add or an edit.
     $form['mapping_id'] = [

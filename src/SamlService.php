@@ -382,9 +382,9 @@ class SamlService {
    * Split off from acs() to... have at least some kind of split.
    *
    * @param string $unique_id
-   *   The user account contained in the SAML response.
+   *   The unique ID (attribute value) contained in the SAML response.
    * @param \Drupal\Core\Session\AccountInterface|null $account
-   *   The user account derived from the SAML response.
+   *   The existing user account derived from the unique ID, if any.
    */
   protected function doLogin($unique_id, AccountInterface $account = NULL) {
     $config = $this->configFactory->get('samlauth.authentication');
@@ -393,7 +393,7 @@ class SamlService {
       $this->logger->debug('No matching local users found for unique SAML ID @saml_id.', ['@saml_id' => $unique_id]);
 
       // Try to link an existing user: first through a custom event handler,
-      // then by name, then by e-mail.
+      // then by name, then by email.
       if ($config->get('map_users')) {
         $event = new SamlauthUserLinkEvent($this->getAttributes());
         $this->eventDispatcher->dispatch(SamlauthEvents::USER_LINK, $event);
@@ -401,29 +401,55 @@ class SamlService {
         if ($account) {
           $this->logger->info('Existing user @name (@uid) was newly matched to SAML login attributes; linking user and logging in.', ['@name' => $account->getAccountName(), '@uid' => $account->id()]);
         }
-        else {
-          // The linking by name / e-mail cannot be bypassed at this point
-          // because it makes no sense to create a new account from the SAML
-          // attributes if one of these two basic properties is already in use.
-          // (In this case a newly created and logged-in account would get a
-          // cryptic machine name because  synchronizeUserAttributes() cannot
-          // assign the proper name while saving.)
-          $name = $this->getAttributeByConfig('user_name_attribute');
-          if ($name && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
-            $account = reset($account_search);
-            $this->logger->info('Matching local user @uid found for name @name (as provided in a SAML attribute); linking user and logging in.', ['@name' => $name, '@uid' => $account->id()]);
+      }
+      // Linking by name / email: we also select accounts if they are blocked
+      // (and throw an exception later on) because 1) we don't want the
+      // selection to be dependent on the current account's state; 2) name and
+      // email are unique and would otherwise lead to another error while
+      // trying to create a new account with duplicate values.
+      if (!$account) {
+        $name = $this->getAttributeByConfig('user_name_attribute');
+        if ($name && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
+          if ($config->get('map_users_name')) {
+            $account = current($account_search);
+            $this->logger->info('SAML login for name @name (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', ['@name' => $name, '@uid' => $account->id()]);
           }
           else {
-            $mail = $this->getAttributeByConfig('user_mail_attribute');
-            if ($mail && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
-              $account = reset($account_search);
-              $this->logger->info('Matching local user @uid found for e-mail @mail (as provided in a SAML attribute); linking user and logging in.', ['@mail' => $mail, '@uid' => $account->id()]);
-            }
+            // We're not configured to link the account by name, but we still
+            // looked it up by name so we can give a better error message than
+            // the one caused by trying to save a new account with a duplicate
+            // name, later.
+            $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account name @name and we are not configured to automatically link accounts.', ['@saml_id' => $unique_id, '@name' => $account->getAccountName()]);
+            throw new UserVisibleException('A local user account with your login name already exists, and we are disallowed from linking it.');
+          }
+        }
+      }
+      if (!$account) {
+        $mail = $this->getAttributeByConfig('user_mail_attribute');
+        if ($mail && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
+          if ($config->get('map_users_mail')) {
+            $account = current($account_search);
+            $this->logger->info('SAML login for email @mail (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', ['@mail' => $mail, '@uid' => $account->id()]);
+          }
+          else {
+            // Treat duplicate email same as duplicate name above.
+            $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account email @mail and we are not configured to automatically link the account.', ['@saml_id' => $unique_id, '@mail' => $account->getEmail()]);
+            throw new UserVisibleException('A local user account with your login email address name already exists, and we are disallowed from linking it.');
           }
         }
       }
 
       if ($account) {
+        $allowed_roles = $config->get('map_users_roles');
+        $disallowed_roles = array_diff($account->getRoles(), $allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
+        if ($disallowed_roles) {
+          $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
+            '@saml_id' => $unique_id,
+            '@uid' => $account->id(),
+            '@roles' => implode(', ', $disallowed_roles),
+          ]);
+          throw new UserVisibleException('A local user account matching your login already exists, and we are disallowed from linking it.');
+        }
         $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
         // linkExistingAccount() does not tell us whether the link was actually
         // successful; it silently continues if the account was already linked

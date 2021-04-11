@@ -377,17 +377,55 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('unique_id_attribute') ?: 'eduPersonTargetedID',
     ];
 
-    $form['user_info']['map_users'] = [
-      '#type' => 'checkbox',
+    $form['user_info']['linking'] = [
       '#title' => $this->t('Attempt to link SAML data to existing local users'),
-      '#description' => $this->t('If the unique ID in the SAML assertion is not linked to a Drupal user, and the name / e-mail attribute matches an existing Drupal user, that user will be linked and logged in. (By default, a new user is created with the same data depending on the next option - which may result in an error about a duplicate or missing user.)'),
+      '#type' => 'details',
+      '#open' => TRUE,
+      '#description' => t('If enabled, whenever the unique ID in the SAML assertion is not already linked to a Drupal user but the assertion data can be matched with an existing non-linked user, that user will be linked and logged in. Matching is attempted in the order of below enabled checkboxes, until a user is found.')
+      . '<br><br><em>' . t('Warning: if the data used for matching can be changed by the IdP user, this has security implications; it enables a user to influence which Drupal user they take over.') . '</em>',
+    ];
+
+    $form['user_info']['linking']['map_users'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Enable custom matching'),
+      '#description' => $this->t("Allows user matching by the included 'User Fields Mapping' module as well as any other code (event subscriber) installed for this purpose."),
       '#default_value' => $config->get('map_users'),
+    ];
+
+    $form['user_info']['linking']['map_users_name'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Enable matching on name'),
+      '#description' => $this->t("Allows matching an existing local user name with value of the user name attribute."),
+      '#default_value' => $config->get('map_users_name'),
+    ];
+
+    $form['user_info']['linking']['map_users_mail'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Enable matching on email'),
+      '#description' => $this->t("Allows matching an existing local user email with value of the user email attribute."),
+      '#default_value' => $config->get('map_users_mail'),
+    ];
+
+    /** @var \Drupal\user\Entity\Role[] $roles */
+    $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
+    unset($roles[UserInterface::ANONYMOUS_ROLE]);
+    unset($roles[UserInterface::AUTHENTICATED_ROLE]);
+    $options = [];
+    foreach ($roles as $name => $role) {
+      $options[$name] = $role->label();
+    }
+    $form['user_info']['linking']['map_users_roles'] = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t('Roles allowed for linking'),
+      '#description' => $this->t('If a matched account has any role that is not explicitly allowed here, linking/login is denied.'),
+      '#options' => $options,
+      '#default_value' => $config->get('map_users_roles') ?? [],
     ];
 
     $form['user_info']['create_users'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Create users from SAML data'),
-      '#description' => $this->t('If data in the SAML assertion is not linked to a Drupal user, a new user is created using the name / e-mail attributes from the response.'),
+      '#description' => $this->t('If data in the SAML assertion is not linked to a Drupal user, a new user is created using the name / email attributes from the response.'),
       '#default_value' => $config->get('create_users'),
     ];
 
@@ -412,7 +450,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('user_name_attribute'),
       '#states' => [
         'invisible' => [
-          ':input[name="map_users"]' => ['checked' => FALSE],
+          ':input[name="map_users_name"]' => ['checked' => FALSE],
           ':input[name="create_users"]' => ['checked' => FALSE],
           ':input[name="sync_name"]' => ['checked' => FALSE],
         ],
@@ -426,7 +464,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('user_mail_attribute'),
       '#states' => [
         'invisible' => [
-          ':input[name="map_users"]' => ['checked' => FALSE],
+          ':input[name="map_users_mail"]' => ['checked' => FALSE],
           ':input[name="create_users"]' => ['checked' => FALSE],
           ':input[name="sync_mail"]' => ['checked' => FALSE],
         ],
@@ -772,6 +810,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('idp_x509_certificate_multi', $this->formatKeyOrCert($form_state->getValue('idp_x509_certificate_multi'), FALSE))
       ->set('unique_id_attribute', $form_state->getValue('unique_id_attribute'))
       ->set('map_users', $form_state->getValue('map_users'))
+      ->set('map_users_name', $form_state->getValue('map_users_name'))
+      ->set('map_users_mail', $form_state->getValue('map_users_mail'))
+      ->set('map_users_roles', $form_state->getValue('map_users_roles'))
       ->set('create_users', $form_state->getValue('create_users'))
       ->set('sync_name', $form_state->getValue('sync_name'))
       ->set('sync_mail', $form_state->getValue('sync_mail'))
