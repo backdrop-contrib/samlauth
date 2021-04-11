@@ -11,6 +11,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\Url;
+use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
@@ -50,6 +51,13 @@ class SamlService {
    * @var \Drupal\externalauth\ExternalAuth
    */
   protected $externalAuth;
+
+  /**
+   * The Authmap service.
+   *
+   * @var \Drupal\externalauth\Authmap
+   */
+  protected $authmap;
 
   /**
    * The config factory.
@@ -112,6 +120,8 @@ class SamlService {
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
    *   The ExternalAuth service.
+   * @param \Drupal\externalauth\Authmap $authmap
+   *   The Authmap service.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
@@ -131,8 +141,9 @@ class SamlService {
    * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
    *   The string translation service.
    */
-  public function __construct(ExternalAuth $external_auth, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
+  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
     $this->externalAuth = $external_auth;
+    $this->authmap = $authmap;
     $this->configFactory = $config_factory;
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger;
@@ -413,13 +424,22 @@ class SamlService {
       }
 
       if ($account) {
-        // There is a chance that the following call will not actually link the
-        // account (if a mapping to this account already exists from another
-        // unique ID). If that happens, it does not matter much to us; we will
-        // just log the account in anyway. Next time the same not-yet-linked
-        // user logs in, we will again try to link the account in the same way
-        // and (falsely) log that we are linking the user.
         $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
+        // linkExistingAccount() does not tell us whether the link was actually
+        // successful; it silently continues if the account was already linked
+        // to a different unique ID. This would mean a user who has the power
+        // to change their user name / email on the IdP side, potentially has
+        // the power to log into different accounts (as long as they only log
+        // into accounts that already are linked to a different IdP user).
+        $linked_id = $this->authmap->get($account->id(), 'samlauth');
+        if ($linked_id != $unique_id) {
+          $this->logger->warning('Denying login: existing Drupal account @uid matches SAML login for unique ID @saml_id, but the account is already linked to SAML login ID @linked_id. If a new account should be created despite the earlier match, temporarily turn off matching. If this login should be linked to user @uid, remove the earlier link.', [
+            '@uid' => $account->id(),
+            '@saml_id' => $unique_id,
+            '@linked_id' => $linked_id,
+          ]);
+          throw new UserVisibleException('Your login data match an earlier login by a different SAML user.');
+        }
         $first_saml_login = TRUE;
       }
     }
