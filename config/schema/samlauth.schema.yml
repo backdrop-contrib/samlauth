@@ -13,6 +13,8 @@ samlauth.authentication:
       type: string
     error_throw:
       type: boolean
+    local_login_saml_error:
+      type: boolean
     logout_different_user:
       type: boolean
     drupal_login_roles:

@@ -139,16 +139,27 @@ class SamlauthConfigureForm extends ConfigFormBase {
     /** @var \Drupal\user\Entity\Role[] $roles */
     $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
     unset($roles[UserInterface::ANONYMOUS_ROLE]);
-    $options = [];
+    $role_options = [];
     foreach ($roles as $name => $role) {
-      $options[$name] = $role->label();
+      $role_options[$name] = $role->label();
     }
     $form['saml_login_logout']['linking']['drupal_login_roles'] = [
       '#type' => 'checkboxes',
       '#title' => $this->t('Roles allowed to use Drupal login also when linked to a SAML login'),
       '#description' => $this->t('Users who have previously logged in through the SAML Identity Provider can only use the standard Drupal login method if they have one of the roles selected here. Drupal users that have never logged in through the IdP are not affected by this restriction.'),
-      '#options' => $options,
+      '#options' => $role_options,
       '#default_value' => $config->get('drupal_login_roles') ?? [],
+    ];
+
+    $form['saml_login_logout']['local_login_saml_error'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Tell disallowed users they must log in using SAML.'),
+      '#description' => $this->t('If not checked, we show the generic "Unrecognized username or password" message to users who cannot use the standard Drupal login method. This prevents disclosing information about whether the account name exists, but is untrue / potentially confusing.', [
+        ':permission' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
+      ]),
+      // TRUE on existing installations where the checkbox didn't exist before;
+      // FALSE on new installations.
+      '#default_value' => $config->get('local_login_saml_error') ?? TRUE,
     ];
 
     $form['saml_login_logout']['login_redirect_url'] = [
@@ -290,7 +301,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Cache HTTP responses containing metadata'),
       '#description' => $this->t("This affects just (Drupal's and external) response caches, whereas the above also affects caching by the IdP. Caching is only important if the metadata URL can be reached by anonymous visitors. The Max-Age value is derived from the validity."),
       // TRUE on existing installations where the checkbox didn't exist before;
-      // FALSE in new installations.
+      // FALSE on new installations.
       '#default_value' => $config->get('metadata_cache_http') ?? TRUE,
     ];
 
@@ -406,19 +417,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('map_users_mail'),
     ];
 
-    /** @var \Drupal\user\Entity\Role[] $roles */
-    $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
-    unset($roles[UserInterface::ANONYMOUS_ROLE]);
-    unset($roles[UserInterface::AUTHENTICATED_ROLE]);
-    $options = [];
-    foreach ($roles as $name => $role) {
-      $options[$name] = $role->label();
-    }
+    unset($role_options[UserInterface::AUTHENTICATED_ROLE]);
     $form['user_info']['linking']['map_users_roles'] = [
       '#type' => 'checkboxes',
       '#title' => $this->t('Roles allowed for linking'),
       '#description' => $this->t('If a matched account has any role that is not explicitly allowed here, linking/login is denied.'),
-      '#options' => $options,
+      '#options' => $role_options,
       '#default_value' => $config->get('map_users_roles') ?? [],
     ];
 
@@ -790,6 +794,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('login_menu_item_title', $form_state->getValue('login_menu_item_title'))
       ->set('logout_menu_item_title', $form_state->getValue('logout_menu_item_title'))
       ->set('logout_different_user', $form_state->getValue('logout_different_user'))
+      ->set('local_login_saml_error', $form_state->getValue('local_login_saml_error'))
       ->set('login_redirect_url', $form_state->getValue('login_redirect_url'))
       ->set('logout_redirect_url', $form_state->getValue('logout_redirect_url'))
       ->set('drupal_login_roles', $form_state->getValue('drupal_login_roles'))
