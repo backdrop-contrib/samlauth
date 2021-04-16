@@ -19,6 +19,29 @@ module
 
 For more information about SAML, see: https://en.wikipedia.org/wiki/SAML_2.0
 
+UPGRADING
+------------
+Upgrading from 8.x-2.x to 8.x-3.x is trivial; just make sure your composer
+dependencies are met. The only reason for the major version jump was a major
+version jump in the upstream php-saml dependency that was caused by a security
+issue - plus having no indication that the upstream 2.x version (which only
+supported PHP < 7.2) would stay maintained.
+
+There is no tested upgrade path from 8.x-1.3 to 8.x-3.x. Upgrading has two
+aspects:
+* Configuration: the module should keep working after the module upgrade
+  because the configuration hasn't changed; it has just been added to.
+  Regardless: it is recommended to look through existing configuration to see
+  which new configuration options are beneficial to include/change.
+* Data: the links between SAML login ID and Drupal user are stored differently
+  so after the upgrade, users could (depending on your settings) be unable to
+  log in or potentially even log in as a different user. The data can be
+  migrated with this SQL query (to be modified for database prefixes):
+  ```sql
+  INSERT INTO authmap (uid, authname, provider, data)
+  SELECT uid, value AS authname, 'samlauth' AS provider, 'N;' as data from users_data WHERE module='samlauth' and name='saml_id'
+  ```
+
 INSTALLATION
 ------------
 Install as you would normally install a contributed drupal module. See:
