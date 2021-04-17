@@ -104,7 +104,17 @@ function samlauth_form_user_login_block_alter(&$form, $form_state) {
 }
 
 /**
- * Common callback for user_login_block and user_login.
+ * Implements hook_form_FORM_ID_alter for user_pass (password reset).
+ *
+ * @param $form
+ * @param $form_state
+ */
+function samlauth_form_user_pass_alter(&$form, $form_state) {
+  samlauth_login_form_alter($form, $form_state);
+}
+
+/**
+ * Common callback for user_login_block / user_login / user_pass.
  */
 function samlauth_login_form_alter(&$form, $form_state) {
   $form['#validate'][] = 'samlauth_check_saml_user';
@@ -122,7 +132,14 @@ function samlauth_check_saml_user($form, $form_state) {
       return;
     }
 
-    if ($account = user_load_by_name($form_state['values']['name'])) {
+    $account = user_load_by_name($form_state['values']['name']);
+    if (!$account) {
+      $account = user_load_by_mail($form_state['values']['name']);
+    }
+    if (!$account) {
+      form_set_error('name', t('Could not load user to do a validation check.'));
+    }
+    else {
       $saml_id = samlauth_find_unique_id_by_user_id($account->uid);
       if ($saml_id !== FALSE) {
         form_set_error('name', t('SAML users must sign in with SSO.'));
