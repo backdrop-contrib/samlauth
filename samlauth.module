@@ -274,7 +274,18 @@ function samlauth_acs() {
     $errors = $auth->getErrors();
 
     if (!empty($errors)) {
-      throw new Exception('ACS error: ' . implode(', ', $errors));
+      $reason = $auth->getLastErrorReason();
+      // Special handling for passive authentication requests: if they fail it
+      // means the user is not logged in, so redirect them to our login form.
+      if ($reason == 'The status code of the Response was not Success, was Responder -> Cannot authenticate Subject in Passive Mode') {
+        watchdog('samlauth', 'Passive authentication failed, redirecting to login form. @reason', [
+          '@reason' => $reason,
+        ], WATCHDOG_INFO);
+        drupal_goto('user/login', array('query' => array('saml' => 'anonymous')));
+      }
+      else {
+        throw new Exception('ACS error: ' . implode(', ', $errors) . " Reason: $reason");
+      }
     }
 
     if (!$auth->isAuthenticated()) {
@@ -289,6 +300,9 @@ function samlauth_acs() {
 
     // If the configured unique id attribute is not present, then bail out early.
     if (!isset($saml_data[$unique_id_attribute][0])) {
+      watchdog('samlauth', 'Configured unique ID is not present in the SAML response: <pre>@response</pre>', array(
+        '@response' => print_r($saml_data, TRUE),
+      ), WATCHDOG_ERROR);
       throw new Exception('Configured unique ID is not present in the SAML response.');
     }
 
@@ -321,6 +335,7 @@ function samlauth_acs() {
   }
   catch (Exception $e) {
     drupal_set_message($e->getMessage(), 'error');
+    watchdog_exception('samlauth', $e);
     drupal_goto();
   }
 
