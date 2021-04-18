@@ -137,7 +137,8 @@ function samlauth_check_saml_user($form, $form_state) {
  * @return array
  */
 function samlauth_get_config() {
-  return array(
+  $config = array(
+    'strict' => (bool) variable_get('samlauth_security_strict'),
     'sp' => array(
       'entityId' => variable_get('samlauth_sp_entity_id'),
       'assertionConsumerService' => array(
@@ -167,6 +168,13 @@ function samlauth_get_config() {
       'requestedAuthnContext' => variable_get('samlauth_security_request_authn_context') ? TRUE : FALSE,
     ),
   );
+  // Passing NULL for signatureAlgorithm would be OK, but not ''.
+  $sig_alg = variable_get('samlauth_security_security_signature_algorithm');
+  if ($sig_alg) {
+    $config['security']['signatureAlgorithm'] = $sig_alg;
+  }
+
+  return $config;
 }
 
 /**

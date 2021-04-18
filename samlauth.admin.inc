@@ -186,10 +186,32 @@ function samlauth_configure_form() {
     '#type' => 'fieldset',
   );
 
+  $form['security']['samlauth_security_strict'] = [
+    '#type' => 'checkbox',
+    '#title' => t('Strict mode'),
+    '#description' => t('In strict mode, any validation failures or unsigned SAML messages which are requested to be signed (according to your settings) will cause the SAML conversation to be terminated. In production environments, this <em>must</em> be set.'),
+    '#default_value' => variable_get('samlauth_security_strict', FALSE),
+  ];
+
   $form['security']['samlauth_security_authn_requests_sign'] = array(
     '#type' => 'checkbox',
     '#title' => t('Request signed authn requests'),
     '#default_value' => variable_get('samlauth_security_authn_requests_sign', FALSE),
+  );
+
+  $form['security']['samlauth_security_security_signature_algorithm'] = array(
+    '#type' => 'select',
+    '#title' => t('Signature algorithm'),
+    '#options' => [
+      '' => t('library default'),
+      'http://www.w3.org/2000/09/xmldsig#rsa-sha1' => 'RSA-sha1',
+      'http://www.w3.org/2000/09/xmldsig#hmac-sha1' => 'HMAC-sha1',
+      'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256' => 'sha256',
+      'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384' => 'sha384',
+      'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512' => 'sha512'
+    ],
+    '#description' => t('Algorithm used in the signing process.'),
+    '#default_value' => variable_get('samlauth_security_security_signature_algorithm'),
   );
 
   $form['security']['samlauth_security_messages_sign'] = array(
