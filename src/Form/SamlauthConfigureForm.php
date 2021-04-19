@@ -11,6 +11,7 @@ use Drupal\Core\Utility\Token;
 use Drupal\samlauth\Controller\SamlController;
 use OneLogin\Saml2\Metadata;
 use OneLogin\Saml2\Utils as SamlUtils;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -433,13 +434,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['security']['security_signature_algorithm'] = [
       '#type' => 'select',
       '#title' => $this->t('Signature algorithm'),
-      // The first option is the library default.
       '#options' => [
-        'http://www.w3.org/2000/09/xmldsig#rsa-sha1' => 'RSA-sha1',
-        'http://www.w3.org/2000/09/xmldsig#hmac-sha1' => 'HMAC-sha1',
-        'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256' => 'sha256',
-        'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384' => 'sha384',
-        'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512' => 'sha512',
+        '' => $this->t('library default'),
+        XMLSecurityKey::RSA_SHA1 => 'RSA-SHA1',
+        XMLSecurityKey::HMAC_SHA1 => 'HMAC-SHA1',
+        XMLSecurityKey::RSA_SHA256 => 'SHA256',
+        XMLSecurityKey::RSA_SHA384 => 'SHA384',
+        XMLSecurityKey::RSA_SHA512 => 'SHA512',
       ],
       '#description' => $this->t('Algorithm used in the signing process.'),
       '#default_value' => $config->get('security_signature_algorithm'),
