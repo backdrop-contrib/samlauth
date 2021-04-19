@@ -232,5 +232,12 @@ function samlauth_configure_form() {
     '#default_value' => variable_get('samlauth_security_request_authn_context', FALSE),
   );
 
+  $form['security']['samlauth_set_nameidpolicy'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Set NameIdPolicy'),
+    '#description' => t('Set a NameIDPolicy on the authorisation request. In case of NameIdPolicy error responses, try to disable this option.'),
+    '#default_value' => variable_get('samlauth_set_nameidpolicy', TRUE),
+  );
+
   return system_settings_form($form);
 }

@@ -212,7 +212,7 @@ function samlauth_metadata() {
  */
 function samlauth_login() {
   $auth = samlauth_get_saml2_auth();
-  $auth->login('/');
+  $auth->login('/', array(), FALSE, FALSE, FALSE, variable_get('samlauth_set_nameidpolicy', TRUE));
 }
 
 /**
