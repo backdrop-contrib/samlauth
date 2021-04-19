@@ -247,13 +247,40 @@ function samlauth_logout() {
  * Menu callback for /saml/sls.
  */
 function samlauth_sls() {
-  if (isset($_REQUEST['RelayState'])) {
-    $url = $_REQUEST['RelayState'];
-    drupal_goto($url);
+  $url = '<front>';
+
+  try {
+    // There are two valid cases here:
+    // - We're processing a LogoutRequest, which will return a URL to redirect
+    //   to (which is the IdP); the RelayState is not for us.
+    // - We're processing a LogoutResponse, which will return NULL; the
+    //   RelayState is meant for us to process.
+    $auth = samlauth_get_saml2_auth();
+    $url = $auth->processSLO(FALSE, NULL, FALSE, NULL, TRUE) ?: '<front>';
+    $errors = $auth->getErrors();
+
+    if (empty($errors)) {
+      if (!$url) {
+        // We should be able to trust the RelayState parameter at this point
+        // because the response from the IDP was verified.
+        if (isset($_REQUEST['RelayState'])) {
+          $url = $_REQUEST['RelayState'];
+        }
+      }
+
+      // Log out the user, since the logout already happened on the server.
+      if (user_is_logged_in()) {
+        module_load_include('pages.inc', 'user');
+        user_logout_current_user();
+      }
+    } else {
+      drupal_set_message('SLS error: ' . implode(', ', $errors), 'error');
+    }
+  } catch (Exception $e) {
+    drupal_set_message('SLS error: ' . $e->getMessage(), 'error');
   }
-  else {
-    drupal_goto('/');
-  }
+
+  drupal_goto($url);
 }
 
 /**
