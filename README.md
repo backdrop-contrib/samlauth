@@ -251,8 +251,9 @@ IdP and sent along with the login.
 
 After users have logged in through the SAML IdP, the link between that
 particular login and the Drupal user gets remembered. From this point on,
-users are treated differently if they do not have the "Use Drupal login,
-bypassing SAML IdP" permission:
+users are treated differently unless they have a role that is explicitly
+"allowed to use Drupal login also when linked to a SAML login" by
+configuration:
 * They cannot log into Drupal directly anymore. Remember that if your Drupal
   site has existing locally (pre-)created users who know their password, this
   means there is an 'invisible' distinction with users who have not logged in
@@ -272,5 +273,5 @@ code.
 
 Users who have been created by the IdP login process get no password, so they
 can only log in locally after using Drupal's 'password reset e-mail'
-functionality. They only have acces to that if they have the "Use Drupal login"
-permission.
+functionality. They only have acces to that if they have a role that is
+"allowed to use Drupal login also when linked to a SAML login"

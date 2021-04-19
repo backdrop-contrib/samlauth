@@ -2,6 +2,3 @@ view sp metadata:
   title: 'View service provider metadata'
 configure saml:
   title: 'Configure SAML authentication'
-bypass saml login:
-  title: 'Use Drupal login, bypassing SAML IdP'
-  description: 'This permission only applies to Drupal users who logged in through the IdP at least once; other users are not prohibited from using Drupal login.'

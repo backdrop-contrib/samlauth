@@ -15,6 +15,10 @@ samlauth.authentication:
       type: boolean
     logout_different_user:
       type: boolean
+    drupal_login_roles:
+      type: sequence
+      sequence:
+        type: string
     sp_entity_id:
       type: string
     sp_name_id_format:

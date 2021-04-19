@@ -31,11 +31,14 @@ function samlauth_help($route_name, RouteMatchInterface $route_match) {
  * Implements hook_form_FORM_ID_alter() for the user edit form.
  */
 function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
-  // Only affect SAML-linked users without the 'bypass' permission; see also
-  // samlauth_check_saml_user().
+  // Only affect SAML-linked users without a role that is allowed to log in
+  // locally.
   /** @var \Drupal\user\Entity\User $account */
   $account = $form_state->getBuildInfo()['callback_object']->getEntity();
-  if ($account->id() == \Drupal::currentUser()->id() && !$account->hasPermission('bypass saml login')) {
+  if ($account->id() == \Drupal::currentUser()->id() && !array_intersect(
+      $account->getRoles(),
+      \Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('drupal_login_roles') ?? []
+    )) {
     /** @var \Drupal\externalauth\AuthmapInterface $authmap */
     $authmap = \Drupal::service('externalauth.authmap');
     if ($authmap->get($account->id(), 'samlauth')) {
@@ -50,7 +53,7 @@ function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
       // for a user whose account was created locally and linked to a SAML
       // login afterwards, to know their password. If not being able to change
       // their e-mail is a concern, then this needs to be solved by role /
-      // permission tweaking, by custom code or by an issue in the samlauth
+      // configuration tweaking, by custom code or by an issue in the samlauth
       // module queue that makes a clear case for solving this in a general
       // manner.)
       $form['account']['mail']['#disabled'] = TRUE;
@@ -93,11 +96,10 @@ function samlauth_check_saml_user($form, FormStateInterface $form_state) {
   // wouldn't be authenticated. Also skip unworkable form state.
   if (!$form_state->hasAnyErrors() && $form_state->hasValue('name')) {
     // If the user has logged into the site using samlauth before, block them
-    // depending on a permission. (There is no option to disallow _any_ user
-    // without that permission from logging in locally; that's not considered
-    // the business of this module.) The 'name' element may contain a user
-    // name or e-mail address; the latter happens for the password reset form,
-    // and for the login form if certain contrib modules are installed.
+    // if they don't have a role that is allowed to log in locally. The 'name'
+    // element may contain a user name or e-mail address; the latter happens
+    // for the password reset form, and for the login form if certain contrib
+    // modules are installed.
     /** @var \Drupal\user\Entity\User $account */
     $account = user_load_by_name($form_state->getValue('name'));
     if (!$account) {
@@ -106,7 +108,10 @@ function samlauth_check_saml_user($form, FormStateInterface $form_state) {
     if (!$account) {
       $form_state->setErrorByName('name', t('Could not load user to do a validation check.'));
     }
-    elseif (!$account->hasPermission('bypass saml login')) {
+    elseif (!array_intersect(
+      $account->getRoles(),
+      \Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('drupal_login_roles') ?? []
+    )) {
       /** @var \Drupal\externalauth\AuthmapInterface $authmap */
       $authmap = \Drupal::service('externalauth.authmap');
       if ($authmap->get($account->id(), 'samlauth')) {

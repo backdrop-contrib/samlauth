@@ -3,12 +3,14 @@
 namespace Drupal\samlauth\Form;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Token;
 use Drupal\samlauth\Controller\SamlController;
+use Drupal\user\UserInterface;
 use OneLogin\Saml2\Metadata;
 use OneLogin\Saml2\Utils as SamlUtils;
 use RobRichards\XMLSecLibs\XMLSecurityKey;
@@ -18,6 +20,13 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Provides a configuration form for samlauth module settings and IdP/SP info.
  */
 class SamlauthConfigureForm extends ConfigFormBase {
+
+  /**
+   * The EntityTypeManager service.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected $entityTypeManager;
 
   /**
    * The PathValidator service.
@@ -38,13 +47,16 @@ class SamlauthConfigureForm extends ConfigFormBase {
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The factory for configuration objects.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
+   *   The EntityTypeManager service.
    * @param \Drupal\Core\Path\PathValidatorInterface $path_validator
    *   The PathValidator service.
    * @param \Drupal\Core\Utility\Token $token
    *   The token service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, PathValidatorInterface $path_validator, Token $token) {
+  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, PathValidatorInterface $path_validator, Token $token) {
     parent::__construct($config_factory);
+    $this->entityTypeManager = $entity_type_manager;
     $this->pathValidator = $path_validator;
     $this->token = $token;
   }
@@ -55,6 +67,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
+      $container->get('entity_type.manager'),
       $container->get('path.validator'),
       $container->get('token')
     );
@@ -121,6 +134,21 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Log out different user upon re-authentication.'),
       '#description' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed.)'),
       '#default_value' => $config->get('logout_different_user'),
+    ];
+
+    /** @var \Drupal\user\Entity\Role[] $roles */
+    $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
+    unset($roles[UserInterface::ANONYMOUS_ROLE]);
+    $options = [];
+    foreach ($roles as $name => $role) {
+      $options[$name] = $role->label();
+    }
+    $form['saml_login_logout']['linking']['drupal_login_roles'] = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t('Roles allowed to use Drupal login also when linked to a SAML login'),
+      '#description' => $this->t('Users who have previously logged in through the SAML Identity Provider can only use the standard Drupal login method if they have one of the roles selected here. Drupal users that have never logged in through the IdP are not affected by this restriction.'),
+      '#options' => $options,
+      '#default_value' => $config->get('drupal_login_roles') ?? [],
     ];
 
     $form['saml_login_logout']['login_redirect_url'] = [
@@ -726,6 +754,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('logout_different_user', $form_state->getValue('logout_different_user'))
       ->set('login_redirect_url', $form_state->getValue('login_redirect_url'))
       ->set('logout_redirect_url', $form_state->getValue('logout_redirect_url'))
+      ->set('drupal_login_roles', $form_state->getValue('drupal_login_roles'))
       ->set('error_redirect_url', $form_state->getValue('error_redirect_url'))
       ->set('error_throw', $form_state->getValue('error_throw'))
       ->set('sp_entity_id', $form_state->getValue('sp_entity_id'))

@@ -2,9 +2,9 @@
 
 namespace Drupal\samlauth\Tests;
 
+use Drupal\samlauth\Controller\SamlController;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Component\Serialization\Yaml;
-use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
 
 /**
@@ -100,17 +100,14 @@ class SamlTest extends BrowserTestBase {
     $this->submitForm([], 'Submit');
     $this->assertSession()->responseContains($core_msg_mail_sent);
 
-    // Linked users cannot.
+    // Linked users only can if a role-based config value says they can.
     \Drupal::service('externalauth.authmap')->save($web_user, 'samlauth', $this->randomString());
     $this->drupalGet('user/password');
     $this->submitForm([], 'Submit');
     $this->assertSession()->responseContains('This user is only allowed to log in through an external authentication provider.');
     $this->assertSession()->responseNotContains($core_msg_mail_sent);
-
-    // ...unless they have the proper permission.
-    $this->grantPermissions(Role::load(RoleInterface::AUTHENTICATED_ID), [
-      'bypass saml login',
-    ]);
+    \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME)
+      ->set('drupal_login_roles', [RoleInterface::AUTHENTICATED_ID])->save();
     $this->submitForm([], 'Submit');
     $this->assertSession()->responseContains($core_msg_mail_sent);
   }

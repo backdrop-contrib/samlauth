@@ -10,20 +10,35 @@ use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
 
 /**
- * Migrate 'Allow SAML users to log in directly' config value to permission.
+ * Empty.
  */
 function samlauth_update_8301() {
+}
+
+/**
+ * Populate "Roles allowed to use Drupal login" from config or permission.
+ */
+function samlauth_update_8302() {
+  $config_role_names = [];
+  // Migrate from either a single checkbox config value (pre-3.0-RC1) or from
+  // a permission.
   $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
-  if ($config->get('drupal_saml_login')) {
-    $roles = Role::loadMultiple();
-    foreach ($roles as $role) {
-      /** @var \Drupal\user\Entity\Role $role */
-      if (!$role->hasPermission('bypass saml login') && !$role->id() != RoleInterface::ANONYMOUS_ID) {
-        $role->grantPermission('bypass saml login');
-        $role->save();
-      }
+  $old_config_value = $config->get('drupal_saml_login');
+  $existing_roles = Role::loadMultiple();
+  foreach ($existing_roles as $role) {
+    // Prefer the config value. Always check for / revoke the permission,
+    // though we can't really have both the permission and $config_value set.
+    /** @var \Drupal\user\Entity\Role $role */
+    if ($role->id() !== RoleInterface::ANONYMOUS_ID
+        && (isset($old_config_value) ? $old_config_value : $role->hasPermission('bypass saml login'))) {
+      $config_role_names[] = $role->id();
+    }
+    if ($role->hasPermission('bypass saml login')) {
+      $role->revokePermission('bypass saml login');
+      $role->save();
     }
   }
   $config->clear('drupal_saml_login');
+  $config->set('drupal_login_roles', $config_role_names);
   $config->save(TRUE);
 }
