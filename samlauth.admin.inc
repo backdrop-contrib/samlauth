@@ -23,7 +23,7 @@ function samlauth_configure_form() {
   $form['saml_requirements']['samlauth_drupal_saml_login'] = array(
     '#type' => 'checkbox',
     '#title' => t('Allow SAML users to login directly with Drupal'),
-    '#description' => t('If this option is enabled, users that have a remote SAML ID will also be allowed to login through the normal Drupal process (without the intervention of the configured identity provider). Note that if Drupal login is hidden, this option will have no effect.'),
+    '#description' => t('Drupal users who have previously logged in through the SAML Identity Provider can also log in through the standard Drupal login screen. (By default, they must always log in through the Identity Provider. This option does not affect Drupal user acounts that are never linked to a SAML login.)'),
     '#default_value' => variable_get('samlauth_drupal_saml_login', FALSE),
   );
 

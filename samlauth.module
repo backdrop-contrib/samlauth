@@ -114,7 +114,7 @@ function samlauth_login_form_alter(&$form, $form_state) {
  * Validation callback for SAML users logging in through the normal login form.
  */
 function samlauth_check_saml_user($form, $form_state) {
-  if (variable_get('samlauth_drupal_saml_login', FALSE)) {
+  if (!variable_get('samlauth_drupal_saml_login', FALSE)) {
     if (form_get_errors()) {
       // If previous validation functions have already failed (name/pw incorrect
       // or blocked), bail out so we don't disclose any details about a user that
@@ -124,7 +124,7 @@ function samlauth_check_saml_user($form, $form_state) {
 
     if ($account = user_load_by_name($form_state['values']['name'])) {
       $saml_id = samlauth_find_unique_id_by_user_id($account->uid);
-      if (!is_null($saml_id)) {
+      if ($saml_id !== FALSE) {
         form_set_error('name', t('SAML users must sign in with SSO.'));
       }
     }
