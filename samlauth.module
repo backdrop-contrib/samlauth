@@ -247,7 +247,7 @@ function samlauth_logout() {
  * Menu callback for /saml/sls.
  */
 function samlauth_sls() {
-  $url = '<front>';
+  $url = '';
 
   try {
     // There are two valid cases here:
@@ -256,7 +256,7 @@ function samlauth_sls() {
     // - We're processing a LogoutResponse, which will return NULL; the
     //   RelayState is meant for us to process.
     $auth = samlauth_get_saml2_auth();
-    $url = $auth->processSLO(FALSE, NULL, FALSE, NULL, TRUE) ?: '<front>';
+    $url = $auth->processSLO(FALSE, NULL, FALSE, NULL, TRUE);
     $errors = $auth->getErrors();
 
     if (empty($errors)) {
@@ -280,7 +280,7 @@ function samlauth_sls() {
     drupal_set_message('SLS error: ' . $e->getMessage(), 'error');
   }
 
-  drupal_goto($url);
+  drupal_goto($url ?: '<front>');
 }
 
 /**
