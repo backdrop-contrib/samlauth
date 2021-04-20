@@ -143,6 +143,7 @@ class SamlService {
     $this->messenger = $messenger;
     $this->setStringTranslation($translation);
 
+    // @todo will this be unnecessary if we pass 'baseurl' to Saml2\Settings?
     if ($this->configFactory->get('samlauth.authentication')->get('use_proxy_headers')) {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
       SamlUtils::setProxyVars(TRUE);
@@ -791,6 +792,7 @@ class SamlService {
         'logoutRequestSigned' => (bool) $config->get('security_logout_requests_sign'),
         'logoutResponseSigned' => (bool) $config->get('security_logout_responses_sign'),
         'wantAssertionsEncrypted' => (bool) $config->get('security_assertions_encrypt'),
+        'wantAssertionsSigned' => (bool) $config->get('security_assertions_signed'),
         'wantMessagesSigned' => (bool) $config->get('security_messages_sign'),
         'requestedAuthnContext' => (bool) $config->get('security_request_authn_context'),
         'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),

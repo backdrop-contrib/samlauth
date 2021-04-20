@@ -532,13 +532,20 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    $form[$group]['security_assertions_signed'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Require assertions to be signed'),
+      '#description' => $this->t('Assertion elements in login responses from the IdP are expected to be signed. (When strict validation is turned off, this check is not performed but the expectation is still specified in the SP metadata.)'),
+      '#default_value' => $config->get('security_assertions_signed'),
+    ];
+
     $form[$group]['security_assertions_encrypt'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require assertions to be encrypted'),
       // The metadata changes if wantAssertionsEncrypted OR wantNameIdEncrypted
       // are set. But we don't have wantNameIdEncrypted yet, so we'll describe
       // this option as the way to change the metadata.
-      '#description' => $this->t("Assertion elements in responses from the IdP are expected to be encrypted. (When strict validation is turned off, this option still has the effect of specifying this expectation in the SP metadata.)"),
+      '#description' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted. (When strict validation is turned off, this check is not performed but the expectation is still specified in the SP metadata.)'),
       '#default_value' => $config->get('security_assertions_encrypt'),
     ];
 
