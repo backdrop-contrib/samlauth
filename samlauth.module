@@ -162,10 +162,15 @@ function samlauth_get_config() {
       'x509cert' => variable_get('samlauth_idp_x509_certificate'),
     ),
     'security' => array(
-      'authnRequestsSigned' => variable_get('samlauth_security_authn_requests_sign') ? TRUE : FALSE,
-      'wantMessagesSigned' => variable_get('samlauth_security_messages_sign') ? TRUE : FALSE,
-      'wantNameIdSigned' => variable_get('samlauth_security_name_id_sign') ? TRUE : FALSE,
-      'requestedAuthnContext' => variable_get('samlauth_security_request_authn_context') ? TRUE : FALSE,
+      'authnRequestsSigned' => (bool) variable_get('samlauth_security_authn_requests_sign'),
+      'logoutRequestSigned' => (bool) variable_get('samlauth_logout_requests_sign'),
+      'logoutResponseSigned' => (bool) variable_get('samlauth_logout_responses_sign'),
+      'wantMessagesSigned' => (bool) variable_get('samlauth_security_messages_sign'),
+      'wantAssertionsSigned' => (bool) variable_get('samlauth_security_assertions_signed'),
+      'wantAssertionsEncrypted' => (bool) variable_get('samlauth_security_assertions_encrypted'),
+      'wantNameId' => (bool) variable_get('samlauth_want_name_id', TRUE),
+      'requestedAuthnContext' => (bool) variable_get('samlauth_security_request_authn_context'),
+      'lowercaseUrlencoding' => (bool) variable_get('samlauth_lowercase_url_encoding'),
     ),
   );
   // Passing NULL for signatureAlgorithm would be OK, but not ''.
@@ -256,7 +261,7 @@ function samlauth_sls() {
     // - We're processing a LogoutResponse, which will return NULL; the
     //   RelayState is meant for us to process.
     $auth = samlauth_get_saml2_auth();
-    $url = $auth->processSLO(FALSE, NULL, FALSE, NULL, TRUE);
+    $url = $auth->processSLO(FALSE, NULL, (bool) variable_get('samlauth_logout_reuse_sigs'), NULL, TRUE);
     $errors = $auth->getErrors();
 
     if (empty($errors)) {
