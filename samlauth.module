@@ -138,6 +138,7 @@ function samlauth_check_saml_user($form, $form_state) {
  */
 function samlauth_get_config() {
   $config = array(
+    'baseurl' => url('saml', array('absolute' => TRUE)) . '/',
     'strict' => (bool) variable_get('samlauth_security_strict'),
     'sp' => array(
       'entityId' => variable_get('samlauth_sp_entity_id'),
