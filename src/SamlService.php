@@ -208,7 +208,7 @@ class SamlService {
     $config = $this->configFactory->get('samlauth.authentication');
     $url = $this->getSamlAuth()->login($return_to, $parameters, FALSE, FALSE, TRUE, $config->get('request_set_name_id_policy') ?? TRUE);
     if ($config->get('debug_log_saml_out')) {
-      $this->logger->debug('Sending SAML login request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
+      $this->logger->debug('Sending SAML authentication request: <pre>@message</pre>', ['@message' => $this->getSamlAuth()->getLastRequestXML()]);
     }
     return $url;
   }
@@ -339,7 +339,7 @@ class SamlService {
   }
 
   /**
-   * Processes a SAML login response; throws an exception if it isn't valid.
+   * Processes a SAML authentication response; throws an exception if invalid.
    *
    * The mechanics of checking whether there are any errors are not so
    * straightforward, so this helper function hopes to abstract that away.
@@ -365,14 +365,14 @@ class SamlService {
     if ($errors) {
       // We have one or multiple error types / short descriptions, and one
       // 'reason' for the last error.
-      throw new \RuntimeException('Error(s) encountered during processing of login response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $auth->getLastErrorReason());
+      throw new \RuntimeException('Error(s) encountered during processing of authentication response. Type(s): ' . implode(', ', array_unique($errors)) . '; reason given for last error: ' . $auth->getLastErrorReason());
     }
     if (!$auth->isAuthenticated()) {
       // Looking at the current code, isAuthenticated() just means "response
       // is valid" because it is mutually exclusive with $errors and exceptions
       // being thrown. So we should never get here. We're just checking it in
       // case the library code changes - in which case we should reevaluate.
-      throw new \RuntimeException('SAML login response was apparently not fully validated even when no error was provided.');
+      throw new \RuntimeException('SAML authentication response was apparently not fully validated even when no error was provided.');
     }
   }
 

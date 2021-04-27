@@ -557,7 +557,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form[$group]['security_want_name_id'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require NameID'),
-      '#description' => $this->t('The login response from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
+      '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
       // This is one of the few checkboxes that must be TRUE on existing
       // installations where the checkbox didn't exist before (in older module
       // versions). Others get their default only from the config/install file.
@@ -605,7 +605,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form[$group]['security_assertions_signed'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require assertions to be signed'),
-      '#description' => $this->t('Assertion elements in login responses from the IdP are expected to be signed. (When strict validation is turned off, this check is not performed but the expectation is still specified in the SP metadata.)'),
+      '#description' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed. (When strict validation is turned off, this check is not performed but the expectation is still specified in the SP metadata.)'),
       '#default_value' => $config->get('security_assertions_signed'),
     ];
 
