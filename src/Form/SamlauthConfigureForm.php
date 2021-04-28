@@ -624,11 +624,25 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'fieldset',
     ];
 
+    $form['other']['use_base_url'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Use Drupal base URL in toolkit library"),
+      '#description' => $this->t('This is supposedly a better version of the below that works for all Drupal configurations and (for reverse proxies) only uses HTTP headers/hostnames when you configured them as <a href=":trusted">trusted</a>. Please turn this on and file an issue if it doesn\'t work for you; it will be standard and non-configurable (and the above option will be removed) in the next major module versoin.', [
+        ':trusted' => 'https://www.drupal.org/docs/installing-drupal/trusted-host-settings#s-trusted-host-security-setting-in-drupal-8',
+      ]),
+      '#default_value' => $config->get('use_base_url'),
+    ];
+
     $form['other']['use_proxy_headers'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t("Use 'X-Forwarded-*' headers."),
-      '#description' => $this->t("The SAML Toolkit will use 'X-Forwarded-*' HTTP headers (if present) for constructing/identifying the SP URL in sent/received messages. This is likely necessary if your SP is behind a reverse proxy, and your Drupal installation is not already <a href=\"https://www.drupal.org/node/425990\" target=\"_blank\">dealing with this</a>."),
+      '#title' => $this->t("Use 'X-Forwarded-*' headers (deprecated)"),
+      '#description' => $this->t("The SAML Toolkit will use 'X-Forwarded-*' HTTP headers (if present) for constructing/identifying the SP URL in sent/received messages. This used to be necessary if your SP is behind a reverse proxy."),
       '#default_value' => $config->get('use_proxy_headers'),
+      '#states' => [
+        'disabled' => [
+          ':input[name="use_base_url"]' => ['checked' => TRUE],
+        ],
+      ],
     ];
 
     $form['debugging'] = [
@@ -836,6 +850,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))
       ->set('strict', $form_state->getValue('strict'))
       ->set('use_proxy_headers', $form_state->getValue('use_proxy_headers'))
+      ->set('use_base_url', $form_state->getValue('use_base_url'))
       ->set('debug_display_error_details', $form_state->getValue('debug_display_error_details'))
       ->set('debug_log_saml_out', $form_state->getValue('debug_log_saml_out'))
       ->set('debug_log_saml_in', $form_state->getValue('debug_log_saml_in'))

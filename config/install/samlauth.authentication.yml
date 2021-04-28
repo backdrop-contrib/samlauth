@@ -43,3 +43,5 @@ security_want_name_id: true
 # was saved without explicitly checking the checkbox. We'll set it to True for
 # new installations.
 security_request_authn_context: true
+# False on older installs; will be removed (and be 'standard true') in v4.x.
+use_base_url: true

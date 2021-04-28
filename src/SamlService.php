@@ -23,6 +23,7 @@ use OneLogin\Saml2\Error as SamlError;
 use OneLogin\Saml2\Utils as SamlUtils;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
@@ -88,6 +89,13 @@ class SamlService {
   protected $eventDispatcher;
 
   /**
+   * The request stack.
+   *
+   * @var \Symfony\Component\HttpFoundation\RequestStack
+   */
+  protected $requestStack;
+
+  /**
    * Private store for SAML session data.
    *
    * @var \Drupal\Core\TempStore\PrivateTempStore
@@ -130,6 +138,8 @@ class SamlService {
    *   A logger instance.
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $event_dispatcher
    *   The event dispatcher.
+   * @param \Symfony\Component\HttpFoundation\RequestStack $request_stack
+   *   The request stack.
    * @param \Drupal\Core\TempStore\PrivateTempStoreFactory $temp_store_factory
    *   A temp data store factory object.
    * @param \Drupal\Core\Flood\FloodInterface $flood
@@ -141,21 +151,27 @@ class SamlService {
    * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
    *   The string translation service.
    */
-  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
+  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
     $this->externalAuth = $external_auth;
     $this->authmap = $authmap;
     $this->configFactory = $config_factory;
     $this->entityTypeManager = $entity_type_manager;
     $this->logger = $logger;
     $this->eventDispatcher = $event_dispatcher;
+    $this->requestStack = $request_stack;
     $this->privateTempStore = $temp_store_factory->get('samlauth');
     $this->flood = $flood;
     $this->currentUser = $current_user;
     $this->messenger = $messenger;
     $this->setStringTranslation($translation);
 
-    // @todo will this be unnecessary if we pass 'baseurl' to Saml2\Settings?
-    if ($this->configFactory->get('samlauth.authentication')->get('use_proxy_headers')) {
+    $config = $this->configFactory->get('samlauth.authentication');
+    // setProxyVars lets the SAML PHP Toolkit use 'X-Forwarded-*' HTTP headers
+    // for identifying the SP URL, but we should pass the Drupal/Symfony base
+    // URL to into the toolkit instead. That uses headers/trusted values in the
+    // same way as the rest of Drupal (as configured in settings.php).
+    // @todo remove this in v4.x
+    if ($config->get('use_proxy_headers') && !$config->get('use_base_url')) {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
       SamlUtils::setProxyVars(TRUE);
     }
@@ -726,7 +742,16 @@ class SamlService {
    */
   protected function getSamlAuth() {
     if (!isset($this->samlAuth)) {
-      $this->samlAuth = new Auth(static::reformatConfig($this->configFactory->get('samlauth.authentication')));
+      $base_url = '';
+      $config = $this->configFactory->get('samlauth.authentication');
+      if ($config->get('use_base_url')) {
+        $request = $this->requestStack->getCurrentRequest();
+        // The 'base url' for the SAML Toolkit is apparently 'all except the
+        // last part of the endpoint URLs'. (Whoever wants a better explanation
+        // can try to extract it from e.g. Utils::getSelfRoutedURLNoQuery().)
+        $base_url = $request->getSchemeAndHttpHost() . $request->getBaseUrl() . '/saml';
+      }
+      $this->samlAuth = new Auth(static::reformatConfig($config, $base_url));
     }
 
     return $this->samlAuth;
@@ -784,11 +809,13 @@ class SamlService {
    *
    * @param \Drupal\Core\Config\ImmutableConfig $config
    *   The module configuration.
+   * @param string $base_url
+   *   (Optional) base URL to set.
    *
    * @return array
    *   The library configuration array.
    */
-  protected static function reformatConfig(ImmutableConfig $config) {
+  protected static function reformatConfig(ImmutableConfig $config, $base_url = '') {
     // Check if we want to load the certificates from a folder. Either folder or
     // cert+key settings should be defined. If both are defined, "folder" is the
     // preferred method and we ignore cert/path values; we don't do more
@@ -854,6 +881,9 @@ class SamlService {
     $sig_alg = $config->get('security_signature_algorithm');
     if ($sig_alg) {
       $library_config['security']['signatureAlgorithm'] = $sig_alg;
+    }
+    if ($base_url) {
+      $library_config['baseurl'] = $base_url;
     }
 
     // Check for the presence of a multi cert situation.
