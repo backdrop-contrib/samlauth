@@ -109,3 +109,5 @@ samlauth.authentication:
       type: boolean
     use_proxy_headers:
       type: boolean
+    use_base_url:
+      type: boolean
