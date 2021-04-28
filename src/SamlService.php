@@ -796,7 +796,6 @@ class SamlService {
         'wantMessagesSigned' => (bool) $config->get('security_messages_sign'),
         'requestedAuthnContext' => (bool) $config->get('security_request_authn_context'),
         'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),
-        'signatureAlgorithm' => $config->get('security_signature_algorithm'),
         // This is the first setting that is TRUE by default AND must be TRUE
         // on existing installations that didn't have the setting before, so
         // it's the first one to get a default value. (If we didn't have the
@@ -806,6 +805,10 @@ class SamlService {
       ],
       'strict' => (bool) $config->get('strict'),
     ];
+    $sig_alg = $config->get('security_signature_algorithm');
+    if ($sig_alg) {
+      $library_config['security']['signatureAlgorithm'] = $sig_alg;
+    }
 
     // Check for the presence of a multi cert situation.
     $multi = $config->get('idp_cert_type');
