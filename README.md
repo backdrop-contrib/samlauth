@@ -150,14 +150,16 @@ The most important configuration value to get right from the start, is the
 "Unique ID attribute". Each user logging in through SAML needs to be identified
 with a unique value that never changes over time. This value is stored by
 Drupal in the authmap table. (If you make a mistake configuring things here,
-all samlauth entries should be removed from the authmap table after fixing the
-configuration.)
+all authmap entries should be removed after fixing the configuration. A UI
+screen for this exists at admin/config/people/saml/authmap.)
 
 This value must get sent from the IdP as an 'attribute' in the SAML response,
 along with other attributes containing information like the user name and
 email. (SAML also has the concept of "NameID" to use for this unique value
 instead of attributes, but this Drupal module does not support that yet. If
-you need this: check whether the saml_sp module works for your use case.)
+you must use an 'email' NameID for this purpose: check whether the saml_sp
+module works for your use case. Otherwise please check the status of
+https://www.drupal.org/project/samlauth/issues/3211380.)
 
 To configure the Unique ID and other attributes, you need to know the names of
 the attributes which the IdP sends in its login assertions. If you do not know
@@ -165,9 +167,10 @@ this information, you need to inspect the contents of such an assertion while a
 user tries to log in. See the section on Debugging.
 
 If there is absolutely no unique non-changing value to set as Unique ID, you
-can take the username or email attribute - but please note that a new Drupal
-user will be created every time that username/email is changed on the IdP
-side.
+can take the username or email attribute. However, please note that each time
+that username/email is changed on the IdP side, a new user gets created. Or
+depending on your configuratoin, the SAML user has the ability to log in as
+a different existing Drupal user, which poses a security risk.
 
 Other settings / checkboxes are hopefully self-explanatory.
 
