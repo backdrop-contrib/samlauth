@@ -456,32 +456,7 @@ class SamlService {
       }
 
       if ($account) {
-        $allowed_roles = $config->get('map_users_roles');
-        $disallowed_roles = array_diff($account->getRoles(), $allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
-        if ($disallowed_roles) {
-          $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
-            '@saml_id' => $unique_id,
-            '@uid' => $account->id(),
-            '@roles' => implode(', ', $disallowed_roles),
-          ]);
-          throw new UserVisibleException('A local user account matching your login already exists, and we are disallowed from linking it.');
-        }
-        $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
-        // linkExistingAccount() does not tell us whether the link was actually
-        // successful; it silently continues if the account was already linked
-        // to a different unique ID. This would mean a user who has the power
-        // to change their user name / email on the IdP side, potentially has
-        // the power to log into different accounts (as long as they only log
-        // into accounts that already are linked to a different IdP user).
-        $linked_id = $this->authmap->get($account->id(), 'samlauth');
-        if ($linked_id != $unique_id) {
-          $this->logger->warning('Denying login: existing Drupal account @uid matches SAML login for unique ID @saml_id, but the account is already linked to SAML login ID @linked_id. If a new account should be created despite the earlier match, temporarily turn off matching. If this login should be linked to user @uid, remove the earlier link.', [
-            '@uid' => $account->id(),
-            '@saml_id' => $unique_id,
-            '@linked_id' => $linked_id,
-          ]);
-          throw new UserVisibleException('Your login data match an earlier login by a different SAML user.');
-        }
+        $this->linkExistingAccount($unique_id, $account);
         $first_saml_login = TRUE;
       }
     }
@@ -518,6 +493,47 @@ class SamlService {
       $this->synchronizeUserAttributes($account, FALSE, $first_saml_login);
 
       $this->externalAuth->userLoginFinalize($account, $unique_id, 'samlauth');
+    }
+  }
+
+  /**
+   * Link a pre-existing Drupal user to a given authname.
+   *
+   * @param string $unique_id
+   *   The unique ID (attribute value) contained in the SAML response.
+   * @param \Drupal\Core\Session\AccountInterface|null $account
+   *   The existing user account derived from the unique ID, if any.
+   *
+   * @throws \Drupal\samlauth\UserVisibleException
+   *   If linking fails or is denied.
+   */
+  protected function linkExistingAccount($unique_id, UserInterface $account) {
+    $allowed_roles = $this->configFactory->get('samlauth.authentication')->get('map_users_roles');
+    $disallowed_roles = array_diff($account->getRoles(), $allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
+    if ($disallowed_roles) {
+      $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
+        '@saml_id' => $unique_id,
+        '@uid' => $account->id(),
+        '@roles' => implode(', ', $disallowed_roles),
+      ]);
+      throw new UserVisibleException('A local user account matching your login already exists, and we are disallowed from linking it.');
+    }
+    $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
+
+    // linkExistingAccount() does not tell us whether the link was actually
+    // successful; it silently continues if the account was already linked
+    // to a different unique ID. This would mean a user who has the power
+    // to change their user name / email on the IdP side, potentially has
+    // the power to log into different accounts (as long as they only log
+    // into accounts that already are linked to a different IdP user).
+    $linked_id = $this->authmap->get($account->id(), 'samlauth');
+    if ($linked_id != $unique_id) {
+      $this->logger->warning('Denying login: existing Drupal account @uid matches SAML login for unique ID @saml_id, but the account is already linked to SAML login ID @linked_id. If a new account should be created despite the earlier match, temporarily turn off matching. If this login should be linked to user @uid, remove the earlier link.', [
+        '@uid' => $account->id(),
+        '@saml_id' => $unique_id,
+        '@linked_id' => $linked_id,
+      ]);
+      throw new UserVisibleException('Your login data match an earlier login by a different SAML user.');
     }
   }
 
