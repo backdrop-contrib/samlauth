@@ -841,6 +841,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('security_logout_requests_sign', $form_state->getValue('security_logout_requests_sign'))
       ->set('security_logout_responses_sign', $form_state->getValue('security_logout_responses_sign'))
       ->set('security_assertions_encrypt', $form_state->getValue('security_assertions_encrypt'))
+      ->set('security_assertions_signed', $form_state->getValue('security_assertions_signed'))
       ->set('security_lowercase_url_encoding', $form_state->getValue('security_lowercase_url_encoding'))
       ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))
       ->set('request_set_name_id_policy', $form_state->getValue('request_set_name_id_policy'))
