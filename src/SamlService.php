@@ -426,8 +426,8 @@ class SamlService {
       if (!$account) {
         $name = $this->getAttributeByConfig('user_name_attribute');
         if ($name && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
+          $account = current($account_search);
           if ($config->get('map_users_name')) {
-            $account = current($account_search);
             $this->logger->info('SAML login for name @name (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', ['@name' => $name, '@uid' => $account->id()]);
           }
           else {
@@ -443,8 +443,8 @@ class SamlService {
       if (!$account) {
         $mail = $this->getAttributeByConfig('user_mail_attribute');
         if ($mail && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
+          $account = current($account_search);
           if ($config->get('map_users_mail')) {
-            $account = current($account_search);
             $this->logger->info('SAML login for email @mail (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', ['@mail' => $mail, '@uid' => $account->id()]);
           }
           else {
