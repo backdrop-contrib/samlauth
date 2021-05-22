@@ -244,6 +244,10 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $cert_folder || (!$sp_x509_certificate && !$sp_private_key) ? 'folder' : 'fields',
     ];
 
+    // @todo support 'x509certNew' - which shows up in metadata. (This amounts
+    //   to configuring two key/cert pairs here I guess, though we don't use
+    //   the new key yet.)
+    // @todo Links to pages that decode/show info about the key or cert.
     $form['service_provider']['sp_x509_certificate'] = [
       '#type' => 'textarea',
       '#title' => $this->t('x509 Certificate'),
@@ -312,7 +316,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Identity Provider'),
     ];
 
-    // @todo Allow a user to automagically populate this by providing a metadata URL for the IdP.
+    // @todo Allow a user to automagically populate this by providing a
+    //   metadata URL for the IdP. OneLogin's IdPMetadataParser can likely help.
     // $form['identity_provider']['idp_metadata_url'] = [
     // '#type' => 'url',
     // '#title' => $this->t('Metadata URL'),
@@ -347,6 +352,11 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('idp_change_password_service'),
     ];
 
+    // The wording of this / the fact that we implemented either key rollover
+    // or signing + encryption is a limitation on our side, not the toolkit.
+    // We could have multiple 'signing' certs (which are used in order to try
+    // and validate signatures) as well as an 'encryption' cert, (The library
+    // accepts multiple 'encryption' certs but only uses the first.)
     $form['identity_provider']['idp_cert_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Single/Multi Cert'),
@@ -357,6 +367,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
         'encryption' => $this->t('Unique Signing/Encryption'),
       ],
       '#default_value' => $config->get('idp_cert_type') ? $config->get('idp_cert_type') : 'single',
+      '#description' => $this->t("Key Rollover: both certificates are tried to verify any signatures. Unique Signing/Encryption: does nothing so far (because we don't encrypt anything)."),
+      // @todo fix if we start supporting NameIdEncrypted, which is the only
+      //   option that governs encrypting anything (NameID in logout requests).
     ];
 
     $form['identity_provider']['idp_x509_certificate'] = [
@@ -369,7 +382,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['identity_provider']['idp_x509_certificate_multi'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Secondary x509 Certificate'),
-      '#description' => $this->t('Secondary public x509 certificate of the IdP. This is a signing key if using "Key Rollover Phase" and an encryption key if using "Unique Signing/Encryption."'),
       '#default_value' => $this->formatKeyOrCert($config->get('idp_x509_certificate_multi'), TRUE),
       '#states' => [
         'invisible' => [
