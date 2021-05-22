@@ -99,19 +99,18 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $config = $this->configFactory()->get(SamlController::CONFIG_OBJECT_NAME);
 
     $form['saml_login_logout'] = [
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
       '#title' => $this->t('Login / Logout'),
     ];
 
     // Show note for enabling "log in" or "log out" menu link item.
     if (Url::fromRoute('entity.menu.edit_form', ['menu' => 'account'])->access()) {
-      $form['saml_login_logout']['menu_item'] = [
-        '#type' => 'markup',
-        '#markup' => '<em>' . $this->t('Note: You <a href="@url">may want to enable</a> the "log in" / "log out" menu item and disable the original one.', [
+      $form['saml_login_logout']['#description'] =
+        '<em>' . $this->t('Note: You <a href="@url">may want to enable</a> the "log in" / "log out" menu item and disable the original one.', [
           '@url' => Url::fromRoute('entity.menu.edit_form', ['menu' => 'account'])
             ->toString(),
-        ]) . '</em>',
-      ];
+        ]) . '</em>';
     }
 
     $form['saml_login_logout']['login_menu_item_title'] = [
@@ -196,8 +195,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
 
     $form['service_provider'] = [
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
       '#title' => $this->t('Service Provider'),
+      '#description' => $this->t("Metadata is not exposed by default; see <a href=\":permissions\">permissions</a>. It is influenced by this configuration section, as well as by some more advanced SAML message options below. Those options often don't matter for getting SAML login into Drupal to work.", [
+        ':permissions' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
+      ]),
     ];
 
     $form['service_provider']['config_info'] = [
@@ -215,9 +218,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
       '#empty' => [],
       '#list_type' => 'ul',
-      '#suffix' => $this->t("Metadata is not exposed by default; see <a href=\":permissions\">permissions</a>. The contents are influenced by this configuration section, as well as by some more advanced SAML message options below. Those options often don't matter for getting SAML login into Drupal to work.", [
-        ':permissions' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
-      ]),
     ];
 
     $form['service_provider']['sp_entity_id'] = [
@@ -281,7 +281,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
 
     $form['service_provider']['caching'] = [
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
       '#title' => $this->t('Caching / Validity'),
       '#description' => $this->t('These values are low for newly installed sites, and should be raised when login is working.'),
     ];
@@ -306,7 +307,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
 
     $form['identity_provider'] = [
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
       '#title' => $this->t('Identity Provider'),
     ];
 
@@ -340,8 +342,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['identity_provider']['idp_change_password_service'] = [
       '#type' => 'url',
-      '#title' => $this->t('Change Password Service'),
-      '#description' => $this->t('URL where users will be directed to change their password.'),
+      '#title' => $this->t('Change Password URL'),
+      '#description' => $this->t("URL where users will be directed to change their password. (This is something your IdP might implement but it's outside of the SAML specification. All we do is just redirect /saml/changepw to the configured URL.)"),
       '#default_value' => $config->get('idp_change_password_service'),
     ];
 
@@ -378,7 +380,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['user_info'] = [
       '#title' => $this->t('User Info and Syncing'),
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
     ];
 
     $form['user_info']['unique_id_attribute'] = [
@@ -477,7 +480,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['security'] = [
       '#title' => $this->t('SAML Message Construction'),
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
     ];
 
     $form['security']['security_authn_requests_sign'] = [
@@ -547,14 +551,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('sp_name_id_format'),
     ];
 
-    // Just mucking around with grouping of options a bit...
     $form['responses'] = [
       '#title' => $this->t('SAML Message Validation'),
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
     ];
-    $group = isset($form['responses']) ? 'responses' : 'security';
 
-    $form[$group]['security_want_name_id'] = [
+    $form['responses']['security_want_name_id'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require NameID'),
       '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
@@ -576,21 +579,21 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // no downside to that and it would enable us to always set TRUE / get rid
     // of this option in a future version of the SAML Toolkit library.
     // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
-    $form[$group]['security_logout_reuse_sigs'] = [
+    $form['responses']['security_logout_reuse_sigs'] = [
       '#type' => 'checkbox',
       '#title' => $this->t("Retrieve logout signature parameters from \$_SERVER['REQUEST']"),
       '#description' => $this->t('Validation of logout requests/responses can fail on some IdPs (among others, ADFS) if this option is not set. This happens independently of the  "Strict validation" option.'),
       '#default_value' => $config->get('security_logout_reuse_sigs'),
     ];
 
-    $form[$group]['strict'] = [
+    $form['responses']['strict'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Strict validation of responses'),
       '#description' => $this->t('Validation failures (partly based on the next options) will cause the SAML conversation to be terminated. In production environments, this <em>must</em> be set.'),
       '#default_value' => $config->get('strict'),
     ];
 
-    $form[$group]['security_messages_sign'] = [
+    $form['responses']['security_messages_sign'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require messages to be signed'),
       '#description' => $this->t('Responses (and logout requests) from the IdP are expected to be signed.'),
@@ -602,14 +605,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
-    $form[$group]['security_assertions_signed'] = [
+    $form['responses']['security_assertions_signed'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require assertions to be signed'),
       '#description' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed. (When strict validation is turned off, this check is not performed but the expectation is still specified in the SP metadata.)'),
       '#default_value' => $config->get('security_assertions_signed'),
     ];
 
-    $form[$group]['security_assertions_encrypt'] = [
+    $form['responses']['security_assertions_encrypt'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require assertions to be encrypted'),
       // The metadata changes if wantAssertionsEncrypted OR wantNameIdEncrypted
@@ -621,7 +624,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['other'] = [
       '#title' => $this->t('Other'),
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
     ];
 
     $form['other']['use_base_url'] = [
@@ -647,7 +651,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['debugging'] = [
       '#title' => $this->t('Debugging'),
-      '#type' => 'fieldset',
+      '#type' => 'details',
+      '#open' => TRUE,
     ];
 
     // This option has effect on signing of (login + logout) requests and
