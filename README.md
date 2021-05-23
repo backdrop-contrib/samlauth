@@ -97,17 +97,17 @@ process is /saml/login.
 
 ### Service Provider:
 
-Unless you want to store the keys in the database: create a folder in a
-'private' location (accessible by Drupal but not accessible over the web),
-named "certs". Place the files sp.key and sp.crt inside them. (These specific
-folder / file names are mandatory.) Configure the folder name in the
-"Certificate Folder" element.
-
 The Entity ID can be any value, used to identify this particular SP / Drupal
 application to the IdP - as long as it is unique among all SPs known by the
 IdP. (Many SPs make it equal to the URL for the application or metadata, but
 that's just a convention. Choose anything you like - unless the organisation
 operating the IdP is already mandating a specific value.)
+
+Place your SSL certificate and private key in a 'private' location on the web
+server (accessible by Drupal but not accessible over the web) and enter the
+file names. Alternatively, don't put them on the server and enter the full
+cert/key (contents of the files); this last thing, saving a private key in
+configuration / the Drupal database, is generally considered less secure.
 
 After saving this configuration, the metadata URL should contain all
 information (as an XML file) necessary for the IdP to configure our information
@@ -120,9 +120,8 @@ can provide information to the (people administering the) IdP:
 - go to admin/people/permissions#module-samlauth to enable permission to view
   the metadata, and pass on the metadata URL
 - or: save the XML file from the metadata URL (/saml/metadata) and pass it on
-- or: just give them the Entity ID, the public certificate (the file sp.crt)
-  and the URLs displayed in the "Service Provider" section of the configuration
-  screen.
+- or: just give them the Entity ID, the public certificate and the URLs 
+  displayed in the "Service Provider" section of the configuration screen.
 
 ### Identity Provider:
 

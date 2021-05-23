@@ -73,3 +73,17 @@ function samlauth_update_8303() {
     $config->save(TRUE);
   }
 }
+
+/**
+ * Change 'Folder name' config for SP cert/key into two separate file names.
+ */
+function samlauth_update_8304() {
+  $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
+  $cert_folder = $config->get('sp_cert_folder');
+  if ($cert_folder && is_string($cert_folder)) {
+    $config->set('sp_x509_certificate', "file:$cert_folder/certs/sp.crt");
+    $config->set('sp_private_key', "file:$cert_folder/certs/sp.key");
+    $config->clear('sp_cert_folder');
+    $config->save(TRUE);
+  }
+}

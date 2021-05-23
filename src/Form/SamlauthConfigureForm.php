@@ -227,22 +227,63 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('sp_entity_id'),
     ];
 
-    $cert_folder = $config->get('sp_cert_folder');
     $sp_x509_certificate = $config->get('sp_x509_certificate');
     $sp_private_key = $config->get('sp_private_key');
+    // @todo remove reference to $cert_folder in 4.x.
+    $cert_folder = $config->get('sp_cert_folder');
+    if ($cert_folder && is_string($cert_folder)) {
+      // Update function hasn't run yet.
+      $sp_x509_certificate = "file:$cert_folder/certs/sp.crt";
+      $sp_private_key = "file:$cert_folder/certs/sp.key";
+    }
+    $sp_cert_type = strstr($sp_x509_certificate, ':', TRUE);
+    $sp_key_type = strstr($sp_private_key, ':', TRUE);
+    if ($sp_cert_type) {
+      $sp_x509_certificate = substr($sp_x509_certificate, strlen($sp_cert_type) + 1);
+    }
+    else {
+      $sp_cert_type = 'config';
+    }
+    if ($sp_key_type) {
+      $sp_private_key = substr($sp_private_key, strlen($sp_key_type) + 1);
+    }
+    else {
+      $sp_key_type = 'config';
+    }
 
-    $form['service_provider']['sp_cert_type'] = [
+    if (!$form_state->getUserInput()) {
+      // Warn if the files don't exist; not on validation but on every form
+      // display. (They may be missing if we're looking at a copy of the site,
+      // and we still want to be able to test other form interactions.)
+      if ($sp_cert_type === 'file' && !file_exists($sp_x509_certificate)) {
+        $this->messenger()->addWarning($this->t('SP certificate file is missing.'));
+      }
+      if ($sp_key_type === 'file' && !file_exists($sp_private_key)) {
+        $this->messenger()->addWarning($this->t('SP private key file is missing.'));
+      }
+    }
+    $form['service_provider']['sp_certkey_type'] = [
       '#type' => 'select',
-      '#title' => $this->t('Type of configuration to save for the certificates'),
+      '#title' => $this->t('Type of values to save for the certificate/key'),
       '#required' => TRUE,
       '#options' => [
-        'folder' => $this->t('Folder name'),
-        'fields' => $this->t('Cert/key value'),
+        'file_file' => $this->t('File'),
+        'config_config' => $this->t('Configuration'),
+        'config_file' => $this->t('Config/file'),
       ],
-      // Prefer folder over certs, like SamlService::reformatConfig(), but if
-      // both are empty then default to folder here.
-      '#default_value' => $cert_folder || (!$sp_x509_certificate && !$sp_private_key) ? 'folder' : 'fields',
     ];
+    if (isset($form['service_provider']['sp_certkey_type']['#options']["{$sp_cert_type}_{$sp_key_type}"])) {
+      $form['service_provider']['sp_certkey_type']['#default_value'] = "{$sp_cert_type}_{$sp_key_type}";
+    }
+    else {
+      // Config + file doesn't make sense; the key should be most secure.
+      $this->messenger()->addWarning($this->t('Invalid choice for key configuration type "@type".', [
+        '@type' => "{$sp_cert_type}/{$sp_key_type}",
+      ]));
+      // Default to config_config because it has the biggest input element.
+      $form['service_provider']['sp_certkey_type']['#default_value'] = 'config_config';
+      $sp_key_type = $sp_cert_type = FALSE;
+    }
 
     // @todo support 'x509certNew' - which shows up in metadata. (This amounts
     //   to configuring two key/cert pairs here I guess, though we don't use
@@ -250,12 +291,27 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // @todo Links to pages that decode/show info about the key or cert.
     $form['service_provider']['sp_x509_certificate'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('x509 Certificate'),
-      '#description' => $this->t("Public x509 certificate for the SP; line breaks and '-----BEGIN/END' lines are optional."),
-      '#default_value' => $this->formatKeyOrCert($config->get('sp_x509_certificate'), TRUE),
+      '#title' => $this->t('X.509 Certificate'),
+      '#description' => $this->t("Public X.509 certificate for the SP; line breaks and '-----BEGIN/END' lines are optional."),
+      '#default_value' => $sp_cert_type !== 'file' ? $this->formatKeyOrCert($sp_x509_certificate, TRUE) : '',
       '#states' => [
         'visible' => [
-          ':input[name="sp_cert_type"]' => ['value' => 'fields'],
+          ':input[name="sp_certkey_type"]' => [
+            ['value' => 'config_config'],
+            'or',
+            ['value' => 'config_file'],
+          ],
+        ],
+      ],
+    ];
+    $form['service_provider']['sp_cert_file'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('X.509 Certificate filename'),
+      '#description' => $this->t('Absolute filename.'),
+      '#default_value' => $sp_cert_type === 'file' ? $sp_x509_certificate : '',
+      '#states' => [
+        'visible' => [
+          ':input[name="sp_certkey_type"]' => ['value' => 'file_file'],
         ],
       ],
     ];
@@ -263,23 +319,26 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_private_key'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Private Key'),
-      '#description' => $this->t("Private key for the SP; line breaks and '-----BEGIN/END' lines are optional."),
-      '#default_value' => $this->formatKeyOrCert($config->get('sp_private_key'), TRUE, TRUE),
+      '#description' => $this->t("Absolute filename (preferred; ignore the input element's size), or private key for the SP; line breaks and '-----BEGIN/END' lines are optional."),
+      '#default_value' => $sp_key_type !== 'file' ? $this->formatKeyOrCert($sp_private_key, TRUE, TRUE) : '',
       '#states' => [
         'visible' => [
-          ':input[name="sp_cert_type"]' => ['value' => 'fields'],
+          ':input[name="sp_certkey_type"]' => ['value' => 'config_config'],
         ],
       ],
     ];
-
-    $form['service_provider']['sp_cert_folder'] = [
+    $form['service_provider']['sp_key_file'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Certificate folder'),
-      '#description' => $this->t('This folder must contain a certs/ subfolder containing certs/sp.key (private key) and certs/sp.crt (public cert) files. The names of the subfolder and files are mandated by the external SAML Toolkit library.'),
-      '#default_value' => $cert_folder,
+      '#title' => $this->t('Private Key filename'),
+      '#description' => $this->t('Absolute filename.'),
+      '#default_value' => $sp_key_type === 'file' ? $sp_private_key : '',
       '#states' => [
         'visible' => [
-          ':input[name="sp_cert_type"]' => ['value' => 'folder'],
+          ':input[name="sp_certkey_type"]' => [
+            ['value' => 'file_file'],
+            'or',
+            ['value' => 'config_file'],
+          ],
         ],
       ],
     ];
@@ -374,14 +433,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $form['identity_provider']['idp_x509_certificate'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('Primary x509 Certificate'),
-      '#description' => $this->t("Public x509 certificate of the IdP; line breaks and '-----BEGIN/END' lines are optional. (The external SAML Toolkit library does not allow configuring this as a separate file.)"),
+      '#title' => $this->t('Primary X.509 Certificate'),
+      '#description' => $this->t("Public X.509 certificate of the IdP; line breaks and '-----BEGIN/END' lines are optional. (The external SAML Toolkit library does not allow configuring this as a separate file.)"),
       '#default_value' => $this->formatKeyOrCert($config->get('idp_x509_certificate'), TRUE),
     ];
 
     $form['identity_provider']['idp_x509_certificate_multi'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('Secondary x509 Certificate'),
+      '#title' => $this->t('Secondary X.509 Certificate'),
       '#default_value' => $this->formatKeyOrCert($config->get('idp_x509_certificate_multi'), TRUE),
       '#states' => [
         'invisible' => [
@@ -741,7 +800,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state);
-    // @TODO: Validate cert. Might be able to just openssl_x509_parse().
     // Validate login/logout redirect URLs.
     $login_url_path = $form_state->getValue('login_redirect_url');
     if ($login_url_path) {
@@ -768,25 +826,64 @@ class SamlauthConfigureForm extends ConfigFormBase {
       }
     }
 
-    // Validate certs folder. Don't allow the user to save an empty folder; if
-    // they want to save incomplete config data, they can switch to 'fields'.
-    $sp_cert_type = $form_state->getValue('sp_cert_type');
-    $sp_cert_folder = $this->fixFolderPath($form_state->getValue('sp_cert_folder'));
-    if ($sp_cert_type == 'folder') {
-      if (empty($sp_cert_folder)) {
-        $form_state->setErrorByName('sp_cert_folder', $this->t('@name field is required.', ['@name' => $form['service_provider']['sp_cert_folder']['#title']]));
-      }
-      elseif (!file_exists($sp_cert_folder . '/certs/sp.key') || !file_exists($sp_cert_folder . '/certs/sp.crt')) {
-        $form_state->setErrorByName('sp_cert_folder', $this->t('The Certificate folder does not contain the required certs/sp.key or certs/sp.crt files.'));
-      }
-    }
-
     $duration = $form_state->getValue('metadata_valid_secs');
     if ($duration || $duration == '0') {
       $duration = $this->parseReadableDuration($form_state->getValue('metadata_valid_secs'));
       if (!$duration) {
         $form_state->setErrorByName('metadata_valid_secs', $this->t('Invalid period value.'));
       }
+    }
+
+    list ($sp_cert_type, $sp_key_type) = explode('_', $form_state->getValue('sp_certkey_type'), 2);
+    switch ($sp_cert_type) {
+      case 'config':
+        $sp_cert = $form_state->getValue('sp_x509_certificate');
+        // @todo Validate cert. Might be able to just openssl_x509_parse().
+        if (empty($sp_cert)) {
+          $form_state->setErrorByName('sp_x509_certificate', $this->t('SP certificate is required.'));
+        }
+        break;
+
+      case 'file':
+        $sp_cert_file = $form_state->getValue('sp_cert_file');
+        // Don't set error if file does not exist; set warning in form builder.
+        if (!$sp_cert_file) {
+          $form_state->setErrorByName('sp_cert_file', $this->t('SP certificate file is required.'));
+        }
+        elseif (is_string($sp_cert_file) && $sp_cert_file[0] !== '/') {
+          $form_state->setErrorByName('sp_cert_file', $this->t('SP certificate filename must be absolute.'));
+        }
+        break;
+
+      default:
+        $form_state->setErrorByName('sp_certkey_type', $this->t('Invalid/impossible choice for Type of values: "@value".', [
+          '@value' => "{$sp_cert_type}_{$sp_key_type}",
+        ]));
+    }
+    switch ($sp_key_type) {
+      case 'config':
+        $sp_key = $form_state->getValue('sp_private_key');
+        // @todo Validate key.
+        if (empty($sp_key)) {
+          $form_state->setErrorByName('sp_private_key', $this->t('SP private key is required.'));
+        }
+        break;
+
+      case 'file':
+        $sp_key_file = $form_state->getValue('sp_key_file');
+        // Don't set error if file does not exist; set warning in form builder.
+        if (!$sp_key_file) {
+          $form_state->setErrorByName('sp_key_file', $this->t('SP private key file is required.'));
+        }
+        elseif (is_string($sp_key_file) && $sp_key_file[0] !== '/') {
+          $form_state->setErrorByName('sp_key_file', $this->t('SP private key filename must be absolute.'));
+        }
+        break;
+
+      default:
+        $form_state->setErrorByName('sp_certkey_type', $this->t('Invalid/impossible choice for Type of values: "@value".', [
+          '@value' => "{$sp_cert_type}_{$sp_key_type}",
+        ]));
     }
   }
 
@@ -796,19 +893,22 @@ class SamlauthConfigureForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $config = $this->configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
 
-    // Only store variables related to the sp_cert_type value. (If the user
-    // switched from fields to folder, the cert/key values always get cleared
-    // so no unused security sensitive data gets saved in the database.)
-    $sp_cert_type = $form_state->getValue('sp_cert_type');
-    $sp_x509_certificate = '';
-    $sp_private_key = '';
-    $sp_cert_folder = '';
-    if ($sp_cert_type === 'folder') {
-      $sp_cert_folder = $this->fixFolderPath($form_state->getValue('sp_cert_folder'));
+    list ($sp_cert_type, $sp_key_type) = explode('_', $form_state->getValue('sp_certkey_type'), 2);
+    switch ($sp_cert_type) {
+      case 'file':
+        $sp_x509_certificate = 'file:' . $form_state->getValue('sp_cert_file');
+        break;
+
+      default:
+        $sp_x509_certificate = $this->formatKeyOrCert($form_state->getValue('sp_x509_certificate'), FALSE);
     }
-    else {
-      $sp_x509_certificate = $this->formatKeyOrCert($form_state->getValue('sp_x509_certificate'), FALSE);
-      $sp_private_key = $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
+    switch ($sp_key_type) {
+      case 'file':
+        $sp_private_key = 'file:' . $form_state->getValue('sp_key_file');
+        break;
+
+      default:
+        $sp_private_key = $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
     }
 
     // This is never 0 but can be ''. (NULL would mean same as ''.) Unlike
@@ -835,7 +935,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('sp_name_id_format', $form_state->getValue('sp_name_id_format'))
       ->set('sp_x509_certificate', $sp_x509_certificate)
       ->set('sp_private_key', $sp_private_key)
-      ->set('sp_cert_folder', $sp_cert_folder)
       ->set('metadata_cache_http', $form_state->getValue('metadata_cache_http'))
       ->set('idp_entity_id', $form_state->getValue('idp_entity_id'))
       ->set('idp_single_sign_on_service', $form_state->getValue('idp_single_sign_on_service'))
@@ -874,6 +973,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('debug_log_saml_in', $form_state->getValue('debug_log_saml_in'))
       ->set('debug_log_in', $form_state->getValue('debug_log_in'))
       ->set('debug_phpsaml', $form_state->getValue('debug_phpsaml'))
+      ->clear('sp_cert_folder')
       ->save();
 
     parent::submitForm($form, $form_state);
@@ -910,16 +1010,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
         SamlUtils::formatCert($value, $heads);
     }
     return $value;
-  }
-
-  /**
-   * Remove trailing slash from a folder name, to unify config values.
-   */
-  protected function fixFolderPath($path) {
-    if ($path) {
-      $path = rtrim($path, '/');
-    }
-    return $path;
   }
 
   /**

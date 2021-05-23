@@ -1055,16 +1055,31 @@ class SamlService {
       // favor of the hardcoded above $add_* logic and reading the key/cert
       // files inside this function, because this old method relies on a
       // specific hardcoded folder name / file names in the Settings class.
+      // @todo remove in 4.x: not applicable after samlauth_update_8304().
       if (!defined('ONELOGIN_CUSTOMPATH')) {
         define('ONELOGIN_CUSTOMPATH', "$cert_folder/");
       }
     }
     else {
       if ($add_cert) {
-        $library_config['sp']['x509cert'] = $add_cert === 'FAKE' ? 'dummy-value-to-subvert-validation' : $config->get('sp_x509_certificate');
+        $cert = $add_cert === 'FAKE' ? 'dummy-value-to-subvert-validation' : $config->get('sp_x509_certificate');
+        if (is_string($cert) && strpos($cert, 'file:') === 0) {
+          $cert = file_get_contents(substr($cert, 5));
+          if ($cert === FALSE) {
+            throw new SamlError('SP Public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
+          }
+        }
+        $library_config['sp']['x509cert'] = $cert;
       }
       if ($add_key) {
-        $library_config['sp']['privateKey'] = $config->get('sp_private_key');
+        $key = $config->get('sp_private_key');
+        if (is_string($key) && strpos($key, 'file:') === 0) {
+          $key = file_get_contents(substr($key, 5));
+          if ($key === FALSE) {
+            throw new SamlError('SP Private key not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+          }
+        }
+        $library_config['sp']['privateKey'] = $key;
       }
     }
     if ($add_idp_cert) {
