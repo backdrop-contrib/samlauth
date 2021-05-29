@@ -310,7 +310,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Identity Provider'),
     ];
 
-    // @TODO: Allow a user to automagically populate this by providing a metadata URL for the IdP.
+    // @todo Allow a user to automagically populate this by providing a metadata URL for the IdP.
     // $form['identity_provider']['idp_metadata_url'] = [
     // '#type' => 'url',
     // '#title' => $this->t('Metadata URL'),
@@ -666,7 +666,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // by the 'security_logout_reuse_sigs' option below, which has its own
     // issues.) This means that the default value should actually be TRUE.
     // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
-    // @TODO change default to TRUE; amend description (and d.o issue, and README
+    // @todo change default to TRUE; amend description (and d.o issue, and README
     $form['debugging']['security_lowercase_url_encoding'] = [
       '#type' => 'checkbox',
       '#title' => $this->t("'Raw' encode signatures when signing messages"),

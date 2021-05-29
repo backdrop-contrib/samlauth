@@ -52,7 +52,7 @@ class SamlTest extends BrowserTestBase {
     parent::setUp();
 
     // Import testshib config.
-    $config = drupal_get_path('module', 'samlauth') . '/test_resources/samlauth.authentication.yml';;
+    $config = drupal_get_path('module', 'samlauth') . '/test_resources/samlauth.authentication.yml';
     $config = file_get_contents($config);
     $config = Yaml::decode($config);
     \Drupal::configFactory()->getEditable('samlauth.authentication')->setData($config)->save();

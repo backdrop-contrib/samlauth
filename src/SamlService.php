@@ -415,7 +415,10 @@ class SamlService {
         $this->eventDispatcher->dispatch(SamlauthEvents::USER_LINK, $event);
         $account = $event->getLinkedAccount();
         if ($account) {
-          $this->logger->info('Existing user @name (@uid) was newly matched to SAML login attributes; linking user and logging in.', ['@name' => $account->getAccountName(), '@uid' => $account->id()]);
+          $this->logger->info('Existing user @name (@uid) was newly matched to SAML login attributes; linking user and logging in.', [
+            '@name' => $account->getAccountName(),
+            '@uid' => $account->id(),
+          ]);
         }
       }
       // Linking by name / email: we also select accounts if they are blocked
@@ -428,14 +431,20 @@ class SamlService {
         if ($name && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
           $account = current($account_search);
           if ($config->get('map_users_name')) {
-            $this->logger->info('SAML login for name @name (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', ['@name' => $name, '@uid' => $account->id()]);
+            $this->logger->info('SAML login for name @name (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', [
+              '@name' => $name,
+              '@uid' => $account->id(),
+            ]);
           }
           else {
             // We're not configured to link the account by name, but we still
             // looked it up by name so we can give a better error message than
             // the one caused by trying to save a new account with a duplicate
             // name, later.
-            $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account name @name and we are not configured to automatically link accounts.', ['@saml_id' => $unique_id, '@name' => $account->getAccountName()]);
+            $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account name @name and we are not configured to automatically link accounts.', [
+              '@saml_id' => $unique_id,
+              '@name' => $account->getAccountName(),
+            ]);
             throw new UserVisibleException('A local user account with your login name already exists, and we are disallowed from linking it.');
           }
         }
@@ -445,11 +454,17 @@ class SamlService {
         if ($mail && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
           $account = current($account_search);
           if ($config->get('map_users_mail')) {
-            $this->logger->info('SAML login for email @mail (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', ['@mail' => $mail, '@uid' => $account->id()]);
+            $this->logger->info('SAML login for email @mail (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', [
+              '@mail' => $mail,
+              '@uid' => $account->id(),
+            ]);
           }
           else {
             // Treat duplicate email same as duplicate name above.
-            $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account email @mail and we are not configured to automatically link the account.', ['@saml_id' => $unique_id, '@mail' => $account->getEmail()]);
+            $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account email @mail and we are not configured to automatically link the account.', [
+              '@saml_id' => $unique_id,
+              '@mail' => $account->getEmail(),
+            ]);
             throw new UserVisibleException('A local user account with your login email address name already exists, and we are disallowed from linking it.');
           }
         }
