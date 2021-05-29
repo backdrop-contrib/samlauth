@@ -5,6 +5,8 @@ services:
   samlauth.saml:
     class: Drupal\samlauth\SamlService
     arguments: ['@externalauth.externalauth', '@externalauth.authmap', '@config.factory', '@entity_type.manager', '@logger.channel.samlauth', '@event_dispatcher', '@request_stack', '@tempstore.private', '@flood', '@current_user', '@messenger', '@string_translation']
+    calls:
+      - [setKeyRepository, ['@?key.repository']]
   samlauth.event_subscriber.user_sync:
     class: Drupal\samlauth\EventSubscriber\UserSyncEventSubscriber
     arguments: ['@config.factory', '@entity_type.manager', '@typed_data_manager', '@email.validator', '@logger.channel.samlauth', '@messenger', '@string_translation']

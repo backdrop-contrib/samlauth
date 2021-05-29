@@ -43,6 +43,18 @@ class SamlauthConfigureForm extends ConfigFormBase {
   protected $token;
 
   /**
+   * The Key repository service.
+   *
+   * This is used as an indicator whether we can show a 'Key' selector on
+   * screen. This is when the key module is installed - not when the
+   * key_asymmetric module is installed. (The latter is necessary for entering
+   * public/private keys but reading them will work fine without it, it seems.)
+   *
+   * @var \Drupal\key\KeyRepositoryInterface
+   */
+  protected $keyRepository;
+
+  /**
    * Constructs a \Drupal\samlauth\Form\SamlauthConfigureForm object.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
@@ -53,12 +65,15 @@ class SamlauthConfigureForm extends ConfigFormBase {
    *   The PathValidator service.
    * @param \Drupal\Core\Utility\Token $token
    *   The token service.
+   * @param \Drupal\key\KeyRepositoryInterface|null $key_repository
+   *   The token service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, PathValidatorInterface $path_validator, Token $token) {
+  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, PathValidatorInterface $path_validator, Token $token, $key_repository) {
     parent::__construct($config_factory);
     $this->entityTypeManager = $entity_type_manager;
     $this->pathValidator = $path_validator;
     $this->token = $token;
+    $this->keyRepository = $key_repository;
   }
 
   /**
@@ -69,7 +84,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $container->get('config.factory'),
       $container->get('entity_type.manager'),
       $container->get('path.validator'),
-      $container->get('token')
+      $container->get('token'),
+      $container->get('key.repository', ContainerInterface::NULL_ON_INVALID_REFERENCE)
     );
   }
 
@@ -227,6 +243,42 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('sp_entity_id'),
     ];
 
+    // Create options for cert/key type select element, and list of Keys for
+    // 'key' select element.
+    $key_cert_type_options = [
+      'key_key' => $this->t('Key storage'),
+      'file_file' => $this->t('File'),
+      'config_config' => $this->t('Configuration'),
+      'key_file' => $this->t('Key/File'),
+      'key_config' => $this->t('Key/Config'),
+      'file_config' => $this->t('File/Config'),
+    ];
+    // List of certs, for selection in IdP section.
+    $selectable_public_certs = [];
+    // List of certs referencing a private key, for selection in SP section.
+    $selectable_public_keypairs = [];
+    $referenced_private_key_ids = [];
+    // List of keys that are selectable on their own, for selection in SP
+    // section if the cert type is file/config; these are not necessarily
+    // referenced from a certificate.
+    $selectable_private_keys = [];
+    if ($this->keyRepository) {
+      $selectable_private_keys = $this->keyRepository->getKeyNamesAsOptions(['type' => 'asymmetric_private']);
+      $keys = $this->keyRepository->getKeysByType('asymmetric_public');
+      foreach ($keys as $public_key_id => $key) {
+        $selectable_public_certs[$public_key_id] = $key->label();
+        $key_type_settings = $key->getKeyType()->getConfiguration();
+        if (!empty($key_type_settings['private_key'])) {
+          $selectable_public_keypairs[$public_key_id] = $key->label();
+          $referenced_private_key_ids[$public_key_id] = $key_type_settings['private_key'];
+        }
+      }
+    }
+    else {
+      unset($key_cert_type_options['key_key'], $key_cert_type_options['file_key'], $key_cert_type_options['config_key']);
+    }
+
+    // Get cert + key; see which types they are and do custom checks.
     $sp_private_key = $config->get('sp_private_key');
     $sp_cert = $config->get('sp_x509_certificate');
     $sp_new_cert = $config->get('sp_new_certificate');
@@ -240,6 +292,29 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $sp_key_type = strstr($sp_private_key, ':', TRUE);
     if ($sp_key_type) {
       $sp_private_key = substr($sp_private_key, strlen($sp_key_type) + 1);
+      if ($sp_key_type === 'key' && !isset($selectable_private_keys[$sp_private_key])) {
+        // Warn if the key doesn't exist. If so, we don't want to mess with the
+        // value (unlike when the cert doesn't exist; see below); let's add it
+        // to the 'selectable keys' so validation doesn't fail.
+        if ($this->keyRepository) {
+          if (!$form_state->getUserInput()) {
+            $this->messenger()->addWarning($this->t("Key entity '@key_name' for SP private key is missing.", [
+              '@key_name' => $sp_private_key,
+            ]));
+          }
+          $selectable_private_keys[$sp_private_key] = $this->t('@value (does not exist)', [
+            '@value' => $sp_private_key,
+          ]);
+        }
+        else {
+          // ...except if we cannot display 'selectable keys' at all.
+          if (!$form_state->getUserInput()) {
+            $this->messenger()->addWarning($this->t('Key module is disabled even though the SP private key has Key storage configured.'));
+          }
+          $sp_private_key = "key:$sp_private_key";
+          $sp_key_type = 'config';
+        }
+      }
     }
     elseif ($sp_private_key) {
       $sp_key_type = 'config';
@@ -247,6 +322,43 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $sp_cert_type = strstr($sp_cert, ':', TRUE);
     if ($sp_cert_type) {
       $sp_cert = substr($sp_cert, strlen($sp_cert_type) + 1);
+      if ($sp_cert_type === 'key') {
+        // Warn if the key doesn't exist; not on validation but on every form
+        // display. Display the original value (including "key:") in the
+        // 'config' textarea; if we put it in the select element just like the
+        // private key, we'd need to alter the validation code too too (to not
+        // derive the private key from this nonexistent key in this case). It
+        // may now fail validation (unlike with missing files).
+        if (!isset($selectable_public_keypairs[$sp_cert])) {
+          if (!$form_state->getUserInput()) {
+            if ($this->keyRepository) {
+              // Text differs from key, b/c reasons can be slightly different.
+              $this->messenger()->addWarning($this->t("Key entity '@key_name' for SP certificate is missing, or not referenced from a public certificate.", [
+                '@key_name' => $sp_cert,
+              ]));
+            }
+            else {
+              $this->messenger()->addWarning($this->t('Key module is disabled even though the SP certificate has Key storage configured.'));
+            }
+          }
+          $sp_cert = "key:$sp_cert";
+          $sp_cert_type = 'config';
+        }
+        elseif ($sp_key_type === 'key' && $referenced_private_key_ids[$sp_cert] !== $sp_private_key) {
+          // If our key exists but isn't referenced from our cert, we cannot
+          // display both in our regular single 'keypair' selector. Move the
+          // cert to the 'config' textarea so we display the private key in its
+          // standalone keys select element.
+          if (!$form_state->getUserInput()) {
+            $this->messenger()->addWarning($this->t("Certificate '@cert_keyname' does not reference key '@key_keyname', which our UI cannot handle. The effect is that the certificate selection UI now probably looks confusing and may fail validation.", [
+              '@cert_keyname' => $sp_cert,
+              '@key_keyname' => $sp_private_key,
+            ]));
+          }
+          $sp_cert = "key:$sp_cert";
+          $sp_cert_type = 'config';
+        }
+      }
     }
     elseif ($sp_cert) {
       $sp_cert_type = 'config';
@@ -254,6 +366,20 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $sp_new_cert_type = strstr($sp_new_cert, ':', TRUE);
     if ($sp_new_cert_type) {
       $sp_new_cert = substr($sp_new_cert, strlen($sp_new_cert_type) + 1);
+      if ($sp_new_cert_type === 'key' && !isset($selectable_public_keypairs[$sp_new_cert])) {
+        if (!$form_state->getUserInput()) {
+          if ($this->keyRepository) {
+            $this->messenger()->addWarning($this->t("Key entity '@key_name' for new SP certificate is missing, or not referenced from a public certificate.", [
+              '@key_name' => $sp_new_cert,
+            ]));
+          }
+          else {
+            $this->messenger()->addWarning($this->t('Key module is disabled even though the new SP certificate has Key storage configured.'));
+          }
+        }
+        $sp_new_cert = "key:$sp_new_cert";
+        $sp_new_cert_type = 'config';
+      }
     }
     elseif ($sp_new_cert) {
       $sp_new_cert_type = 'config';
@@ -274,18 +400,31 @@ class SamlauthConfigureForm extends ConfigFormBase {
       }
     }
 
-    // Set defaults if key/certificate values are not present yet.
+    // Set default types if key/certificate values are not present yet.
     if (!$sp_key_type) {
-      $sp_key_type = 'file';
+      $sp_key_type = $this->keyRepository ? 'key' : 'file';
     }
     if (!$sp_cert_type) {
       if (!$sp_new_cert_type) {
-        $sp_new_cert_type = $sp_key_type === 'config' ? 'config' : 'file';
+        $sp_new_cert_type = $sp_key_type;
       }
       $sp_cert_type = $sp_new_cert_type;
     }
     elseif (!$sp_new_cert_type) {
       $sp_new_cert_type = $sp_cert_type;
+    }
+
+    // Check if these types make sense and, in case of key_key, the combination
+    // of both keys can actually be presented as a keypair.
+    $sp_key_cert_type = "{$sp_key_type}_{$sp_cert_type}";
+    if ($sp_new_cert_type !== $sp_cert_type || !isset($key_cert_type_options[$sp_key_cert_type])) {
+      $sp_key_cert_type = '';
+      $key_cert_type_options = ['' => '?'] + $key_cert_type_options;
+      if (!$form_state->getUserInput()) {
+        $this->messenger()->addWarning($this->t("Encountered an unexpected combination of SP key / certificate types (@value). The effect is that the UI probably looks confusing, without much clarity about which entries will get saved. Careful when editing.", [
+          '@value' => "$sp_key_type / $sp_cert_type" . ($sp_new_cert_type ? " / $sp_new_cert_type" : ''),
+        ]));
+      }
     }
 
     // We have only a subselection of common/logical types, with 'key type'
@@ -295,29 +434,43 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_key_cert_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Type of values to save for the key/certificate'),
-      '#options' => [
-        'file_file' => $this->t('File'),
-        'config_config' => $this->t('Configuration'),
-        'file_config' => $this->t('File/Config'),
-      ],
+      '#description' => ($this->keyRepository ? $this->t('Key storage is most versatile.') . ' ' : '')
+      . $this->t('File is generally considered more secure than configuration.'),
+      '#options' => $key_cert_type_options,
+      '#default_value' => $sp_key_cert_type,
     ];
-    $sp_key_cert_type = "{$sp_key_type}_{$sp_cert_type}";
-    if ($sp_new_cert_type === $sp_cert_type
-        && isset($form['service_provider']['sp_key_cert_type']['#options'][$sp_key_cert_type])) {
-      $form['service_provider']['sp_key_cert_type']['#default_value'] = $sp_key_cert_type;
-    }
-    else {
-      // Add 'confusing' default value if either unrecognized or multiple
-      // types ($cert_types === ':').
-      $form['service_provider']['sp_key_cert_type']['#options'] =
-        ['' => '?'] + $form['service_provider']['sp_key_cert_type']['#options'];
-      $sp_key_cert_type = '';
-      $this->messenger()->addWarning($this->t("Encountered an unexpected combination of SP key / certificate types (@value). The effect is that the UI probably looks confusing, without much clarity about which entries will get saved. Careful when editing.", [
-        '@value' => "$sp_key_type / $sp_cert_type" . ($sp_new_cert_type ? " / $sp_new_cert_type" : ''),
-      ]));
-    }
 
     // @todo Links to pages that decode/show info about the key or cert.
+    if ($this->keyRepository) {
+      // We've decided on one selector for a keypair instead of separate ones
+      // for certs and keys (even though we'll store them separately in
+      // config), because forcing the user to create references to their
+      // private keys is likely beneficial for longer term maintenance. This
+      // means we don't show this selector for sp_key_cert_type "key_key".
+      // Still, we set the #default_value also in that case which, while not
+      // necessary for saving, can be good for the editing experience.
+      $form['service_provider']['sp_key_key'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Private Key'),
+        '#description' => $this->t('Add private keys in the <a href=":url">Keys</a> list.', [
+          ':url' => Url::fromRoute('entity.key.collection')->toString(),
+        ]),
+        '#options' => $selectable_private_keys,
+        '#empty_option' => $this->t('- Select a private key -'),
+        '#default_value' => $sp_key_type === 'key' ? $sp_private_key : '',
+        '#states' => [
+          'visible' => [
+            ':input[name="sp_key_cert_type"]' => [
+              ['value' => 'key_file'],
+              'or',
+              ['value' => 'key_config'],
+              'or',
+              ['value' => ''],
+            ],
+          ],
+        ],
+      ];
+    }
     $form['service_provider']['sp_key_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Private Key filename'),
@@ -339,7 +492,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'textarea',
       '#title' => $this->t('Private Key'),
       '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
-      '#default_value' => $sp_key_type !== 'file' ? $this->formatKeyOrCert($sp_private_key, TRUE, TRUE) : '',
+      '#default_value' => $sp_key_type === 'config' ? $this->formatKeyOrCert($sp_private_key, TRUE, TRUE) : '',
       '#states' => [
         'visible' => [
           ':input[name="sp_key_cert_type"]' => [
@@ -351,15 +504,38 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    if ($this->keyRepository) {
+      $form['service_provider']['sp_cert_key'] = [
+        '#type' => 'select',
+        '#title' => $this->t('X.509 Certificate with attached private key'),
+        '#description' => $this->t("Add private keys and certificates (don't forget to reference the private key) in the <a href=\":url\">Keys</a> list.", [
+          ':url' => Url::fromRoute('entity.key.collection')->toString(),
+        ]),
+        '#options' => $selectable_public_keypairs,
+        '#empty_option' => $this->t('- Select a certificate -'),
+        '#default_value' => $sp_cert_type === 'key' ? $sp_cert : '',
+        '#states' => [
+          'visible' => [
+            ':input[name="sp_key_cert_type"]' => [
+              ['value' => 'key_key'],
+              'or',
+              ['value' => ''],
+            ],
+          ],
+        ],
+      ];
+    }
     $form['service_provider']['sp_cert_file'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('X.509 Certificate filename'),
+      '#title' => $this->t('X.509 Certificate Filename'),
       '#description' => $this->t('Absolute filename.'),
       '#default_value' => $sp_cert_type === 'file' ? $sp_cert : '',
       '#states' => [
         'visible' => [
           ':input[name="sp_key_cert_type"]' => [
             ['value' => 'file_file'],
+            'or',
+            ['value' => 'key_file'],
             'or',
             ['value' => ''],
           ],
@@ -370,13 +546,15 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'textarea',
       '#title' => $this->t('X.509 Certificate'),
       '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
-      '#default_value' => $sp_cert_type !== 'file' ? $this->formatKeyOrCert($sp_cert, TRUE) : '',
+      '#default_value' => $sp_cert_type === 'config' ? $this->formatKeyOrCert($sp_cert, TRUE) : '',
       '#states' => [
         'visible' => [
           ':input[name="sp_key_cert_type"]' => [
-            ['value' => 'config_config'],
+            ['value' => 'key_config'],
             'or',
             ['value' => 'file_config'],
+            'or',
+            ['value' => 'config_config'],
             'or',
             ['value' => ''],
           ],
@@ -384,6 +562,31 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    if ($this->keyRepository) {
+      // We've decided on one selector for a keypair instead of separate ones
+      // for certs and keys (even though we'll store them separately in
+      // config), because forcing the user to create references to their
+      // private keys is likely beneficial for longer term maintenance.
+      $form['service_provider']['sp_new_cert_key'] = [
+        '#type' => 'select',
+        '#title' => $this->t('New X.509 Certificate'),
+        '#description' => $this->t("This is announced in the metadata, to plan for using it in the future. Add the certificate in the <a href=\":url\">Keys</a> list. It must reference a key (even though that won't be used yet), so this cert/key pair is ready to be moved into production.", [
+          ':url' => Url::fromRoute('entity.key.collection')->toString(),
+        ]),
+        '#options' => $selectable_public_keypairs,
+        '#empty_option' => $this->t('- Select a certificate -'),
+        '#default_value' => $sp_new_cert_type === 'key' ? $sp_new_cert : '',
+        '#states' => [
+          'visible' => [
+            ':input[name="sp_key_cert_type"]' => [
+              ['value' => 'key_key'],
+              'or',
+              ['value' => ''],
+            ],
+          ],
+        ],
+      ];
+    }
     $form['service_provider']['sp_new_cert_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('New X.509 Certificate filename'),
@@ -392,6 +595,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#states' => [
         'visible' => [
           ':input[name="sp_key_cert_type"]' => [
+            ['value' => 'key_file'],
+            'or',
             ['value' => 'file_file'],
             'or',
             ['value' => ''],
@@ -403,13 +608,15 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'textarea',
       '#title' => $this->t('New X.509 Certificate'),
       '#description' => $this->t("This is announced in the metadata, to plan for using it in the future. Line breaks and '-----BEGIN/END' lines are optional."),
-      '#default_value' => $sp_new_cert_type !== 'file' ? $this->formatKeyOrCert($sp_new_cert, TRUE) : '',
+      '#default_value' => $sp_new_cert_type === 'config' ? $this->formatKeyOrCert($sp_new_cert, TRUE) : '',
       '#states' => [
         'visible' => [
           ':input[name="sp_key_cert_type"]' => [
-            ['value' => 'config_config'],
+            ['value' => 'key_config'],
             'or',
             ['value' => 'file_config'],
+            'or',
+            ['value' => 'config_config'],
             'or',
             ['value' => ''],
           ],
@@ -508,32 +715,38 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $cert_types = strstr($encryption_cert, ':', TRUE);
     foreach ($certs as $value) {
       $cert_type = strstr($value, ':', TRUE);
+      if (!$cert_type) {
+        $cert_type = 'config';
+      }
       if ($cert_types && $cert_types !== $cert_type) {
-        $this->messenger()->addWarning($this->t("IdP certificates are not all of the same type. The effect is that the UI probably looks confusing, without much clarity about which entries will get saved. Careful when editing."));
+        if (!$form_state->getUserInput()) {
+          $this->messenger()->addWarning($this->t("IdP certificates are not all of the same type. The effect is that the UI probably looks confusing, without much clarity about which entries will get saved. Careful when editing."));
+        }
         $cert_types = ':';
         break;
       }
       $cert_types = $cert_type;
     }
+
+    $options = [
+      'file' => $this->t('File'),
+      'config' => $this->t('Configuration'),
+    ];
+    if ($this->keyRepository) {
+      $options = ['key' => $this->t('Key storage')] + $options;
+    }
+    if ($cert_types && !isset($options[$cert_types])) {
+      $options = ['' => '?'] + $options;
+    }
+    if (!$cert_types) {
+      $cert_types = $this->keyRepository ? 'key' : 'file';
+    }
     $form['identity_provider']['idp_cert_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Type of values to save for the certificate(s)'),
-      '#options' => [
-        'file' => $this->t('File'),
-        'config' => $this->t('Configuration'),
-      ],
+      '#options' => $options,
+      '#default_value' => isset($options[$cert_types]) ? $cert_types : '',
     ];
-    if ($cert_types) {
-      if (isset($form['identity_provider']['idp_cert_type']['#options'][$cert_types])) {
-        $form['identity_provider']['idp_cert_type']['#default_value'] = $cert_types;
-      }
-      else {
-        // Add 'confusing' default value if either unrecognized or multiple
-        // types ($cert_types === ':').
-        $form['identity_provider']['idp_cert_type']['#options'] =
-          ['' => '?'] + $form['identity_provider']['idp_cert_type']['#options'];
-      }
-    }
 
     $form['identity_provider']['idp_certs'] = [
       // @todo sometime: 'multivalue'... if #1091852 has been solved for a long
@@ -543,6 +756,28 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t('X.509 Certificate(s)'),
       '#description' => $this->t('Public X.509 certificate(s) of the IdP, used for validating signatures (and by default also for encryption).'),
       '#add_more_label' => $this->t('Add extra certificate'),
+    ];
+    if ($this->keyRepository) {
+      $form['identity_provider']['idp_certs']['key'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Certificate'),
+        '#description' => $this->t('Add certificates in the <a href=":url">Keys</a> list.', [
+          ':url' => Url::fromRoute('entity.key.collection')->toString(),
+        ]),
+        '#options' => $selectable_public_certs,
+        '#empty_option' => $this->t('- Select a certificate -'),
+        '#states' => [
+          'visible' => [
+            ':input[name="idp_cert_type"]' => [
+              ['value' => 'key'],
+              'or',
+              ['value' => ''],
+            ],
+          ],
+        ],
+      ];
+    }
+    $form['identity_provider']['idp_certs'] += [
       'file' => [
         '#type' => 'textfield',
         '#title' => $this->t('Certificate Filename'),
@@ -582,19 +817,47 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     if ($certs) {
       $form['identity_provider']['idp_certs']['#default_value'] = [];
-      foreach ($certs as $value) {
+      foreach ($certs as $index => $value) {
         $cert_type = strstr($value, ':', TRUE);
         $form['identity_provider']['idp_certs']['#default_value'][] =
-          $cert_type === 'file' ? ['file' => substr($value, 5) ] : ['cert' => $this->formatKeyOrCert($value, TRUE)];
+          in_array($cert_type, ['key', 'file'], TRUE)
+            ? [$cert_type => substr($value, strlen($cert_type) + 1)]
+            : ['cert' => $this->formatKeyOrCert($value, TRUE)];
+        if (!$form_state->getUserInput() && $cert_type === 'file' && !file_exists(substr($value, 5))) {
+          $this->messenger()->addWarning($this->t('IdP certificate file@index is missing.', [
+            '@index' => $index ? " $index" : '',
+          ]));
+        }
       }
     }
 
+    // @todo change description; remove "whenever we'll support that", if we
+    //   start supporting NameIdEncrypted.
+    $description = $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (whenever we'll support that). If left empty, the first certificate above is used for encryption too.");
+    if ($this->keyRepository) {
+      $form['identity_provider']['idp_certkey_encryption'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Certificate'),
+        '#description' => $description,
+        '#default_value' => $cert_types === 'key' ? substr($encryption_cert, 4) : '',
+        '#options' => $selectable_public_certs,
+        '#empty_option' => $this->t('- Select a certificate -'),
+        '#states' => [
+          'visible' => [
+            ':input[name="idp_cert_type"]' => [
+              ['value' => 'key'],
+              'or',
+              ['value' => ''],
+            ],
+          ],
+        ],
+      ];
+    }
     $form['identity_provider']['idp_certfile_encryption'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Encryption Certificate Filename'),
-      '#default_value' => substr($encryption_cert, 5),
-      // @todo change description; remove "whenever we'll support that".
-      '#description' => $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (whenever we'll support that). If left empty, the first certificate above is used for encryption too."),
+      '#description' => $description,
+      '#default_value' => $cert_types === 'file' ? substr($encryption_cert, 5) : '',
       '#states' => [
         'visible' => [
           ':input[name="idp_cert_type"]' => [
@@ -608,11 +871,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['identity_provider']['idp_cert_encryption'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Encryption Certificate'),
-      '#default_value' => $this->formatKeyOrCert($encryption_cert, TRUE),
-      // @todo fix if we start supporting NameIdEncrypted, which is the only
-      //   option that governs encrypting anything (NameID in logout requests).
-      // @todo change description; remove "whenever we'll support that".
-      '#description' => $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (whenever we'll support that). If left empty, the first certificate above is used for encryption too."),
+      '#description' => $description,
+      '#default_value' => $cert_types === 'config' ? $this->formatKeyOrCert($encryption_cert, TRUE) : '',
       '#states' => [
         'visible' => [
           ':input[name="idp_cert_type"]' => [
@@ -623,6 +883,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
         ],
       ],
     ];
+    if (!$form_state->getUserInput() && $cert_types === 'file' && !file_exists(substr($encryption_cert, 5))) {
+      $this->messenger()->addWarning($this->t('IdP encryption certificate file is missing.'));
+    }
 
     $form['user_info'] = [
       '#title' => $this->t('User Info and Syncing'),
@@ -1017,29 +1280,49 @@ class SamlauthConfigureForm extends ConfigFormBase {
     else {
       $sp_cert_type = '';
     }
+    $keyname = $form_state->getValue('sp_key_key');
+    $cert_keyname = $form_state->getValue('sp_cert_key');
+    if (in_array($sp_cert_type, ['', 'key']) && $cert_keyname && ($sp_key_type === 'key' || !$sp_key_type && !$keyname)) {
+      // The select element for the private key is invisible. Get it from the
+      // cert (except if that is empty; then we don't really care what happens
+      // at this stage; we'll warn while displaying the form).
+      $key = $this->keyRepository->getKey($cert_keyname);
+      if ($key) {
+        $key_type_settings = $key->getKeyType()->getConfiguration();
+        if (!empty($key_type_settings['private_key'])) {
+          $key = $this->keyRepository->getKey($key_type_settings['private_key']);
+        }
+      }
+      $form_state->setValue('sp_key_key', $key ? $key->id() : '');
+    }
     $filename = $form_state->getValue('sp_key_file');
-    $contents = $form_state->getValue('sp_private_key');
+    $full_cert = $form_state->getValue('sp_private_key');
     if ($filename && in_array($sp_key_type, ['', 'file']) && $filename[0] !== '/') {
       $form_state->setErrorByName('sp_key_file', $this->t('SP private key filename must be absolute.'));
     }
-    if ($sp_key_type == '' && $filename && $contents) {
-      $form_state->setErrorByName("sp_private_key", $this->t('SP private key and filename cannot both be set.'));
+    // There are 4 elements that reference the key. At least 3 must be empty or
+    // invisible. (Checking $sp_key_type=='' is enough to determine if multiple
+    // elements are visible.)
+    if (!$sp_key_type && (((int) empty($keyname)) + ((int) empty($cert_keyname)) + ((int) empty($filename)) + ((int) empty($full_cert))) < 3) {
+      $form_state->setErrorByName("sp_private_key", $this->t('Only one private key (filename) element must be populated.'));
     }
+
     $filename = $form_state->getValue('sp_cert_file');
-    $contents = $form_state->getValue('sp_x509_certificate');
+    $full_cert = $form_state->getValue('sp_x509_certificate');
     if ($filename && in_array($sp_cert_type, ['', 'file']) && $filename[0] !== '/') {
       $form_state->setErrorByName('sp_cert_file', $this->t('SP certificate filename must be absolute.'));
     }
-    if ($sp_cert_type == '' && $filename && $contents) {
-      $form_state->setErrorByName("sp_x509_certificate", $this->t('SP certificate and filename cannot both be set.'));
+    if (!$sp_cert_type && (($cert_keyname && $filename) || ($cert_keyname && $full_cert) || ($filename && $full_cert))) {
+      $form_state->setErrorByName("sp_private_key", $this->t('Only one certificate (filename) element must be populated.'));
     }
+    $keyname = $form_state->getValue('sp_new_cert_key');
     $filename = $form_state->getValue('sp_new_cert_file');
-    $contents = $form_state->getValue('sp_new_cert');
+    $full_cert = $form_state->getValue('sp_new_cert');
     if ($filename && in_array($sp_cert_type, ['', 'file']) && $filename[0] !== '/') {
-      $form_state->setErrorByName('sp_cert_file', $this->t('SP new certificate filename must be absolute.'));
+      $form_state->setErrorByName("sp_private_key", $this->t('Only one new certificate (filename) element must be populated.'));
     }
-    if ($sp_cert_type == '' && $filename && $contents) {
-      $form_state->setErrorByName("sp_new_cert", $this->t('SP new certificate and filename cannot both be set.'));
+    if (!$sp_cert_type && (($keyname && $filename) || ($keyname && $full_cert) || ($filename && $full_cert))) {
+      $form_state->setErrorByName("sp_new_cert", $this->t('Only one new certificate (filename) element must be populated.'));
     }
 
     $idp_cert_type = $form_state->getValue('idp_cert_type');
@@ -1048,16 +1331,17 @@ class SamlauthConfigureForm extends ConfigFormBase {
       if (!empty($item['file']) && in_array($idp_cert_type, ['', 'file']) && $item['file'][0] !== '/') {
         $form_state->setErrorByName("idp_certs][$index][file", $this->t('IdP certificate filename must be absolute.'));
       }
-      if ($idp_cert_type == '' && !empty($item['file']) && !empty($item['cert'])) {
-        $form_state->setErrorByName("idp_certs][$index][cert", $this->t('IdP certificate and filename cannot both be set.'));
+      if (!$idp_cert_type && ((!empty($item['key']) && !empty($item['file'])) || (!empty($item['key']) && !empty($item['cert'])) || (!empty($item['file']) && !empty($item['cert'])))) {
+        $form_state->setErrorByName("idp_certs][$index][cert", $this->t('Only one new certificate (filename) element must be populated per row.'));
       }
     }
-    $idp_cert_file = $form_state->getValue('idp_certfile_encryption');
-    $idp_cert = $form_state->getValue('idp_cert_encryption');
-    if ($idp_cert_file && in_array($idp_cert_type, ['', 'file']) && $idp_cert_file[0] !== '/') {
+    $keyname = $form_state->getValue('idp_certkey_encryption');
+    $filename = $form_state->getValue('idp_certfile_encryption');
+    $full_cert = $form_state->getValue('idp_cert_encryption');
+    if ($filename && in_array($idp_cert_type, ['', 'file']) && $filename[0] !== '/') {
       $form_state->setErrorByName('idp_certfile_encryption', $this->t('IdP encryption certificate filename must be absolute.'));
     }
-    if ($idp_cert_type == '' && $idp_cert_file && $idp_cert) {
+    if (!$idp_cert_type && (($keyname && $filename) || ($keyname && $full_cert) || ($filename && $full_cert))) {
       $form_state->setErrorByName("idp_cert_encryption", $this->t('IdP certificate and filename cannot both be set.'));
     }
   }
@@ -1075,45 +1359,73 @@ class SamlauthConfigureForm extends ConfigFormBase {
     else {
       $sp_cert_type = '';
     }
-    $sp_private_key = '';
     // We validated that max. 1 of the values is set if $sp_key/cert_type == ''.
-    if (in_array($sp_key_type, ['', 'file'])) {
+    // If $sp_key/cert_type is nonempty, other values may be set which we must
+    // explicitly skip.
+    $sp_private_key = $form_state->getValue('sp_key_key');
+    if ($sp_private_key && in_array($sp_key_type, ['', 'key'])) {
+      // If 'key', the value was changed to the appropriate one in the
+      // validate function (if necessary).
+      $sp_private_key = "key:$sp_private_key";
+    }
+    if (!$sp_private_key && in_array($sp_key_type, ['', 'file'])) {
       $sp_private_key = $form_state->getValue('sp_key_file');
       if ($sp_private_key) {
         $sp_private_key = "file:$sp_private_key";
       }
     }
     if (!$sp_private_key && in_array($sp_key_type, ['', 'config'])) {
-      // It's OK if this is NULL.
-      $sp_private_key = $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
+      $sp_private_key = $form_state->getValue('sp_private_key');
+      if ($sp_private_key) {
+        $sp_private_key = $this->formatKeyOrCert($sp_private_key, FALSE, TRUE);
+      }
     }
 
-    $sp_cert = '';
-    if (in_array($sp_cert_type, ['', 'file'])) {
+    $sp_cert = $form_state->getValue('sp_cert_key');
+    if ($sp_cert && in_array($sp_cert_type, ['', 'key'])) {
+      // If 'key', the value was changed to the appropriate one in the
+      // validate function (if necessary).
+      $sp_cert = "key:$sp_cert";
+    }
+    if (!$sp_cert && in_array($sp_cert_type, ['', 'file'])) {
       $sp_cert = $form_state->getValue('sp_cert_file');
       if ($sp_cert) {
         $sp_cert = "file:$sp_cert";
       }
     }
     if (!$sp_cert && in_array($sp_cert_type, ['', 'config'])) {
-      $sp_cert = $this->formatKeyOrCert($form_state->getValue('sp_x509_certificate'), FALSE);
+      $sp_cert = $form_state->getValue('sp_x509_certificate');
+      if ($sp_cert) {
+        $sp_cert = $this->formatKeyOrCert($sp_cert, FALSE);
+      }
     }
 
-    $sp_new_cert = '';
-    if (in_array($sp_cert_type, ['', 'file'])) {
+    $sp_new_cert = $form_state->getValue('sp_new_cert_key');
+    if ($sp_new_cert && in_array($sp_cert_type, ['', 'key'])) {
+      // If 'key', the value was changed to the appropriate one in the
+      // validate function (if necessary).
+      $sp_new_cert = "key:$sp_new_cert";
+    }
+    if (!$sp_new_cert && in_array($sp_cert_type, ['', 'file'])) {
       $sp_new_cert = $form_state->getValue('sp_new_cert_file');
       if ($sp_new_cert) {
         $sp_new_cert = "file:$sp_new_cert";
       }
     }
     if (!$sp_new_cert && in_array($sp_cert_type, ['', 'config'])) {
-      $sp_new_cert = $this->formatKeyOrCert($form_state->getValue('sp_new_cert'), FALSE);
+      $sp_new_cert = $form_state->getValue('sp_new_cert');
+      if ($sp_new_cert) {
+        $sp_new_cert = $this->formatKeyOrCert($sp_new_cert, FALSE);
+      }
     }
 
     $idp_cert_type = $form_state->getValue('idp_cert_type');
     $idp_certs = [];
     foreach ($form_state->getValue('idp_certs') as $item) {
       // We validated that max. 1 of the values is set if $idp_cert_type == ''.
+      if (!empty($item['key']) && in_array($idp_cert_type, ['', 'key'])) {
+        $idp_certs[] = "key:{$item['key']}";
+      }
       if (!empty($item['file']) && in_array($idp_cert_type, ['', 'file'])) {
         $idp_certs[] = "file:{$item['file']}";
       }
@@ -1121,12 +1433,23 @@ class SamlauthConfigureForm extends ConfigFormBase {
         $idp_certs[] = $this->formatKeyOrCert($item['cert'], FALSE);
       }
     }
-    $idp_cert_encryption = $form_state->getValue('idp_certfile_encryption');
-    if ($idp_cert_encryption && in_array($idp_cert_type, ['', 'file'])) {
-      $idp_cert_encryption = "file:$idp_cert_encryption";
+    $idp_cert_encryption = $form_state->getValue('idp_certkey_encryption');
+    if ($idp_cert_encryption && in_array($idp_cert_type, ['', 'key'])) {
+      // If 'key', the value was changed to the appropriate one in the
+      // validate function (if necessary).
+      $idp_cert_encryption = "key:$idp_cert_encryption";
     }
-    elseif (in_array($idp_cert_type, ['', 'config'])) {
-      $idp_cert_encryption = $this->formatKeyOrCert($form_state->getValue('idp_cert_encryption'), FALSE);
+    if (!$idp_cert_encryption && in_array($idp_cert_type, ['', 'file'])) {
+      $idp_cert_encryption = $form_state->getValue('idp_certfile_encryption');
+      if ($idp_cert_encryption) {
+        $idp_cert_encryption = "file:$idp_cert_encryption";
+      }
+    }
+    if (!$idp_cert_encryption && in_array($idp_cert_type, ['', 'config'])) {
+      $idp_cert_encryption = $form_state->getValue('idp_cert_encryption');
+      if ($idp_cert_encryption) {
+        $idp_cert_encryption = $this->formatKeyOrCert($idp_cert_encryption, FALSE);
+      }
     }
 
     // This is never 0 but can be ''. (NULL would mean same as ''.) Unlike
@@ -1222,7 +1545,10 @@ class SamlauthConfigureForm extends ConfigFormBase {
    *   (Un)formatted key or cert.
    */
   protected function formatKeyOrCert($value, $heads, $key = FALSE) {
-    if (is_string($value)) {
+    // If the string contains a colon, it's probably a "key:" config value
+    // that we placed in the certificate element because we have no other
+    // place for it. Leave it alone (and if it fails validation, so be it).
+    if (is_string($value) && strpos($value, ':') === FALSE) {
       $value = $key ?
         SamlUtils::formatPrivateKey($value, $heads) :
         SamlUtils::formatCert($value, $heads);

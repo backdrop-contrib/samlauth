@@ -13,6 +13,7 @@ use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\Url;
 use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
+use Drupal\key\KeyRepositoryInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
@@ -124,6 +125,17 @@ class SamlService {
   protected $messenger;
 
   /**
+   * The Key repository service.
+   *
+   * This is set when the key module is installed. (Not when the key_asymmetric
+   * module is installed. The latter is necessary for entering public/private
+   * keys but reading them will work fine without it, it seems.)
+   *
+   * @var \Drupal\key\KeyRepositoryInterface
+   */
+  protected $keyRepository;
+
+  /**
    * Constructs a new SamlService.
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
@@ -175,6 +187,19 @@ class SamlService {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
       SamlUtils::setProxyVars(TRUE);
     }
+  }
+
+  /**
+   * Set the Key repository service.
+   *
+   * This has a separate setter (unlike all other dependent objects mentioned
+   * in the constructor) because it's an optional dependency.
+   *
+   * @param \Drupal\key\KeyRepositoryInterface $key_repository
+   *   the Key repository service.
+   */
+  public function setKeyRepository(KeyRepositoryInterface $key_repository) {
+    $this->keyRepository = $key_repository;
   }
 
   /**
@@ -798,7 +823,7 @@ class SamlService {
         // can try to extract it from e.g. Utils::getSelfRoutedURLNoQuery().)
         $base_url = $request->getSchemeAndHttpHost() . $request->getBaseUrl() . '/saml';
       }
-      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose));
+      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository));
     }
 
     return $this->samlAuth[$purpose];
@@ -854,6 +879,9 @@ class SamlService {
   /**
    * Returns a configuration array as used by the external library.
    *
+   * Some of these arguments are just added because the method is static (which
+   * will change in v4.x).
+   *
    * @param \Drupal\Core\Config\ImmutableConfig $config
    *   The module configuration.
    * @param string $base_url
@@ -861,11 +889,13 @@ class SamlService {
    * @param string $purpose
    *   (Optional) purpose for the config: 'metadata' / 'login' / 'acs' /
    *   'logout' / 'sls-request' / 'sls-response'.
+   * @param \Drupal\key\KeyRepositoryInterface $key_repository
+   *   (Optional) the service's Key repository.
    *
    * @return array
    *   The library configuration array.
    */
-  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '') {
+  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
@@ -1064,7 +1094,24 @@ class SamlService {
     else {
       if ($add_key) {
         $key = $config->get('sp_private_key');
-        if (is_string($key) && strpos($key, 'file:') === 0) {
+        if (!is_string($key)) {
+          throw new SamlError('SP private key setting is not a string.', SamlError::SETTINGS_INVALID);
+        }
+        $type = strstr($key, ':', TRUE);
+        if ($type === 'key') {
+          if ($key_repository) {
+            $key = substr($key, 4);
+            $key_entity = $key_repository->getKey($key);
+            if (!$key_entity) {
+              throw new SamlError("SP private key '$key' not found.", SamlError::SETTINGS_INVALID);
+            }
+            $key = $key_entity->getKeyValue();
+          }
+          else {
+            throw new SamlError('SP private key setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+          }
+        }
+        elseif ($type === 'file') {
           $key = file_get_contents(substr($key, 5));
           if ($key === FALSE) {
             throw new SamlError('SP private key not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
@@ -1074,37 +1121,110 @@ class SamlService {
       }
       if ($add_cert) {
         $cert = $add_cert === 'FAKE' ? 'dummy-value-to-subvert-validation' : $config->get('sp_x509_certificate');
-        if (is_string($cert) && strpos($cert, 'file:') === 0) {
-          $cert = file_get_contents(substr($cert, 5));
-          if ($cert === FALSE) {
-            throw new SamlError('SP public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
-          }
+        if (!is_string($cert)) {
+          throw new SamlError('SP public cert setting is not a string.', SamlError::SETTINGS_INVALID);
         }
-        $library_config['sp']['x509cert'] = $cert;
+        if ($cert) {
+          $type = strstr($cert, ':', TRUE);
+          if ($type === 'key') {
+            if ($key_repository) {
+              $cert = substr($cert, 4);
+              $key_entity = $key_repository->getKey($cert);
+              if (!$key_entity) {
+                throw new SamlError("SP public cert '$cert' not found.", SamlError::SETTINGS_INVALID);
+              }
+              $cert = $key_entity->getKeyValue();
+            }
+            else {
+              throw new SamlError('SP public cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+            }
+          }
+          elseif ($type === 'file') {
+            $cert = file_get_contents(substr($cert, 5));
+            if ($cert === FALSE) {
+              throw new SamlError('SP public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
+            }
+          }
+          $library_config['sp']['x509cert'] = $cert;
+        }
       }
       if ($add_new_cert) {
         $cert = $config->get('sp_new_certificate');
-        if (is_string($cert) && strpos($cert, 'file:') === 0) {
-          $cert = file_get_contents(substr($cert, 5));
-          if ($cert === FALSE) {
-            throw new SamlError('SP new public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
-          }
+        if (!is_string($cert)) {
+          throw new SamlError('SP new public cert setting is not a string.', SamlError::SETTINGS_INVALID);
         }
-        $library_config['sp']['x509certNew'] = $cert;
+        if ($cert) {
+          $type = strstr($cert, ':', TRUE);
+          if ($type === 'key') {
+            if ($key_repository) {
+              $cert = substr($cert, 4);
+              $key_entity = $key_repository->getKey($cert);
+              if (!$key_entity) {
+                throw new SamlError("SP new public cert '$cert' not found.", SamlError::SETTINGS_INVALID);
+              }
+              $cert = $key_entity->getKeyValue();
+            }
+            else {
+              throw new SamlError('SP new public cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+            }
+          }
+          elseif ($type === 'file') {
+            $cert = file_get_contents(substr($cert, 5));
+            if ($cert === FALSE) {
+              throw new SamlError('SP new public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
+            }
+          }
+          $library_config['sp']['x509certNew'] = $cert;
+        }
       }
     }
     if ($add_idp_cert) {
       $certs = $config->get('idp_certs');
-      $encryption_cert = $config->get('idp_cert_encryption');
-      foreach ($certs as $i => $cert)
-      if (is_string($cert) && strpos($cert, 'file:') === 0) {
-        $certs[$i] = file_get_contents(substr($cert, 5));
-        if ($certs[$i] === FALSE) {
-          $nr = ($i ? " $i" : '');
-          throw new SamlError("IdP cert$nr not found.", SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+      foreach ($certs as $i => $cert) {
+        if (!is_string($certs[$i])) {
+          throw new SamlError('IdP cert setting is not a string.', SamlError::SETTINGS_INVALID);
+        }
+        $type = strstr($cert, ':', TRUE);
+        if ($type === 'key') {
+          if ($key_repository) {
+            $cert = substr($cert, 4);
+            $key_entity = $key_repository->getKey($cert);
+            if (!$key_entity) {
+              throw new SamlError("IdP cert '$cert' not found.", SamlError::SETTINGS_INVALID);
+            }
+            $certs[$i] = $key_entity->getKeyValue();
+          }
+          else {
+            throw new SamlError('IdP cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+          }
+        }
+        elseif ($type === 'file') {
+          $certs[$i] = file_get_contents(substr($cert, 5));
+          if ($certs[$i] === FALSE) {
+            $nr = ($i ? " $i" : '');
+            throw new SamlError("IdP cert$nr not found.", SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+          }
         }
       }
-      if (is_string($encryption_cert) && strpos($encryption_cert, 'file:') === 0) {
+      $encryption_cert = $config->get('idp_cert_encryption');
+      if (!is_string($certs[$i])) {
+        throw new SamlError('IdP cert setting is not a string.', SamlError::SETTINGS_INVALID);
+      }
+      $type = strstr($encryption_cert, ':', TRUE);
+      if ($type === 'key') {
+        if ($key_repository) {
+          $encryption_cert = substr($encryption_cert, 4);
+          $key_entity = $key_repository->getKey($encryption_cert);
+          if (!$key_entity) {
+            throw new SamlError("IdP encryption cert '$encryption_cert' not found.", SamlError::SETTINGS_INVALID);
+          }
+          $encryption_cert = $key_entity->getKeyValue();
+        }
+        else {
+          throw new SamlError('IdP encryption cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+        }
+      }
+      elseif ($type === 'file') {
         $encryption_cert = file_get_contents(substr($encryption_cert, 5));
         if ($encryption_cert === FALSE) {
           throw new SamlError('IdP encryption cert not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);

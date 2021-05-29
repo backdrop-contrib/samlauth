@@ -56,16 +56,40 @@ installed the module using Composer.
 
 During configuration,
 
-- We need an SSL public/private key pair. Without going into detail: the most
-  common way of creating keys is the following openssl command:
+- You need an SSL public/private key pair - or, more precisely: a private key
+  and a related public X.509 certificate. You may have opinions and/or
+  procedures around creating safe key pairs, and we won't discuss this here
+  besides giving the most common command for creating keys if it you have none:
   ```
   openssl req -new -x509 -days 3652 -nodes -out sp.crt -keyout sp.key
   ```
-- We need to exchange information with the IdP, because both parties need to
+  For the rest, the internet has more information about this topic.
+- You need to decide where to store the keys. This module can:
+  - Store them in a file on the webserver's file system. (Always keep the 
+    private key in a safe location outside the webserver's document root.)
+  - Store them in configuration values. This is generally less secure than a 
+    file, but may be useful for test environments, depending on your setup.
+  - Use the [Key](https://www.drupal.org/project/key) module, which has options
+    for safer retrieval of keys, e.g. from an environment variable or various
+    external key management solutions. In order to use this solution, before
+    configuring samlauth:
+    - Install the Key module, and the 'key_asymmetric' submodule that is
+      distributed along with samlauth. You'll also need to install the
+      phpseclib library, by means of e.g.
+      ```
+      composer require phpseclib/phpseclib:~3.0
+      ``` 
+    - Install the appropriate add-on module if you want to use an external key
+      provider.
+    - Visit admin/config/system/keys and add 'Key' for your private key, using
+      your preferred key provider. Also optionally, create a 'key' for the 
+      related X.509 certificate. (This is optional because the certificate is 
+      not a secret, but it may be beneficial to keep both in the same list.)
+- You need to exchange information with the IdP, because both parties need to
   configure the other's identity/location. More details are in the respective
   configuration sections.
 
-Optional installs:
+Other optional installs:
 - views module, to see a list of currently registered links (associations)
   between SAML login data and Drupal users - and be able to delete them from
   the administrative UI (rather than directly manipulating the 'authmap' table).
@@ -103,11 +127,9 @@ IdP. (Many SPs make it equal to the URL for the application or metadata, but
 that's just a convention. Choose anything you like - unless the organisation
 operating the IdP is already mandating a specific value.)
 
-Place your SSL certificate and private key in a 'private' location on the web
-server (accessible by Drupal but not accessible over the web) and enter the
-file names. Alternatively, don't put them on the server and enter the full
-cert/key (contents of the files); this last thing, saving a private key in
-configuration / the Drupal database, is generally considered less secure.
+If your SSL certificate / private key is stored safely as discussed above,
+reference them in this sectin. Alternatively (less safe) select "Configuration"
+for 'Type of storage', and paste the contents into this screen.
 
 After saving this configuration, the metadata URL should contain all
 information (as an XML file) necessary for the IdP to configure our information
@@ -168,7 +190,7 @@ user tries to log in. See the section on Debugging.
 If there is absolutely no unique non-changing value to set as Unique ID, you
 can take the username or email attribute. However, please note that each time
 that username/email is changed on the IdP side, a new user gets created. Or
-depending on your configuratoin, the SAML user has the ability to log in as
+depending on your configuration, the SAML user has the ability to log in as
 a different existing Drupal user, which poses a security risk.
 
 Other settings / checkboxes are hopefully self-explanatory.
