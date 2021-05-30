@@ -21,6 +21,10 @@ use Drupal\Core\Render\Element\FormElement;
  * - #cardinality: the cardinality of this element. Can be a positive number or
  *   MultiValue::CARDINALITY_UNLIMITED to set it as unlimited. The default value
  *   is unlimited.
+ * - #add_empty: Applicable only for unlimited cardinality: 0 to add no extra
+ *   empty sets values below existing values. FALSE to add no extra empty
+ *   values, except display one when there are no existing values. By default,
+ *   one empty value is added.
  * - #add_more_label: the label to use for the "add more" button. The default
  *   value is "Add another item".
  *
@@ -180,16 +184,30 @@ class MultiValue extends FormElement {
 
     $element_state = static::getElementState($parents, $element_name, $form_state);
     if ($element_state === NULL) {
-      $element_state = [
-        // The initial count is always based on the default value. The default
-        // value should always have numeric keys.
-        'items_count' => count($element['#default_value'] ?? []),
-      ];
+      // The default value should always have numeric keys. The initial count
+      // is based on the default value... except if #add_empty says to add an
+      // extra item only for 0 values.
+      if (!$element['#default_value'] && isset($element['#add_empty']) && $element['#add_empty'] === FALSE) {
+        $element_state = ['items_count' => 1];
+      }
+      else {
+        $element_state = [
+          'items_count' => count($element['#default_value'] ?? []),
+        ];
+      }
       static::setElementState($parents, $element_name, $form_state, $element_state);
     }
 
     // Determine the number of elements to display.
-    $max = $cardinality === self::CARDINALITY_UNLIMITED ? $element_state['items_count'] : ($cardinality - 1);
+    if ($cardinality !== self::CARDINALITY_UNLIMITED) {
+      $nr_elements = $cardinality;
+    }
+    elseif (!empty($element['#disabled']) || (isset($element['#add_empty']) && !$element['#add_empty'])) {
+      $nr_elements = $element_state['items_count'];
+    }
+    else {
+      $nr_elements = $element_state['items_count'] + 1;
+    }
 
     // Extract the elements that will have to be repeated for each delta.
     $children = [];
@@ -202,7 +220,7 @@ class MultiValue extends FormElement {
     // Re-key the elements so that deltas are consecutive.
     $value = array_values($value);
 
-    for ($i = 0; $i <= $max; $i++) {
+    for ($i = 0; $i < $nr_elements; $i++) {
       $element[$i] = $children;
 
       if (isset($value[$i])) {
