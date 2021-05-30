@@ -41,11 +41,11 @@ samlauth.authentication:
       type: string
     idp_change_password_service:
       type: string
-    idp_cert_type:
-      type: string
-    idp_x509_certificate:
-      type: string
-    idp_x509_certificate_multi:
+    idp_certs:
+      type: sequence
+      sequence:
+        type: string
+    idp_cert_encryption:
       type: string
     unique_id_attribute:
       type: string

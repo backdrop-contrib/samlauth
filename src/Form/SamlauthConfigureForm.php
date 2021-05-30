@@ -411,42 +411,50 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('idp_change_password_service'),
     ];
 
-    // The wording of this / the fact that we implemented either key rollover
-    // or signing + encryption is a limitation on our side, not the toolkit.
-    // We could have multiple 'signing' certs (which are used in order to try
-    // and validate signatures) as well as an 'encryption' cert, (The library
-    // accepts multiple 'encryption' certs but only uses the first.)
-    $form['identity_provider']['idp_cert_type'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Single/Multi Cert'),
-      '#required' => TRUE,
-      '#options' => [
-        'single' => $this->t('Single Cert'),
-        'signing' => $this->t('Key Rollover Phase'),
-        'encryption' => $this->t('Unique Signing/Encryption'),
+    $cert_values = $config->get('idp_certs');
+    $encryption_cert = $config->get('idp_cert_encryption');
+    // @todo remove this block; idp_cert_type was removed in 3.3.
+    if (!$cert_values && !$encryption_cert) {
+      $value = $config->get('idp_x509_certificate');
+      $cert_values = $value ? [$value] : [];
+      $value = $config->get('idp_x509_certificate_multi');
+      if ($value) {
+        if ($config->get('idp_cert_type') === 'encryption') {
+          $encryption_cert = $value;
+        }
+        else {
+          $cert_values[] = $value;
+        }
+      }
+    }
+
+    $form['identity_provider']['idp_certs'] = [
+      // @todo in 4.0: 'multivalue'.
+      '#type' => 'samlmultivalue',
+      '#add_empty' => FALSE,
+      '#title' => $this->t('X.509 Certificate(s)'),
+      '#description' => $this->t("Public X.509 certificate(s) of the IdP, used for validating signatures (and by default also for encryption); line breaks and '-----BEGIN/END' lines are optional."),
+      '#add_more_label' => $this->t('Add extra certificate'),
+      'cert' => [
+        '#type' => 'textarea',
+        '#title' => $this->t('Certificate'),
       ],
-      '#default_value' => $config->get('idp_cert_type') ? $config->get('idp_cert_type') : 'single',
-      '#description' => $this->t("Key Rollover: both certificates are tried to verify any signatures. Unique Signing/Encryption: does nothing so far (because we don't encrypt anything)."),
+    ];
+    if ($cert_values) {
+      $form['identity_provider']['idp_certs']['#default_value'] = [];
+      foreach ($cert_values as $value) {
+        $form['identity_provider']['idp_certs']['#default_value'][] = ['cert' => $this->formatKeyOrCert($value, TRUE)];
+      }
+    }
+
+    $form['identity_provider']['idp_cert_encryption'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Encryption Certificate'),
+      '#default_value' => $this->formatKeyOrCert($encryption_cert, TRUE),
       // @todo fix if we start supporting NameIdEncrypted, which is the only
       //   option that governs encrypting anything (NameID in logout requests).
-    ];
-
-    $form['identity_provider']['idp_x509_certificate'] = [
-      '#type' => 'textarea',
-      '#title' => $this->t('Primary X.509 Certificate'),
-      '#description' => $this->t("Public X.509 certificate of the IdP; line breaks and '-----BEGIN/END' lines are optional. (The external SAML Toolkit library does not allow configuring this as a separate file.)"),
-      '#default_value' => $this->formatKeyOrCert($config->get('idp_x509_certificate'), TRUE),
-    ];
-
-    $form['identity_provider']['idp_x509_certificate_multi'] = [
-      '#type' => 'textarea',
-      '#title' => $this->t('Secondary X.509 Certificate'),
-      '#default_value' => $this->formatKeyOrCert($config->get('idp_x509_certificate_multi'), TRUE),
-      '#states' => [
-        'invisible' => [
-          ':input[name="idp_cert_type"]' => ['value' => 'single'],
-        ],
-      ],
+      // @todo change description; remove "whenever we'll support that".
+      '#description' => $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (whenever we'll support that). If left empty, the first certificate above is used for encryption too."),
     ];
 
     $form['user_info'] = [
@@ -911,6 +919,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
         $sp_private_key = $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
     }
 
+    $idp_certs = [];
+    foreach ($form_state->getValue('idp_certs') as $item) {
+      if (!empty($item['cert'])) {
+        $idp_certs[] = $this->formatKeyOrCert($item['cert'], FALSE);
+      }
+    }
+
     // This is never 0 but can be ''. (NULL would mean same as ''.) Unlike
     // others, this value needs to be unset if empty.
     $metadata_valid = $form_state->getValue('metadata_valid_secs');
@@ -940,9 +955,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('idp_single_sign_on_service', $form_state->getValue('idp_single_sign_on_service'))
       ->set('idp_single_log_out_service', $form_state->getValue('idp_single_log_out_service'))
       ->set('idp_change_password_service', $form_state->getValue('idp_change_password_service'))
-      ->set('idp_cert_type', $form_state->getValue('idp_cert_type'))
-      ->set('idp_x509_certificate', $this->formatKeyOrCert($form_state->getValue('idp_x509_certificate'), FALSE))
-      ->set('idp_x509_certificate_multi', $this->formatKeyOrCert($form_state->getValue('idp_x509_certificate_multi'), FALSE))
+      ->set('idp_certs', $idp_certs)
+      ->set('idp_cert_encryption', $this->formatKeyOrCert($form_state->getValue('idp_cert_encryption'), FALSE))
       ->set('unique_id_attribute', $form_state->getValue('unique_id_attribute'))
       ->set('map_users', $form_state->getValue('map_users'))
       ->set('map_users_name', $form_state->getValue('map_users_name'))

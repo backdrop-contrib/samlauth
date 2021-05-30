@@ -87,3 +87,34 @@ function samlauth_update_8304() {
     $config->save(TRUE);
   }
 }
+
+/**
+ * Expand multi-value support for IdP certificates.
+ */
+function samlauth_update_8305() {
+  $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
+
+  $old_cert = $config->get('idp_x509_certificate');
+  $old_cert_multi = $config->get('idp_x509_certificate_multi');
+  $new_certs = $config->get('idp_certs');
+  $new_encryption_cert = $config->get('idp_cert_encryption');
+  if (($old_cert || $old_cert_multi) && !$new_certs && !$new_encryption_cert) {
+    $new_certs = $old_cert ? [$old_cert] : [];
+    if ($old_cert_multi) {
+      if ($config->get('idp_cert_type') === 'encryption') {
+        $new_encryption_cert = $old_cert_multi;
+      }
+      else {
+        $new_certs[] = $old_cert_multi;
+      }
+    }
+    $config->set('idp_certs', $new_certs);
+    if ($new_encryption_cert) {
+      $config->set('idp_cert_encryption', $new_encryption_cert);
+    }
+    $config->clear('idp_x509_certificate');
+    $config->clear('idp_x509_certificate_multi');
+    $config->clear('idp_cert_type');
+    $config->save(TRUE);
+  }
+}

@@ -1083,39 +1083,42 @@ class SamlService {
       }
     }
     if ($add_idp_cert) {
-      // This is not used if we also set 'signing' and 'encryption' in
-      // x509certMulti. If we only set 'signing', then this is still used as
-      // the encryption cert => we might set this one in 'encryption' instead.
-      $library_config['idp']['x509cert'] = $config->get('idp_x509_certificate');
-
-      // Check for the presence of a multi cert situation. (The library is
-      // more versatile than this; the maximum of two certs and not being
-      // able to have both multiple 'signing' certs and an 'encryption' cert
-      // is purely in our configuration.)
-      $multi = $config->get('idp_cert_type');
-      switch ($multi) {
-        case "signing":
-          $library_config['idp']['x509certMulti'] = [
-            'signing' => [
-              $config->get('idp_x509_certificate'),
-              $config->get('idp_x509_certificate_multi'),
-            ],
-          ];
-          break;
-
-        case "encryption":
-          // Encyption is only used for SLO requests (on /logout, not SLO
-          // responses on /sls or login requests) and only uses the first
-          // cert so we would never have to add multiple 'encryption' certs.
-          $library_config['idp']['x509certMulti'] = [
-            'signing' => [
-              $config->get('idp_x509_certificate'),
-            ],
-            'encryption' => [
-              $config->get('idp_x509_certificate_multi'),
-            ],
-          ];
-          break;
+      $certs = $config->get('idp_certs');
+      $encryption_cert = $config->get('idp_cert_encryption');
+      // @todo remove in 4.x: not applicable after samlauth_update_8304().
+      if (!$certs && !$encryption_cert) {
+        $old_cert = $config->get('idp_x509_certificate');
+        $old_cert_multi = $config->get('idp_x509_certificate_multi');
+        if ($old_cert || $old_cert_multi) {
+          $certs = $old_cert ? [$old_cert] : [];
+          if ($old_cert_multi) {
+            if ($config->get('idp_cert_type') === 'encryption') {
+              $encryption_cert = $old_cert_multi;
+            }
+            else {
+              $certs[] = $old_cert_multi;
+            }
+          }
+        }
+      }
+      // If we don't set a separate 'x509certMulti > encryption' cert, the
+      // 'main' cert (not 'x509certMulti > signing') is used for encryption so
+      // it must be set. If we have a single 'main/signing' cert, we can set it
+      // in either 'x509certMulti > signing' or as the main cert - both is not
+      // necessary. This can be encoded in several arbitrary ways, e.g.:
+      if ($encryption_cert) {
+        $library_config['idp']['x509certMulti'] = [
+          // This is an array, but the library never uses anything but the
+          // first value.
+          'encryption' => [$encryption_cert],
+          'signing' => $certs,
+        ];
+      }
+      else {
+        $library_config['idp']['x509cert'] = reset($certs);
+        if (count($certs) > 1) {
+          $library_config['idp']['x509certMulti']['signing'] = $certs;
+        }
       }
     }
 
