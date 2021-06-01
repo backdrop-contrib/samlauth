@@ -80,3 +80,10 @@ samlauth.authmap_delete_form:
     _title: 'Delete authmap entry'
   requirements:
     _permission: 'configure saml'
+ajax_forms_test.states_form:
+  path: '/ajax_forms_test_states_form'
+  defaults:
+    _title: 'Ajax Form with States API'
+    _form: '\Drupal\samlauth\Form\AjaxFormsTestStatesForm'
+  requirements:
+    _access: 'TRUE'

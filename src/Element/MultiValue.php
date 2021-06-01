@@ -402,6 +402,10 @@ class MultiValue extends FormElement {
       return NULL;
     }
 
+    // Adding until #1091852 gets solved.
+    if (!empty($element['#description_suffix'])) {
+      $element['#description'] .= ' ' . $element['#description_suffix'];
+    }
     return $element;
   }
 

@@ -1085,6 +1085,20 @@ class SamlService {
     if ($add_idp_cert) {
       $certs = $config->get('idp_certs');
       $encryption_cert = $config->get('idp_cert_encryption');
+      foreach ($certs as $i => $cert)
+      if (is_string($cert) && strpos($cert, 'file:') === 0) {
+        $certs[$i] = file_get_contents(substr($cert, 5));
+        if ($certs[$i] === FALSE) {
+          $nr = ($i ? " $i" : '');
+          throw new SamlError("IdP cert$nr not found.", SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+        }
+      }
+      if (is_string($encryption_cert) && strpos($encryption_cert, 'file:') === 0) {
+        $encryption_cert = file_get_contents(substr($encryption_cert, 5));
+        if ($encryption_cert === FALSE) {
+          throw new SamlError('IdP encryption cert not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+        }
+      }
       // @todo remove in 4.x: not applicable after samlauth_update_8304().
       if (!$certs && !$encryption_cert) {
         $old_cert = $config->get('idp_x509_certificate');

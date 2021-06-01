@@ -411,42 +411,117 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('idp_change_password_service'),
     ];
 
-    $cert_values = $config->get('idp_certs');
+    $certs = $config->get('idp_certs');
     $encryption_cert = $config->get('idp_cert_encryption');
     // @todo remove this block; idp_cert_type was removed in 3.3.
-    if (!$cert_values && !$encryption_cert) {
+    if (!$certs && !$encryption_cert) {
       $value = $config->get('idp_x509_certificate');
-      $cert_values = $value ? [$value] : [];
+      $certs = $value ? [$value] : [];
       $value = $config->get('idp_x509_certificate_multi');
       if ($value) {
         if ($config->get('idp_cert_type') === 'encryption') {
           $encryption_cert = $value;
         }
         else {
-          $cert_values[] = $value;
+          $certs[] = $value;
         }
+      }
+    }
+    // Check if all certs are of the same type. The SSO part of the module can
+    // handle that fine (if someone saved the configuration that way) but the
+    // UI cannot; it would make things look more complicated and I don't see a
+    // reason to do so.
+    $cert_types = strstr($encryption_cert, ':', TRUE);
+    foreach ($certs as $value) {
+      $cert_type = strstr($value, ':', TRUE);
+      if ($cert_types && $cert_types !== $cert_type) {
+        $this->messenger()->addWarning($this->t("IdP certificates are not all of the same type. The effect is that the UI probably looks confusing; it's probably unclear which entries will get saved. Careful when editing."));
+        $cert_types = ':';
+        break;
+      }
+      $cert_types = $cert_type;
+    }
+    $form['identity_provider']['idp_cert_type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Type of values to save for the certificate(s)'),
+      '#options' => [
+        'file' => $this->t('File'),
+        'config' => $this->t('Configuration'),
+      ],
+    ];
+    if ($cert_types) {
+      if (isset($form['identity_provider']['idp_cert_type']['#options'][$cert_types])) {
+        $form['identity_provider']['idp_cert_type']['#default_value'] = $cert_types;
+      }
+      else {
+        // Add 'confusing' default value if either unrecognized or multiple
+        // types ($cert_types === ':').
+        $form['identity_provider']['idp_cert_type']['#options'] =
+          ['' => '?'] + $form['identity_provider']['idp_cert_type']['#options'];
       }
     }
 
     $form['identity_provider']['idp_certs'] = [
-      // @todo in 4.0: 'multivalue'.
+      // @todo sometime: 'multivalue'... if #1091852 has been solved for a long
+      //   time so we don't need the #description_suffix anymore.
       '#type' => 'samlmultivalue',
       '#add_empty' => FALSE,
       '#title' => $this->t('X.509 Certificate(s)'),
-      '#description' => $this->t("Public X.509 certificate(s) of the IdP, used for validating signatures (and by default also for encryption); line breaks and '-----BEGIN/END' lines are optional."),
+      '#description' => $this->t('Public X.509 certificate(s) of the IdP, used for validating signatures (and by default also for encryption).'),
       '#add_more_label' => $this->t('Add extra certificate'),
+      'file' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('Certificate Filename'),
+        '#states' => [
+          'visible' => [
+            ':input[name="idp_cert_type"]' => [['value' => 'file']]
+              + ($cert_types === ':' ? ['or', ['value' => '']] : []),
+          ],
+        ],
+      ],
       'cert' => [
         '#type' => 'textarea',
         '#title' => $this->t('Certificate'),
+        '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
+        '#states' => [
+          'visible' => [
+            ':input[name="idp_cert_type"]' => [['value' => 'config']]
+              + ($cert_types === ':' ? ['or', ['value' => '']] : []),
+          ],
+        ],
       ],
+      // Bug #1091852 keeps all child elements visible. This JS was an attempt
+      // at fixing this but makes them all invisible, which is worse. (Note we
+      // cannot just make JS that hides the ones we need to hide, because then
+      // they don't respond to #states changes anymore.)
+      //'#attached' => ['library' => ['samlauth/fix1091852']],
     ];
-    if ($cert_values) {
+    if ($this->getRequest()->getMethod() === 'POST') {
+      // We hacked #description_suffix into MultiValue.
+      $form['identity_provider']['idp_certs']['#description_suffix'] = $this->t('<div class="messages messages--warning"><strong>Apologies if multiple types of input elements are visible in every row. Please fill only the appropriate type, or re-select the "Type of values" above.</strong></div>');
+    }
+    if ($certs) {
       $form['identity_provider']['idp_certs']['#default_value'] = [];
-      foreach ($cert_values as $value) {
-        $form['identity_provider']['idp_certs']['#default_value'][] = ['cert' => $this->formatKeyOrCert($value, TRUE)];
+      foreach ($certs as $value) {
+        $cert_type = strstr($value, ':', TRUE);
+        $form['identity_provider']['idp_certs']['#default_value'][] =
+          $cert_type === 'file' ? ['file' => substr($value, 5) ] : ['cert' => $this->formatKeyOrCert($value, TRUE)];
       }
     }
 
+    $form['identity_provider']['idp_certfile_encryption'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Encryption Certificate Filename'),
+      '#default_value' => substr($encryption_cert, 5),
+      // @todo change description; remove "whenever we'll support that".
+      '#description' => $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (whenever we'll support that). If left empty, the first certificate above is used for encryption too."),
+      '#states' => [
+        'visible' => [
+          ':input[name="idp_cert_type"]' => [['value' => 'file']]
+            + ($cert_types === ':' ? ['or', ['value' => '']] : []),
+        ],
+      ],
+    ];
     $form['identity_provider']['idp_cert_encryption'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Encryption Certificate'),
@@ -455,6 +530,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
       //   option that governs encrypting anything (NameID in logout requests).
       // @todo change description; remove "whenever we'll support that".
       '#description' => $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (whenever we'll support that). If left empty, the first certificate above is used for encryption too."),
+      '#states' => [
+        'visible' => [
+          ':input[name="idp_cert_type"]' => [['value' => 'config']]
+            + ($cert_types === ':' ? ['or', ['value' => '']] : []),
+        ],
+      ],
     ];
 
     $form['user_info'] = [
@@ -893,6 +974,25 @@ class SamlauthConfigureForm extends ConfigFormBase {
           '@value' => "{$sp_cert_type}_{$sp_key_type}",
         ]));
     }
+
+    $idp_cert_type = $form_state->getValue('idp_cert_type');
+    $idp_certs = $form_state->getValue('idp_certs');
+    foreach ($idp_certs as $index => $item) {
+      if (!empty($item['file']) && in_array($idp_cert_type, ['', 'file']) && $item['file'][0] !== '/') {
+        $form_state->setErrorByName("idp_certs][$index][file", $this->t('IdP certificate filename must be absolute.'));
+      }
+      if ($idp_cert_type == '' && !empty($item['file']) && !empty($item['cert'])) {
+        $form_state->setErrorByName("idp_certs][$index][cert", $this->t('IdP certificate and filename cannot both be set.'));
+      }
+    }
+    $idp_cert_file = $form_state->getValue('idp_certfile_encryption');
+    $idp_cert = $form_state->getValue('idp_cert_encryption');
+    if ($idp_cert_file && in_array($idp_cert_type, ['', 'file']) && $idp_cert_file[0] !== '/') {
+      $form_state->setErrorByName('idp_certfile_encryption', $this->t('IdP encryption certificate filename must be absolute.'));
+    }
+    if ($idp_cert_type == '' && $idp_cert_file && $idp_cert) {
+      $form_state->setErrorByName("idp_cert_encryption", $this->t('IdP certificate and filename cannot both be set.'));
+    }
   }
 
   /**
@@ -919,11 +1019,23 @@ class SamlauthConfigureForm extends ConfigFormBase {
         $sp_private_key = $this->formatKeyOrCert($form_state->getValue('sp_private_key'), FALSE, TRUE);
     }
 
+    $idp_cert_type = $form_state->getValue('idp_cert_type');
     $idp_certs = [];
     foreach ($form_state->getValue('idp_certs') as $item) {
-      if (!empty($item['cert'])) {
+      // We validated that max. 1 of the values is set if $idp_cert_type == ''.
+      if (!empty($item['file']) && in_array($idp_cert_type, ['', 'file'])) {
+        $idp_certs[] = "file:{$item['file']}";
+      }
+      if (!empty($item['cert']) && in_array($idp_cert_type, ['', 'config'])) {
         $idp_certs[] = $this->formatKeyOrCert($item['cert'], FALSE);
       }
+    }
+    $idp_cert_encryption = $form_state->getValue('idp_certfile_encryption');
+    if ($idp_cert_encryption) {
+      $idp_cert_encryption = "file:$idp_cert_encryption";
+    }
+    else {
+      $idp_cert_encryption = $this->formatKeyOrCert($idp_cert_encryption, FALSE);
     }
 
     // This is never 0 but can be ''. (NULL would mean same as ''.) Unlike
@@ -956,7 +1068,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ->set('idp_single_log_out_service', $form_state->getValue('idp_single_log_out_service'))
       ->set('idp_change_password_service', $form_state->getValue('idp_change_password_service'))
       ->set('idp_certs', $idp_certs)
-      ->set('idp_cert_encryption', $this->formatKeyOrCert($form_state->getValue('idp_cert_encryption'), FALSE))
+      ->set('idp_cert_encryption', $idp_cert_encryption)
       ->set('unique_id_attribute', $form_state->getValue('unique_id_attribute'))
       ->set('map_users', $form_state->getValue('map_users'))
       ->set('map_users_name', $form_state->getValue('map_users_name'))
