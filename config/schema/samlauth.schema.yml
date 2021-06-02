@@ -27,6 +27,8 @@ samlauth.authentication:
       type: string
     sp_x509_certificate:
       type: string
+    sp_new_certificate:
+      type: string
     sp_private_key:
       type: string
     metadata_valid_secs:
