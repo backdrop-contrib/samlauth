@@ -3,6 +3,11 @@ These are selected quick notes for developers. For all changes, see the
 
 8.x-3.3:
 
+* Configuration: security_metadata_sign, security_nameid_encrypt,
+  security_nameid_encrypted, security_encryption_algorithm added. (These
+  settings were added to complete the known configurable options, not to cover
+  any outstanding request / issue.)
+
 * Configuration: sp_cert_folder has been removed. sp_private_key,
   sp_x509_certificate, (new) sp_new_certificate, idp_certs and
   idp_cert_encryption can now hold values with a 'file:' and 'key:' prefix

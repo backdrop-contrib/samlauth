@@ -920,46 +920,54 @@ class SamlService {
         ],
       ],
       'security' => [
-        // @todo not implemented yet: nameIdEncrypted, which is
-        // Used for logout; also influences Settings:__construct() checks for
-        // IDP cert:
-        // @todo not implemented yet: signMetadata, which is
-        // Used for metadata:
-        // Used for metadata / login(*):
+        // Used for metadata (adds a whole signature section):
+        'signMetadata' => (bool) $config->get('security_metadata_sign'),
+        // Used for metadata (value goes into attribute
+        // AuthnRequestsSigned="true/false" of SPSSODescriptor) / login(*):
         'authnRequestsSigned' => (bool) $config->get('security_authn_requests_sign'),
         // Used for logout(*):
         'logoutRequestSigned' => (bool) $config->get('security_logout_requests_sign'),
         // Used for SLO response, sent after processing incoming SLO request(*):
         'logoutResponseSigned' => (bool) $config->get('security_logout_responses_sign'),
-        // @todo not implemented yet: wantNameIdEncrypted, which is
+        // Used for logout; also influences Settings:__construct() checks for
+        // presence of IDP cert:
+        'nameIdEncrypted' => (bool) $config->get('security_nameid_encrypt'),
+        // Used for acs:
+        // TRUE by default AND must be TRUE on existing installations that
+        // didn't have the setting before, so it's the first one to get a
+        // default value. (If we didn't have the (bool) operator, we wouldn't
+        // necessarily need the default - but leaving it out would just invite
+        // a bug later on.)
+        'wantNameId' => (bool) ($config->get('security_want_name_id') ?? TRUE),
         // Used for login / acs(*); indirectly influences metadata(**):
+        'wantNameIdEncrypted' => (bool) $config->get('security_nameid_encrypted'),
         // Used for acs(*); indirectly influences metadata(**):
         'wantAssertionsEncrypted' => (bool) $config->get('security_assertions_encrypt'),
-        // Used for metadata / acs(*):
+        // Used for metadata (value goes into attribute
+        // WantAssertionsSigned="true/false" of SPSSODescriptor) / acs(*):
         'wantAssertionsSigned' => (bool) $config->get('security_assertions_signed'),
         // Used for acs / sls (processing incoming SLO responses and requests):
         'wantMessagesSigned' => (bool) $config->get('security_messages_sign'),
-        // Used for metadata / login:
+        // Used for login:
         'requestedAuthnContext' => (bool) $config->get('security_request_authn_context'),
         // Used for login / logout / SLO response, sent after processing
         // incoming SLO request; should be deprecated:
         'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),
-        // Used for acs:
-        // This is the first setting that is TRUE by default AND must be TRUE
-        // on existing installations that didn't have the setting before, so
-        // it's the first one to get a default value. (If we didn't have the
-        // (bool) operator, we wouldn't necessarily need the default - but
-        // leaving it out would just invite a bug later on.)
-        'wantNameId' => (bool) ($config->get('security_want_name_id') ?? TRUE),
         // (*): also influences Settings:__construct() checks for SP cert+key.
-        // (**): if either of these properties is true, some 'encryption'
-        // attribute is always included in the metadata.
+        // (**): if either of these properties is true, an extra 'encryption'
+        // certificate is always included in the metadata. (With the same value
+        // as the 'signing' certificate; we don't support different ones.)
       ],
       'strict' => (bool) $config->get('strict'),
     ];
     $sig_alg = $config->get('security_signature_algorithm');
     if ($sig_alg) {
       $library_config['security']['signatureAlgorithm'] = $sig_alg;
+    }
+    $enc_alg = $config->get('security_encryption_algorithm');
+    if ($enc_alg) {
+      // Not a typo; this is snake_case in the library too.
+      $library_config['security']['encryption_algorithm'] = $enc_alg;
     }
     if ($base_url) {
       $library_config['baseurl'] = $base_url;
@@ -986,6 +994,7 @@ class SamlService {
     // / certs are used.
     $add_key = $add_cert = $add_idp_cert = TRUE;
     $add_new_cert = in_array($purpose, ['metadata', '']);
+    $add_idp_encryption_cert = FALSE;
     switch ($purpose) {
       case 'metadata':
         // signMetadata / wantNameIdEncrypted are not implemented yet but that
@@ -1025,6 +1034,9 @@ class SamlService {
         // $add_idp_cert=!empty($library_config['security']['nameIdEncrypted']);
         // ^ This would also need the 2nd parameter to Settings::__construct()
         // to be !$add_idp_cert.
+        // That just means we should generally add at least 1 IdP cert, though.
+        // We don't need to add the encryption cert specifically - only if:
+        $add_idp_encryption_cert = !empty($library_config['security']['nameIdEncrypted']);
         break;
 
       case 'acs':
@@ -1065,7 +1077,7 @@ class SamlService {
       unset($library_config['security']['logoutRequestSigned']);
       unset($library_config['security']['logoutResponseSigned']);
       unset($library_config['security']['wantAssertionsEncrypted']);
-      unset($library_config['security']['wantAssertionsSigned']);
+      unset($library_config['security']['wantNameIdEncrypted']);
     }
     if (!$add_idp_cert) {
       // Same for IdP cert.
@@ -1178,11 +1190,41 @@ class SamlService {
         }
       }
     }
-    if ($add_idp_cert) {
+
+    $encryption_cert = '';
+    $certs = [];
+    if ($add_idp_encryption_cert) {
+      $encryption_cert = $config->get('idp_cert_encryption');
+      if (isset($encryption_cert) && !is_string($encryption_cert)) {
+        throw new SamlError('IdP encryption cert setting is not a string.', SamlError::SETTINGS_INVALID);
+      }
+      $type = strstr($encryption_cert, ':', TRUE);
+      if ($type === 'key') {
+        if ($key_repository) {
+          $encryption_cert = substr($encryption_cert, 4);
+          $key_entity = $key_repository->getKey($encryption_cert);
+          if (!$key_entity) {
+            throw new SamlError("IdP encryption cert '$encryption_cert' not found.", SamlError::SETTINGS_INVALID);
+          }
+          $encryption_cert = $key_entity->getKeyValue();
+        }
+        else {
+          throw new SamlError('IdP encryption cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+        }
+      }
+      elseif ($type === 'file') {
+        $encryption_cert = file_get_contents(substr($encryption_cert, 5));
+        if ($encryption_cert === FALSE) {
+          throw new SamlError('IdP encryption cert not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+        }
+      }
+    }
+    if ($add_idp_cert || ($add_idp_encryption_cert && !$encryption_cert)) {
       $certs = $config->get('idp_certs');
       foreach ($certs as $i => $cert) {
         if (isset($certs[$i]) && !is_string($certs[$i])) {
-          throw new SamlError('IdP cert setting is not a string.', SamlError::SETTINGS_INVALID);
+          $nr = ($i ? " $i" : '');
+          throw new SamlError("IdP cert setting$nr is not a string.", SamlError::SETTINGS_INVALID);
         }
         $type = strstr($cert, ':', TRUE);
         if ($type === 'key') {
@@ -1206,64 +1248,42 @@ class SamlService {
           }
         }
       }
-      $encryption_cert = $config->get('idp_cert_encryption');
-      if (isset($encryption_cert) && !is_string($encryption_cert)) {
-        throw new SamlError('IdP cert setting is not a string.', SamlError::SETTINGS_INVALID);
-      }
-      $type = strstr($encryption_cert, ':', TRUE);
-      if ($type === 'key') {
-        if ($key_repository) {
-          $encryption_cert = substr($encryption_cert, 4);
-          $key_entity = $key_repository->getKey($encryption_cert);
-          if (!$key_entity) {
-            throw new SamlError("IdP encryption cert '$encryption_cert' not found.", SamlError::SETTINGS_INVALID);
+    }
+    // @todo remove in 4.x: not applicable after samlauth_update_8304().
+    if (!$certs && !$encryption_cert) {
+      $old_cert = $config->get('idp_x509_certificate');
+      $old_cert_multi = $config->get('idp_x509_certificate_multi');
+      if ($old_cert || $old_cert_multi) {
+        $certs = $old_cert ? [$old_cert] : [];
+        if ($old_cert_multi) {
+          if ($config->get('idp_cert_type') === 'encryption') {
+            $encryption_cert = $old_cert_multi;
           }
-          $encryption_cert = $key_entity->getKeyValue();
-        }
-        else {
-          throw new SamlError('IdP encryption cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
-        }
-      }
-      elseif ($type === 'file') {
-        $encryption_cert = file_get_contents(substr($encryption_cert, 5));
-        if ($encryption_cert === FALSE) {
-          throw new SamlError('IdP encryption cert not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
-        }
-      }
-      // @todo remove in 4.x: not applicable after samlauth_update_8304().
-      if (!$certs && !$encryption_cert) {
-        $old_cert = $config->get('idp_x509_certificate');
-        $old_cert_multi = $config->get('idp_x509_certificate_multi');
-        if ($old_cert || $old_cert_multi) {
-          $certs = $old_cert ? [$old_cert] : [];
-          if ($old_cert_multi) {
-            if ($config->get('idp_cert_type') === 'encryption') {
-              $encryption_cert = $old_cert_multi;
-            }
-            else {
-              $certs[] = $old_cert_multi;
-            }
+          else {
+            $certs[] = $old_cert_multi;
           }
         }
       }
-      // If we don't set a separate 'x509certMulti > encryption' cert, the
-      // 'main' cert (not 'x509certMulti > signing') is used for encryption so
-      // it must be set. If we have a single 'main/signing' cert, we can set it
-      // in either 'x509certMulti > signing' or as the main cert - both is not
-      // necessary. This can be encoded in several arbitrary ways, e.g.:
-      if ($encryption_cert) {
-        $library_config['idp']['x509certMulti'] = [
-          // This is an array, but the library never uses anything but the
-          // first value.
-          'encryption' => [$encryption_cert],
-          'signing' => $certs,
-        ];
-      }
-      else {
+    }
+    // If we don't set a separate 'x509certMulti > encryption' cert, the
+    // 'main' cert (not 'x509certMulti > signing') is used for encryption so
+    // it must be set. If we have a single 'main/signing' cert, we can set it
+    // in either 'x509certMulti > signing' or as the main cert - both is not
+    // necessary. This can be encoded in several arbitrary ways, e.g.:
+    if ($encryption_cert) {
+      $library_config['idp']['x509certMulti'] = [
+        // This is an array, but the library never uses anything but the
+        // first value.
+        'encryption' => [$encryption_cert],
+        'signing' => $certs,
+      ];
+    }
+    elseif ($certs) {
+      if (count($certs) == 1 || $add_idp_encryption_cert) {
         $library_config['idp']['x509cert'] = reset($certs);
-        if (count($certs) > 1) {
-          $library_config['idp']['x509certMulti']['signing'] = $certs;
-        }
+      }
+      if (count($certs) > 1) {
+        $library_config['idp']['x509certMulti']['signing'] = $certs;
       }
     }
 

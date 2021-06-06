@@ -75,19 +75,27 @@ samlauth.authentication:
       type: boolean
     strict:
       type: boolean
+    security_metadata_sign:
+      type: boolean
     security_authn_requests_sign:
       type: boolean
     security_logout_requests_sign:
       type: boolean
     security_logout_responses_sign:
       type: boolean
-    security_assertions_encrypt:
+    security_nameid_encrypt:
       type: boolean
     security_signature_algorithm:
+      type: string
+    security_encryption_algorithm:
       type: string
     security_messages_sign:
       type: boolean
     security_assertions_signed:
+      type: boolean
+    security_assertions_encrypt:
+      type: boolean
+    security_nameid_encrypted:
       type: boolean
     security_want_name_id:
       type: boolean

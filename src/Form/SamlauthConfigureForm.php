@@ -624,6 +624,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    $form['service_provider']['security_metadata_sign'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Sign metadata'),
+      '#description' => $this->t('Add a UUID to the metadata XML and sign it (using the key whose public equivalent is published inside this same metadata).'),
+      '#default_value' => $config->get('security_metadata_sign'),
+    ];
+
     $form['service_provider']['caching'] = [
       '#type' => 'details',
       '#open' => TRUE,
@@ -831,13 +838,15 @@ class SamlauthConfigureForm extends ConfigFormBase {
       }
     }
 
-    // @todo change description; remove "whenever we'll support that", if we
-    //   start supporting NameIdEncrypted.
-    $description = $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (whenever we'll support that). If left empty, the first certificate above is used for encryption too.");
+    $description = $this->t("Optional public X.509 certificate used for encrypting the NameID in logout requests (if specified below). If left empty, the first certificate above is used for encryption too.");
     if ($this->keyRepository) {
+      // It is odd to make disabled-ness depend on a security checkbox that is
+      // furthe down below, but at least this makes clear that this encryption
+      // cert is only used for one very specific thing. Also, it is likely that
+      // only very few installations use a separate encryption certificate.
       $form['identity_provider']['idp_certkey_encryption'] = [
         '#type' => 'select',
-        '#title' => $this->t('Certificate'),
+        '#title' => $this->t('Encryption Certificate'),
         '#description' => $description,
         '#default_value' => $cert_types === 'key' ? substr($encryption_cert, 4) : '',
         '#options' => $selectable_public_certs,
@@ -849,6 +858,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
               'or',
               ['value' => ''],
             ],
+          ],
+          'disabled' => [
+            ':input[name="security_nameid_encrypt"]' => ['checked' => FALSE],
           ],
         ],
       ];
@@ -866,6 +878,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
             ['value' => ''],
           ],
         ],
+        'disabled' => [
+          ':input[name="security_nameid_encrypt"]' => ['checked' => FALSE],
+        ],
       ],
     ];
     $form['identity_provider']['idp_cert_encryption'] = [
@@ -880,6 +895,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
             'or',
             ['value' => ''],
           ],
+        ],
+        'disabled' => [
+          ':input[name="security_nameid_encrypt"]' => ['checked' => FALSE],
         ],
       ],
     ];
@@ -918,14 +936,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['user_info']['linking']['map_users_name'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable matching on name'),
-      '#description' => $this->t("Allows matching an existing local user name with value of the user name attribute."),
+      '#description' => $this->t('Allows matching an existing local user name with value of the user name attribute.'),
       '#default_value' => $config->get('map_users_name'),
     ];
 
     $form['user_info']['linking']['map_users_mail'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable matching on email'),
-      '#description' => $this->t("Allows matching an existing local user email with value of the user email attribute."),
+      '#description' => $this->t('Allows matching an existing local user email with value of the user email attribute.'),
       '#default_value' => $config->get('map_users_mail'),
     ];
 
@@ -965,7 +983,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal user name.<br />Example: <em>cn</em> or <em>eduPersonPrincipalName</em>'),
       '#default_value' => $config->get('user_name_attribute'),
       '#states' => [
-        'invisible' => [
+        'disabled' => [
           ':input[name="map_users_name"]' => ['checked' => FALSE],
           ':input[name="create_users"]' => ['checked' => FALSE],
           ':input[name="sync_name"]' => ['checked' => FALSE],
@@ -979,7 +997,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
       '#default_value' => $config->get('user_mail_attribute'),
       '#states' => [
-        'invisible' => [
+        'disabled' => [
           ':input[name="map_users_mail"]' => ['checked' => FALSE],
           ':input[name="create_users"]' => ['checked' => FALSE],
           ':input[name="sync_mail"]' => ['checked' => FALSE],
@@ -996,7 +1014,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['security']['security_authn_requests_sign'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Sign authentication requests'),
-      '#description' => $this->t('Requests sent to the Single Sign-On Service of the IdP will include a signature.'),
+      '#description' => $this->t('Requests sent to the Single Sign-On Service of the IdP will include a signature.') . '*',
       '#default_value' => $config->get('security_authn_requests_sign'),
     ];
 
@@ -1025,13 +1043,41 @@ class SamlauthConfigureForm extends ConfigFormBase {
         XMLSecurityKey::RSA_SHA384 => 'SHA384',
         XMLSecurityKey::RSA_SHA512 => 'SHA512',
       ],
-      '#description' => $this->t('Algorithm used in the signing process.'),
+      '#description' => $this->t('Algorithm used by the signing process.'),
       '#default_value' => $config->get('security_signature_algorithm'),
       '#states' => [
-        'invisible' => [
+        'disabled' => [
           ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
           ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
           ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
+        ],
+      ],
+    ];
+
+    $form['security']['security_nameid_encrypt'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Encrypt NameID in logout requests'),
+      '#description' => $this->t("The NameID included in requests sent to the Single Logout Service of the IdP will be encrypted."),
+      '#default_value' => $config->get('security_nameid_encrypt'),
+    ];
+
+    // I am not a crypto expert and do not know if we can/should add
+    // AESnnn/GCM and others here as well. The library default can be found in
+    // the Utils::generateNameId() definition.
+    $form['security']['security_encryption_algorithm'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Encryption algorithm'),
+      '#options' => [
+        '' => $this->t('library default'),
+        XMLSecurityKey::AES128_CBC => 'AES128/CBC',
+        XMLSecurityKey::AES192_CBC => 'AES192/CBC',
+        XMLSecurityKey::AES256_CBC => 'AES256/CBC',
+      ],
+      '#description' => $this->t('Algorithm used by the encryption process.'),
+      '#default_value' => $config->get('security_encryption_algorithm'),
+      '#states' => [
+        'disabled' => [
+          ':input[name="security_nameid_encrypt"]' => ['checked' => FALSE],
         ],
       ],
     ];
@@ -1046,7 +1092,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['security']['request_set_name_id_policy'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Specify NameID policy'),
-      '#description' => $this->t('A NameIDPolicy element is added in authentication requests. This is default behavior for the SAML Toolkit library, but may be unneeded. If checked, "NameID Format" may need to be specified too. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
+      '#description' => $this->t('A NameIDPolicy element is added in authentication requests, mentioning the below format. This is default behavior for the SAML Toolkit library, but may be unneeded. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
       // This is one of the few checkboxes that must be TRUE on existing
       // installations where the checkbox didn't exist before (in older module
       // versions). Others get their default only from the config/install file.
@@ -1056,8 +1102,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['security']['sp_name_id_format'] = [
       '#type' => 'textfield',
       '#title' => $this->t('NameID Format'),
-      '#description' => $this->t('The format for the NameID attribute to request from the identity provider. If "Specify NameID policy" is unchecked, this value is not included in authentication requests but is still included in the SP metadata. Some common formats (with "unspecified" being the default):<br>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified<br>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress<br>urn:oasis:names:tc:SAML:2.0:nameid-format:transient<br>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'),
+      '#description' => $this->t('The format for the NameID attribute to request from the identity provider / to send in logout requests.*<br>Some common formats (with "unspecified" being the default):<br>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified<br>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress<br>urn:oasis:names:tc:SAML:2.0:nameid-format:transient<br>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'),
       '#default_value' => $config->get('sp_name_id_format'),
+    ];
+
+    // Untll #description_display works: (#314385)
+    $form['security']['description'] = [
+      '#type' => 'markup',
+      '#markup' => '*: ' . $this->t('These options also influence the SP metadata. (They are mentioned as  an attribute or child element of the SPSSODescriptor element.)'),
     ];
 
     $form['responses'] = [
@@ -1117,18 +1169,28 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['responses']['security_assertions_signed'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require assertions to be signed'),
-      '#description' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed. (When strict validation is turned off, this check is not performed but the expectation is still specified in the SP metadata.)'),
+      '#description' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed.*'),
       '#default_value' => $config->get('security_assertions_signed'),
     ];
 
     $form['responses']['security_assertions_encrypt'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Require assertions to be encrypted'),
-      // The metadata changes if wantAssertionsEncrypted OR wantNameIdEncrypted
-      // are set. But we don't have wantNameIdEncrypted yet, so we'll describe
-      // this option as the way to change the metadata.
-      '#description' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted. (When strict validation is turned off, this check is not performed but the expectation is still specified in the SP metadata.)'),
+      '#description' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.*'),
       '#default_value' => $config->get('security_assertions_encrypt'),
+    ];
+
+    $form['responses']['security_nameid_encrypted'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Require NameID to be encrypted'),
+      '#description' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.*'),
+      '#default_value' => $config->get('security_nameid_encrypted'),
+    ];
+
+    // Untll #description_display works: (#314385)
+    $form['responses']['description'] = [
+      '#type' => 'markup',
+      '#markup' => '*: ' . $this->t('These checks are not done when strict validation is turned off, but the settings also influence the SP metadata. (The "signed" value is mentioned as an attribute of the SPSSODescriptor element. The "encrypted" options add an extra "encryption" certificate descriptor element when enabled.)'),
     ];
 
     $form['other'] = [
@@ -1161,6 +1223,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['debugging'] = [
       '#title' => $this->t('Debugging'),
       '#type' => 'details',
+      '#description' => $this->t('When turning off debugging options to go into production mode, also check above "Caching / validity" options.'),
       '#open' => TRUE,
     ];
 
@@ -1452,6 +1515,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       }
     }
 
+    $config->set('sp_x509_certificate', $sp_cert)
+      ->set('sp_new_certificate', $sp_new_cert)
+      ->set('sp_private_key', $sp_private_key)
+      ->set('idp_certs', $idp_certs)
+      ->set('idp_cert_encryption', $idp_cert_encryption)
+      ->clear('sp_cert_folder');
+
     // This is never 0 but can be ''. (NULL would mean same as ''.) Unlike
     // others, this value needs to be unset if empty.
     $metadata_valid = $form_state->getValue('metadata_valid_secs');
@@ -1462,60 +1532,61 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $config->clear('metadata_valid_secs');
     }
 
-    $config
-      ->set('login_menu_item_title', $form_state->getValue('login_menu_item_title'))
-      ->set('logout_menu_item_title', $form_state->getValue('logout_menu_item_title'))
-      ->set('logout_different_user', $form_state->getValue('logout_different_user'))
-      ->set('local_login_saml_error', $form_state->getValue('local_login_saml_error'))
-      ->set('login_redirect_url', $form_state->getValue('login_redirect_url'))
-      ->set('logout_redirect_url', $form_state->getValue('logout_redirect_url'))
-      ->set('drupal_login_roles', $form_state->getValue('drupal_login_roles'))
-      ->set('error_redirect_url', $form_state->getValue('error_redirect_url'))
-      ->set('error_throw', $form_state->getValue('error_throw'))
-      ->set('sp_entity_id', $form_state->getValue('sp_entity_id'))
-      ->set('sp_name_id_format', $form_state->getValue('sp_name_id_format'))
-      ->set('sp_x509_certificate', $sp_cert)
-      ->set('sp_new_certificate', $sp_new_cert)
-      ->set('sp_private_key', $sp_private_key)
-      ->set('metadata_cache_http', $form_state->getValue('metadata_cache_http'))
-      ->set('idp_entity_id', $form_state->getValue('idp_entity_id'))
-      ->set('idp_single_sign_on_service', $form_state->getValue('idp_single_sign_on_service'))
-      ->set('idp_single_log_out_service', $form_state->getValue('idp_single_log_out_service'))
-      ->set('idp_change_password_service', $form_state->getValue('idp_change_password_service'))
-      ->set('idp_certs', $idp_certs)
-      ->set('idp_cert_encryption', $idp_cert_encryption)
-      ->set('unique_id_attribute', $form_state->getValue('unique_id_attribute'))
-      ->set('map_users', $form_state->getValue('map_users'))
-      ->set('map_users_name', $form_state->getValue('map_users_name'))
-      ->set('map_users_mail', $form_state->getValue('map_users_mail'))
-      ->set('map_users_roles', $form_state->getValue('map_users_roles'))
-      ->set('create_users', $form_state->getValue('create_users'))
-      ->set('sync_name', $form_state->getValue('sync_name'))
-      ->set('sync_mail', $form_state->getValue('sync_mail'))
-      ->set('user_name_attribute', $form_state->getValue('user_name_attribute'))
-      ->set('user_mail_attribute', $form_state->getValue('user_mail_attribute'))
-      ->set('security_authn_requests_sign', $form_state->getValue('security_authn_requests_sign'))
-      ->set('security_logout_requests_sign', $form_state->getValue('security_logout_requests_sign'))
-      ->set('security_logout_responses_sign', $form_state->getValue('security_logout_responses_sign'))
-      ->set('security_assertions_encrypt', $form_state->getValue('security_assertions_encrypt'))
-      ->set('security_assertions_signed', $form_state->getValue('security_assertions_signed'))
-      ->set('security_lowercase_url_encoding', $form_state->getValue('security_lowercase_url_encoding'))
-      ->set('security_messages_sign', $form_state->getValue('security_messages_sign'))
-      ->set('request_set_name_id_policy', $form_state->getValue('request_set_name_id_policy'))
-      ->set('security_want_name_id', $form_state->getValue('security_want_name_id'))
-      ->set('security_logout_reuse_sigs', $form_state->getValue('security_logout_reuse_sigs'))
-      ->set('security_request_authn_context', $form_state->getValue('security_request_authn_context'))
-      ->set('security_signature_algorithm', $form_state->getValue('security_signature_algorithm'))
-      ->set('strict', $form_state->getValue('strict'))
-      ->set('use_proxy_headers', $form_state->getValue('use_proxy_headers'))
-      ->set('use_base_url', $form_state->getValue('use_base_url'))
-      ->set('debug_display_error_details', $form_state->getValue('debug_display_error_details'))
-      ->set('debug_log_saml_out', $form_state->getValue('debug_log_saml_out'))
-      ->set('debug_log_saml_in', $form_state->getValue('debug_log_saml_in'))
-      ->set('debug_log_in', $form_state->getValue('debug_log_in'))
-      ->set('debug_phpsaml', $form_state->getValue('debug_phpsaml'))
-      ->clear('sp_cert_folder')
-      ->save();
+    foreach ([
+      'login_menu_item_title',
+      'logout_menu_item_title',
+      'logout_different_user',
+      'local_login_saml_error',
+      'login_redirect_url',
+      'logout_redirect_url',
+      'drupal_login_roles',
+      'error_redirect_url',
+      'error_throw',
+      'sp_entity_id',
+      'sp_name_id_format',
+      'metadata_cache_http',
+      'idp_entity_id',
+      'idp_single_sign_on_service',
+      'idp_single_log_out_service',
+      'idp_change_password_service',
+      'unique_id_attribute',
+      'map_users',
+      'map_users_name',
+      'map_users_mail',
+      'map_users_roles',
+      'create_users',
+      'sync_name',
+      'sync_mail',
+      'user_name_attribute',
+      'user_mail_attribute',
+      'security_metadata_sign',
+      'security_authn_requests_sign',
+      'security_logout_requests_sign',
+      'security_logout_responses_sign',
+      'security_assertions_encrypt',
+      'security_nameid_encrypt',
+      'security_nameid_encrypted',
+      'security_assertions_signed',
+      'security_lowercase_url_encoding',
+      'security_messages_sign',
+      'request_set_name_id_policy',
+      'security_want_name_id',
+      'security_logout_reuse_sigs',
+      'security_request_authn_context',
+      'security_signature_algorithm',
+      'security_encryption_algorithm',
+      'strict',
+      'use_proxy_headers',
+      'use_base_url',
+      'debug_display_error_details',
+      'debug_log_saml_out',
+      'debug_log_saml_in',
+      'debug_log_in',
+      'debug_phpsaml',
+    ] as $config_value) {
+      $config->set($config_value, $form_state->getValue($config_value));
+    }
+    $config->save();
 
     parent::submitForm($form, $form_state);
   }
