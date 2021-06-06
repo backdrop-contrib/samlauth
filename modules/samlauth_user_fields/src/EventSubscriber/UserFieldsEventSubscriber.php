@@ -174,7 +174,16 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     $match_fields = [];
     if (is_array($mappings)) {
       foreach ($mappings as $mapping) {
-        if (isset($mapping['link_user_order']) && isset($mapping['field_name']) && isset($mapping['attribute_name'])) {
+        // 'Sub fields' (":") are currently not allowed for linking. We
+        // disallow them in the UI, so we hope that no 'sub field' is ever
+        // configured here. But if it is... we give the generic warning below.
+        // (Why they are disallowed: because I simply haven't checked yet,
+        // whether the entity query logic works/can work for them.)
+        if (isset($mapping['link_user_order'])
+            && isset($mapping['field_name'])
+            && strpos($mapping['field_name'], ':') === FALSE
+            && isset($mapping['attribute_name'])
+           ) {
           $match_id = $mapping['link_user_order'];
           $value = $this->getAttribute($mapping['attribute_name'], $attributes);
           if (!isset($value)) {
@@ -223,6 +232,8 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     $mappings = $config->get('field_mappings');
     $validation_errors = [];
     if (is_array($mappings)) {
+      $compound_field_values = [];
+      $changed_compound_field_values = [];
       foreach ($mappings as $mapping) {
         // If the attribute name is invalid, or the field does not exist, spam
         // the logs on every login until the mapping is fixed.
@@ -232,33 +243,99 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
         elseif (empty($mapping['field_name']) || !is_string($mapping['field_name'])) {
           $this->logger->warning('Invalid user field mapped from SAML attribute %attribute; the mapping must be fixed.', ['%attribute' => $mapping['attribute_name']]);
         }
-        elseif (!$account->hasField($mapping['field_name'])) {
-          $this->logger->warning('User field %field is mapped from SAML attribute %attribute, but does not exist; the mapping must be fixed.', [
-            '%field' => $mapping['field_name'],
-            '%attribute' => $mapping['attribute_name'],
-          ]);
-        }
-        else {
-          // Skip if the attribute name does not exist in the set of SAML
-          // attributes. Or the value is NULL, which we assume does not happen.
-          // We'll likely also skip empty strings, but that's determined by
-          // isInputValueUpdatable().
-          $value = $this->getAttribute($mapping['attribute_name'], $event->getAttributes());
-          if (isset($value)
-              && $this->isInputValueUpdatable($value, $account, $mapping['field_name'])) {
-            $valid = $this->validateAccountFieldValue($value, $account, $mapping['field_name']);
-            if ($valid) {
-              $account->set($mapping['field_name'], $value);
-              $event->markAccountChanged();
+        // Skip silently if the configured attribute is not present in our
+        // data or if its value is considered 'empty / not updatable'.
+        $value = $this->getUpdatableAttributeValue($mapping['attribute_name'], $event->getAttributes());
+        if (isset($value)) {
+          $account_field_name = strstr($mapping['field_name'], ':', TRUE);
+          if ($account_field_name) {
+            $sub_field_name = substr($mapping['field_name'], strlen($account_field_name) + 1);
+          }
+          else {
+            $account_field_name = $mapping['field_name'];
+            $sub_field_name = '';
+          }
+
+          $field_definition = $account->getFieldDefinition($account_field_name);
+          if (!$field_definition) {
+            $this->logger->warning('User field %field is mapped from SAML attribute %attribute, but does not exist; the mapping must be fixed.', [
+              '%field' => $mapping['field_name'],
+              '%attribute' => $mapping['attribute_name'],
+            ]);
+          }
+          elseif ($sub_field_name && $field_definition->getType() !== 'address') {
+            // 'address' is the only compound field type we tested so far.
+            $this->logger->warning('Unsuppoted user field type %type; skipping field mapping.', [
+              '%type' => $field_definition->getType(),
+            ]);
+          }
+          else {
+            if (!$sub_field_name) {
+              // Compare, validate, set single field.
+              if (!$this->isInputValueEqual($value, $account->get($account_field_name)->value, $account_field_name)) {
+                $valid = $this->validateAccountFieldValue($value, $account, $mapping['field_name']);
+                if ($valid) {
+                  $account->set($mapping['field_name'], $value);
+                  $event->markAccountChanged();
+                }
+                else {
+                  // Collect values to include below. Supposedly we have scalar
+                  // values; var_export() shows their type. And identifier
+                  // should include both source and destination because we can
+                  // have multiple mappings defined for either.
+                  $validation_errors[] = $mapping['attribute_name'] . ' (' . var_export($value, TRUE)
+                    . ') > ' . $mapping['field_name'];
+                }
+              }
             }
             else {
-              // Collect values to include below. Supposedly we have scalar
-              // values; var_export() shows their type. And identifier should
-              // include both source and destination because we can have
-              // multiple mappings defined for either.
-              $validation_errors[] = $mapping['attribute_name'] . ' (' . var_export($value, TRUE)
-                . ') > ' . $mapping['field_name'];
+              // Get/compare compound field; if it should be updated, set the
+              // changed field value aside for later validation, because
+              // validation needs to be done on the field as a whole, and other
+              // attributes may be mapped to other sub values.
+              if (!isset($compound_field_values[$account_field_name])) {
+                // TypedData: this only works with multivalue fields but I
+                // guess that's a given anyway. We can either get() the
+                // single value (specific object) or getValue() it, in which
+                // case we assume it's an array, for our purpose. In the former
+                // case, I guess
+                // - typedDataManager->create($field_definition, $input_value)
+                //   would get us a new value if our field is NULL (which can
+                //   happen)
+                // - validateAccountFieldValue() likely just works if we skip
+                //   the create() call when $value is an object
+                // but I haven't tried that. So far we just work with arrays.
+                $compound_field_values[$account_field_name] =
+                  $account->get($account_field_name)->get(0)->getValue() ?? [];
+              }
+              if (!$this->isInputValueEqual($value, $compound_field_values[$account_field_name][$sub_field_name] ?? NULL, $mapping['field_name'])) {
+                $compound_field_values[$account_field_name][$sub_field_name] = $value;
+                // Just for logging if necessary:
+                $changed_compound_field_values[$account_field_name][] =
+                  $mapping['attribute_name'] . ' (' . var_export($value, TRUE) . ')';
+              }
+              // This would be a step toward working with objects - untested:
+              // TypedData uncertainty: get($sub_field_name) returns StringData
+              // for address subfields; get($sub_field_name)->getValue()
+              // returns the string. Both would be good for our current purpose
+              // provided that isInputValueEqual() could handle classes.
+              // if (!$this->isInputValueEqual($value, $account_field->get($sub_field_name)->getValue(), $mapping['field_name'])) {
+              // $account_field->setValue($sub_field_name, $value);
+              // $compound_field_values[$account_field_name] = $account_field;.
             }
+          }
+        }
+      }
+      if ($compound_field_values) {
+        foreach ($compound_field_values as $field_name => $value) {
+          $valid = $this->validateAccountFieldValue($value, $account, $field_name);
+          if ($valid) {
+            $account->set($field_name, $value);
+            $event->markAccountChanged();
+          }
+          else {
+            $validation_errors[] = implode(' + ', $changed_compound_field_values)
+              . " > $field_name";
           }
         }
       }
@@ -278,11 +355,8 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
   /**
    * Checks if a value should be updated into an existing user account field.
    *
-   * This returns FALSE if the value is already equal in the user account. This
-   * is abstracted into a separate method because the definition of "equals" is
-   * not fully clear / so it's easier to override if necessary. This standard
-   * implementation treats empty strings as "no value" rather than "an empty
-   * value".
+   * Unused / deprecated in favor of getUpdatableAttributeValue(). Will likely
+   * be removed in the next major version.
    *
    * @param mixed $input_value
    *   The value to (maybe) update / write into the user account field.
@@ -297,25 +371,49 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
    *   validity should still be checked.
    */
   protected function isInputValueUpdatable($input_value, UserInterface $account, $account_field_name) {
-    // It would be awesome if we could just do $input_value != $current_value
-    // but that implies trust that the attribute data is properly 'typed' and
-    // does not contain meaningless values (such as empty strings - which
-    // likely mean NULL rather than an empty value that should be overwritten
-    // in the user). In absence of exact detailed knowledge/trust of our input
-    // value, we'll fall back to generic rules that usually work:
-    // - Do not treat "" as a value - i.e. don't overwrite a field with "".
-    // - Do treat some other similar values (like 0) as a value. See
-    //   isInputValueEqual() for more details.
     return $account->hasField($account_field_name)
       && !$this->isInputValueEqual($input_value, '')
       && !$this->isInputValueEqual($input_value, $account->get($account_field_name)->value, $account_field_name);
   }
 
   /**
+   * Returns 'updatable' value from a SAML attribute; logs anything strange.
+   *
+   * 'Updatable' here does not necessarily mean the value will actually be
+   * updated because we are not comparing it with the current destination field
+   * value here. It just means the value in itself could be written into the
+   * field. This standard implementation treats empty strings as "no value"
+   * rather than "an empty value".
+   *
+   * @param string $name
+   *   The name of a SAML attribute.
+   * @param array $attributes
+   *   The complete set of SAML attributes in the assertion. (The attributes
+   *   can currently be duplicated, keyed both by their name and friendly name.)
+   *
+   * @return mixed|null
+   *   The SAML attribute value; NULL if the attribute value was not found or
+   *   should not be used for updating.
+   */
+  protected function getUpdatableAttributeValue($name, array $attributes) {
+    $value = $this->getAttribute($name, $attributes);
+
+    // In absence of exact detailed knowledge/trust of our input
+    // value, we'll fall back to generic rules that usually work:
+    // - Do not treat "" as a value - i.e. don't overwrite a field with "".
+    // - Do treat some other similar values (like 0) as a value. See
+    //   isInputValueEqual() for more details.
+    return isset($value) && !$this->isInputValueEqual($value, '') ? $value : NULL;
+  }
+
+  /**
    * Checks if an input value is equal to a user account field value.
    *
    * This is abstracted into a separate method because the definition of
-   * "equals" is not fully clear / so it's easier to override if necessary.
+   * "equals" is not fully clear / so it's easier to override if necessary. (It
+   * would be great if we could just do $input_value != $field_value but that
+   * implies trust that the attribute data is properly 'typed' and does not
+   * contain meaningless values.)
    *
    * @param mixed $input_value
    *   The input value.

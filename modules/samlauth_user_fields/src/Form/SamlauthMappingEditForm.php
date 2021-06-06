@@ -3,8 +3,10 @@
 namespace Drupal\samlauth_user_fields\Form;
 
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\TypedData\DataDefinition;
 use Drupal\samlauth\Controller\SamlController;
 use Drupal\samlauth_user_fields\EventSubscriber\UserFieldsEventSubscriber;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -18,6 +20,7 @@ class SamlauthMappingEditForm extends FormBase {
    * Field types that can be mapped.
    */
   const MAP_FIELD_TYPES = [
+    'address',
     'boolean',
     'email',
     'float',
@@ -119,7 +122,16 @@ class SamlauthMappingEditForm extends FormBase {
     foreach ($user_fields as $name => $field) {
       if (in_array($field->getType(), static::MAP_FIELD_TYPES, TRUE)
           && !in_array($name, static::PREVENT_MAP_FIELDS, TRUE)) {
-        $options[$name] = $field->getLabel();
+        $subfields = $this->getSubFields($field);
+        $label = $field->getLabel();
+        if ($subfields) {
+          foreach ($subfields as $sub_name => $sub_label) {
+            $options["$name:$sub_name"] = "$label: $sub_label";
+          }
+        }
+        else {
+          $options[$name] = $label;
+        }
       }
     }
     $field_name = NULL;
@@ -171,10 +183,14 @@ class SamlauthMappingEditForm extends FormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $mappings = $this->configFactory()->get(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)->get('field_mappings');
+    if (strpos($form_state->getValue('field_name'), ':') !== FALSE
+        && !in_array($form_state->getValue('link_user_order'), ['', NULL], TRUE)) {
+      $form_state->setErrorByName('link_user_order', $this->t("Linking by a 'sub field' is not currently supported."));
+    }
 
     // If this is a new mapping, check to make sure a 'same' one isn't already
     // defined.
+    $mappings = $this->configFactory()->get(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)->get('field_mappings');
     if (is_array($mappings)) {
       $our_mapping_id = $form_state->getValue('mapping_id');
       $our_match_id = $form_state->getValue('link_user_order');
@@ -223,6 +239,59 @@ class SamlauthMappingEditForm extends FormBase {
     $config->set('field_mappings', $mappings)->save();
 
     $form_state->setRedirect('samlauth_user_fields.list');
+  }
+
+  /**
+   * Checks if the field has multiple columns that we can map values into.
+   *
+   * This starts off as a private method with some hardcoded logic because I'm
+   * not sure how this will evolve and if it will be general enough.
+   *
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $field
+   *   The field to check.
+   *
+   * @return array
+   *   All columns (as keys, with the label as values) inside this field which
+   *   can be mapped - or an empty array if the field is a 'simple' field with
+   *   just one mappable value column.
+   */
+  private function getSubFields(FieldDefinitionInterface $field) {
+    // Hardcode for address only. It is possible that the below code is general
+    // enough for all field types, but I don't know that for sure. I don't want
+    // field types that used to be treated as single-value to return an array
+    // here, thereby losing compatibility with previous module versions.
+    if ($field->getType() !== 'address') {
+      return [];
+    }
+
+    // A FieldDefinitionInterface does not necessarily have
+    // getPropertyDefinitions() and getSchema(). (The basic user fields do,
+    // because they extend BaseFieldDefinition which implements both
+    // FieldDefinitionInterface and FieldStorageDefinitionInterface.)
+    $storage_definition = $field->getFieldStorageDefinition();
+    $property_definitions = $storage_definition->getPropertyDefinitions();
+    $schema = $storage_definition->getSchema();
+    // Not sure which fields we should support; start out with just varchar
+    // (which is all fields in case of type 'address'). Also not sure if we
+    // want to filter out the address subfields that are set to "invisible"; I
+    // guess/hope not.
+    $columns = array_filter($schema['columns'], function ($column) {
+      return ($column['type'] ?? NULL) === 'varchar';
+    });
+    $subfields = [];
+    if ($columns) {
+      foreach (array_keys($columns) as $column_name) {
+        if (isset($property_definitions[$column_name])
+            && $property_definitions[$column_name] instanceof DataDefinition) {
+          $subfields[$column_name] = $property_definitions[$column_name]->getLabel();
+        }
+        else {
+          $subfields[$column_name] = $column_name;
+        }
+      }
+    }
+
+    return $subfields;
   }
 
 }

@@ -6,6 +6,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\TypedData\DataDefinition;
 use Drupal\Core\Url;
 use Drupal\samlauth\Controller\SamlController;
 use Drupal\samlauth_user_fields\EventSubscriber\UserFieldsEventSubscriber;
@@ -180,8 +181,25 @@ class SamlauthMappingListForm extends ConfigFormBase {
           ],
         ];
 
-        $user_field = isset($fields[$mapping['field_name']])
-          ? $fields[$mapping['field_name']]->getLabel() : $this->t('Unknown field %name', ['%name' => $mapping['field_name']]);
+        $real_field_name = strstr($mapping['field_name'], ':', TRUE);
+        if ($real_field_name) {
+          $sub_field_name = substr($mapping['field_name'], strlen($real_field_name) + 1);
+          if (isset($fields[$real_field_name])) {
+            $property_definitions = $fields[$real_field_name]->getFieldStorageDefinition()->getPropertyDefinitions();
+            if (isset($property_definitions[$sub_field_name])
+                && $property_definitions[$sub_field_name] instanceof DataDefinition) {
+              $sub_field_name = $property_definitions[$sub_field_name]->getLabel();
+            }
+          }
+        }
+        else {
+          $real_field_name = $mapping['field_name'];
+          $sub_field_name = '';
+        }
+        $user_field = (isset($fields[$real_field_name])
+            ? $fields[$real_field_name]->getLabel()
+            : $this->t('Unknown field %name', ['%name' => $real_field_name]))
+          . ($sub_field_name ? ": $sub_field_name" : '');
         $output['table']['#rows'][$id] = [
           $mapping['attribute_name'],
           $user_field,
