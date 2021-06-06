@@ -202,8 +202,10 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
           }
         }
       }
-      elseif ($account->isNew()) {
-        // We won't allow new accounts with empty e-mail.
+      elseif ($account->isNew() && !$account->getEmail()) {
+        // We won't allow new accounts with empty e-mail. If a custom event
+        // subscriber wants to populate the e-mail, then (at least for now) it
+        // should be registered with a higher priority than this standard one.
         $fatal_errors[] = $this->t('Email address is not provided in SAML attribute.');
       }
     }
