@@ -73,12 +73,8 @@ During configuration,
     for safer retrieval of keys, e.g. from an environment variable or various
     external key management solutions. In order to use this solution, before
     configuring samlauth:
-    - Install the Key module, and the 'key_asymmetric' submodule that is
-      distributed along with samlauth. You'll also need to install the
-      phpseclib library, by means of e.g.
-      ```
-      composer require phpseclib/phpseclib:~3.0
-      ``` 
+    - Install [Asymmetric Keys](https://www.drupal.org/project/key_asymmetric), 
+      plus its dependencies (the Key module and phpseclib/phpseclib:~3.0.7).
     - Install the appropriate add-on module if you want to use an external key
       provider.
     - Visit admin/config/system/keys and add 'Key' for your private key, using

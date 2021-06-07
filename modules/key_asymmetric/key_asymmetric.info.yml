@@ -1,8 +1,0 @@
-name: 'Asymmetric (public/private) keys'
-type: module
-description: 'Provides key types for public/private keys'
-package: 'Security'
-core_version_requirement: ^8 || ^9
-core: 8.x
-dependencies:
-  - key:key
