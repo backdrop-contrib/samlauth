@@ -1094,7 +1094,7 @@ class SamlService {
     else {
       if ($add_key) {
         $key = $config->get('sp_private_key');
-        if (!is_string($key)) {
+        if (isset($key) && !is_string($key)) {
           throw new SamlError('SP private key setting is not a string.', SamlError::SETTINGS_INVALID);
         }
         $type = strstr($key, ':', TRUE);
@@ -1121,7 +1121,7 @@ class SamlService {
       }
       if ($add_cert) {
         $cert = $add_cert === 'FAKE' ? 'dummy-value-to-subvert-validation' : $config->get('sp_x509_certificate');
-        if (!is_string($cert)) {
+        if (isset($cert) && !is_string($cert)) {
           throw new SamlError('SP public cert setting is not a string.', SamlError::SETTINGS_INVALID);
         }
         if ($cert) {
@@ -1150,7 +1150,7 @@ class SamlService {
       }
       if ($add_new_cert) {
         $cert = $config->get('sp_new_certificate');
-        if (!is_string($cert)) {
+        if (isset($cert) && !is_string($cert)) {
           throw new SamlError('SP new public cert setting is not a string.', SamlError::SETTINGS_INVALID);
         }
         if ($cert) {
@@ -1181,7 +1181,7 @@ class SamlService {
     if ($add_idp_cert) {
       $certs = $config->get('idp_certs');
       foreach ($certs as $i => $cert) {
-        if (!is_string($certs[$i])) {
+        if (isset($certs[$i]) && !is_string($certs[$i])) {
           throw new SamlError('IdP cert setting is not a string.', SamlError::SETTINGS_INVALID);
         }
         $type = strstr($cert, ':', TRUE);
@@ -1207,7 +1207,7 @@ class SamlService {
         }
       }
       $encryption_cert = $config->get('idp_cert_encryption');
-      if (!is_string($certs[$i])) {
+      if (isset($encryption_cert) && !is_string($encryption_cert)) {
         throw new SamlError('IdP cert setting is not a string.', SamlError::SETTINGS_INVALID);
       }
       $type = strstr($encryption_cert, ':', TRUE);

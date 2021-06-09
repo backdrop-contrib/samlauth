@@ -65,21 +65,21 @@ During configuration,
   ```
   For the rest, the internet has more information about this topic.
 - You need to decide where to store the keys. This module can:
-  - Store them in a file on the webserver's file system. (Always keep the 
+  - Store them in a file on the webserver's file system. (Always keep the
     private key in a safe location outside the webserver's document root.)
-  - Store them in configuration values. This is generally less secure than a 
+  - Store them in configuration values. This is generally less secure than a
     file, but may be useful for test environments, depending on your setup.
   - Use the [Key](https://www.drupal.org/project/key) module, which has options
     for safer retrieval of keys, e.g. from an environment variable or various
     external key management solutions. In order to use this solution, before
     configuring samlauth:
-    - Install [Asymmetric Keys](https://www.drupal.org/project/key_asymmetric), 
+    - Install [Asymmetric Keys](https://www.drupal.org/project/key_asymmetric),
       plus its dependencies (the Key module and phpseclib/phpseclib:~3.0.7).
     - Install the appropriate add-on module if you want to use an external key
       provider.
     - Visit admin/config/system/keys and add 'Key' for your private key, using
-      your preferred key provider. Also optionally, create a 'key' for the 
-      related X.509 certificate. (This is optional because the certificate is 
+      your preferred key provider. Also optionally, create a 'key' for the
+      related X.509 certificate. (This is optional because the certificate is
       not a secret, but it may be beneficial to keep both in the same list.)
 - You need to exchange information with the IdP, because both parties need to
   configure the other's identity/location. More details are in the respective
@@ -138,7 +138,7 @@ can provide information to the (people administering the) IdP:
 - go to admin/people/permissions#module-samlauth to enable permission to view
   the metadata, and pass on the metadata URL
 - or: save the XML file from the metadata URL (/saml/metadata) and pass it on
-- or: just give them the Entity ID, the public certificate and the URLs 
+- or: just give them the Entity ID, the public certificate and the URLs
   displayed in the "Service Provider" section of the configuration screen.
 
 ### Identity Provider:
