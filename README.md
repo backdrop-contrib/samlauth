@@ -210,8 +210,7 @@ in detail; hopefully the setting descriptions give a clue. Just some hints:
   supply the Unique ID value. (I didn't want to turn them off by default
   until some further module work was done, though.)
 
-DEBUGGING
----------
+### Debugging options
 
 Hopefully the 'Debugging' options in the configuration screen are of enough
 support to be able to get SAML login working. In particular, turn on "Log
@@ -220,6 +219,35 @@ for the names of attributes containing data that needs to be written into
 Drupal user accounts. (After trying to log in through the IdP, Drupal's "Recent
 log messages" should contain the XML message that contains the assertion /
 attributes.)
+
+### SAMLtest.id Identity Provider for testing
+
+SAMLtest is a SAML 2.0 IdP and SP testing service. It is useful to test this
+module.
+Configure the module with the "Identity Provider" information:
+- Entity ID: https://samltest.id/saml/idp
+- Single Sign On Service: https://samltest.id/idp/profile/SAML2/Redirect/SSO
+- Primary x509 Certificate: get it from https://samltest.id/download/#SAMLtest%E2%80%99s_IdP
+
+For the "User Info and Syncing" section:
+- Unique ID attribute: uid
+- Check "Create users from SAML data"
+- "User name attribute": uid
+- "User email attribute": mail
+
+Save the information so you can see the "Metadata URL": https://example.com/saml/metadata.
+
+Edit anonymous role permissions to enable the "View service provider metadata"
+permission in /admin/people/permissions/anonymous#module-samlauth.
+Go to https://samltest.id/upload.php and fetch the "Metadata URL".
+
+You can also enable the "log in" / "log out" menu item and disable the original
+one in /admin/structure/menu/manage/account and then use it to login.
+
+Now go to /saml/login and follow the instructions. If you check "Don't Remember
+Login" you will be able to try multiple users accounts.
+
+### Further debugging
 
 If needed, you can use third party tools to help debug your SSO flow with SAML.
 The following are browser extensions that can be used on Linux, macOS and
