@@ -275,6 +275,17 @@ https://www.samltool.com/saml_tools.php.
 OCCASIONALLY ASKED QUESTIONS
 ----------------------------
 
+Q: How to I redirect users to a specific path after they logged in?
+
+A: A specific login URL can do this: /saml/login?destination=drupal/path. To
+   instead have all users redirect to a specific destination, regardless of
+   which URL they used, there is a configuration setting "Login redirect URL".
+   (This configured URL can at the moment also contain tokens even though this
+   is not documented anywhere. Frankly I've never been sure whether it should;
+   it was just added in a contributed patch when the module wasn't very stable
+   yet. To make sure that the usage of this token does not disappear in a next
+   version of this module: notify me about how you are using this.)
+
 Q: Does this module have an option to redirect all not-logged-in users to the
    IdP login screen?
 
