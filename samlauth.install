@@ -118,3 +118,15 @@ function samlauth_update_8305() {
     $config->save(TRUE);
   }
 }
+
+// @todo - uncomment this at the moment I remove 3.2 compatibility code.
+/**
+ * Re-migrate old IdP cert configurations if necessary.
+ */
+//function samlauth_update_8400() {
+//  // It's possible that provisioning script have kept writing the IdP cert to
+//  // 'idp_x509_certificate(_multi)' config, which has not given any errors
+//  // until now. Re-migrate old -> new config again if necessary, now 3.2
+//  // compatibility has been removed.
+//  samlauth_update_8305();
+//}

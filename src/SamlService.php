@@ -1250,6 +1250,7 @@ class SamlService {
       }
     }
     // @todo remove in 4.x: not applicable after samlauth_update_8304().
+    // @todo at the same time as removing this, uncomment samlauth_update_8400.
     if (!$certs && !$encryption_cert) {
       $old_cert = $config->get('idp_x509_certificate');
       $old_cert_multi = $config->get('idp_x509_certificate_multi');
