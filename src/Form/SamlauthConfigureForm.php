@@ -848,7 +848,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
         '#type' => 'select',
         '#title' => $this->t('Encryption Certificate'),
         '#description' => $description,
-        '#default_value' => $cert_types === 'key' ? substr($encryption_cert, 4) : '',
+        '#default_value' => $cert_types === 'key' && $encryption_cert ? substr($encryption_cert, 4) : '',
         '#options' => $selectable_public_certs,
         '#empty_option' => $this->t('- Select a certificate -'),
         '#states' => [
@@ -869,7 +869,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Encryption Certificate Filename'),
       '#description' => $description,
-      '#default_value' => $cert_types === 'file' ? substr($encryption_cert, 5) : '',
+      '#default_value' => $cert_types === 'file' && $encryption_cert ? substr($encryption_cert, 5) : '',
       '#states' => [
         'visible' => [
           ':input[name="idp_cert_type"]' => [
@@ -887,7 +887,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#type' => 'textarea',
       '#title' => $this->t('Encryption Certificate'),
       '#description' => $description,
-      '#default_value' => $cert_types === 'config' ? $this->formatKeyOrCert($encryption_cert, TRUE) : '',
+      '#default_value' => $cert_types === 'config' && $encryption_cert ? $this->formatKeyOrCert($encryption_cert, TRUE) : '',
       '#states' => [
         'visible' => [
           ':input[name="idp_cert_type"]' => [
@@ -901,7 +901,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
         ],
       ],
     ];
-    if (!$form_state->getUserInput() && $cert_types === 'file' && !file_exists(substr($encryption_cert, 5))) {
+    if (!$form_state->getUserInput() && $cert_types === 'file' && $encryption_cert && !file_exists(substr($encryption_cert, 5))) {
       $this->messenger()->addWarning($this->t('IdP encryption certificate file is missing.'));
     }
 
