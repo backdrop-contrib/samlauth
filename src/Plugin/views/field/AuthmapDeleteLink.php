@@ -49,10 +49,17 @@ class AuthmapDeleteLink extends LinkBase {
    * {@inheritdoc}
    */
   protected function renderLink(ResultRow $row) {
+    // From EntityLink:
     if ($this->options['output_url_as_text']) {
       return $this->getUrlInfo($row)->toString();
     }
-    return parent::renderLink($row);
+    // From LinkBase, minus addLangCode() which needs an entity. (If this needs
+    // 'alter']['language' set sometimes, then we still need to work out when
+    // and how.)
+    $this->options['alter']['make_link'] = TRUE;
+    $this->options['alter']['url'] = $this->getUrlInfo($row);
+    $text = !empty($this->options['text']) ? $this->sanitizeValue($this->options['text']) : $this->getDefaultLabel();
+    return $text;
   }
 
   /**
