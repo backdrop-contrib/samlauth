@@ -199,7 +199,7 @@ function samlauth_views_data_alter(array &$data) {
   if (!isset($data['authmap']['uid'])) {
     $data['authmap']['uid'] = [
       'title' => t('Drupal User ID'),
-      'help' => t('The user linked to the authname'),
+      'help' => t('The user linked to the authname.'),
       // The 'join' on the users_field_data table in the original table
       // definition (in externalauth.views.inc) essentially means that this
       // table's fields can be used in a 'Users' view. This 'relationship'
@@ -223,7 +223,7 @@ function samlauth_views_data_alter(array &$data) {
   }
   if (!isset($data['authmap']['delete'])) {
     $data['authmap']['delete'] = [
-      'title' => t('Link to delete @label entry.', ['@label' => 'authmap']),
+      'title' => t('Link to delete @label entry', ['@label' => 'authmap']),
       'help' => t('Provide a link to delete the @label entry.', ['@label' => 'authmap']),
       'field' => [
         'id' => 'samlauth_link_delete',
