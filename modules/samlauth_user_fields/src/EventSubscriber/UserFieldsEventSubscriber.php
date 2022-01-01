@@ -174,41 +174,42 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
     $match_fields = [];
     if (is_array($mappings)) {
       foreach ($mappings as $mapping) {
-        // 'Sub fields' (":") are currently not allowed for linking. We
-        // disallow them in the UI, so we hope that no 'sub field' is ever
-        // configured here. But if it is... we give the generic warning below.
-        // (Why they are disallowed: because I simply haven't checked yet,
-        // whether the entity query logic works/can work for them.)
-        if (isset($mapping['link_user_order'])
-            && isset($mapping['field_name'])
-            && strpos($mapping['field_name'], ':') === FALSE
-            && isset($mapping['attribute_name'])
-           ) {
-          $match_id = $mapping['link_user_order'];
-          $value = $this->getAttribute($mapping['attribute_name'], $attributes);
-          if (!isset($value)) {
-            // Skip this match; ignore other mappings that are part of it.
-            $match_fields[$match_id] = FALSE;
-          }
-          if (!isset($match_fields[$match_id])) {
-            $match_fields[$match_id] = [$mapping['field_name'] => $value];
-          }
-          elseif ($match_fields[$match_id]) {
-            if (isset($match_fields[$match_id][$mapping['field_name']])) {
-              // The same match cannot define two attributes/values for the same
-              // user field. Spam logs until the site owner fixes configuration.
-              $this->logger->debug("Match attempt %id for linking users has multiple SAML attributes tied to the same user field, which is impossible. We'll ignore attribute %attribute.", [
-                '%id' => $match_id,
-                '%attribute' => $mapping['attribute_name'],
-              ]);
+        if (isset($mapping['link_user_order'])) {
+          // 'Sub fields' (":") are currently not allowed for linking. We
+          // disallow them in the UI, so we hope that no 'sub field' is ever
+          // configured here. But if it is... we give the generic warning below.
+          // (Why they are disallowed: because I simply haven't checked yet,
+          // whether the entity query logic works/can work for them.)
+          if (isset($mapping['field_name'])
+              && strpos($mapping['field_name'], ':') === FALSE
+              && isset($mapping['attribute_name'])
+          ) {
+            $match_id = $mapping['link_user_order'];
+            $value = $this->getAttribute($mapping['attribute_name'], $attributes);
+            if (!isset($value)) {
+              // Skip this match; ignore other mappings that are part of it.
+              $match_fields[$match_id] = FALSE;
             }
-            else {
-              $match_fields[$match_id][$mapping['field_name']] = $value;
+            if (!isset($match_fields[$match_id])) {
+              $match_fields[$match_id] = [$mapping['field_name'] => $value];
+            }
+            elseif ($match_fields[$match_id]) {
+              if (isset($match_fields[$match_id][$mapping['field_name']])) {
+                // The same match cannot define two attributes/values for the
+                // same user field. Spam logs until configuration gets fixed.
+                $this->logger->debug("Match attempt %id for linking users has multiple SAML attributes tied to the same user field, which is impossible. We'll ignore attribute %attribute.", [
+                  '%id' => $match_id,
+                  '%attribute' => $mapping['attribute_name'],
+                ]);
+              }
+              else {
+                $match_fields[$match_id][$mapping['field_name']] = $value;
+              }
             }
           }
-        }
-        else {
-          $this->logger->warning('Partially invalid %name configuration value; user linking may be partially skipped.', ['%name' => 'field_mappings']);
+          else {
+            $this->logger->warning('Partially invalid %name configuration value; user linking may be partially skipped.', ['%name' => 'field_mappings']);
+          }
         }
       }
     }
