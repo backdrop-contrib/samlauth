@@ -953,6 +953,8 @@ class SamlService {
         // Used for login / logout / SLO response, sent after processing
         // incoming SLO request; should be deprecated:
         'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),
+        // Allow duplicated Attribute Names. Used for acs.
+        'allowRepeatAttributeName' => (bool) $config->get('security_allow_repeat_attribute_name'),
         // (*): also influences Settings:__construct() checks for SP cert+key.
         // (**): if either of these properties is true, an extra 'encryption'
         // certificate is always included in the metadata. (With the same value

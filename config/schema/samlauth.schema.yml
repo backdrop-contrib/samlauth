@@ -105,6 +105,8 @@ samlauth.authentication:
       type: boolean
     security_logout_reuse_sigs:
       type: boolean
+    security_allow_repeat_attribute_name:
+      type: boolean
     debug_display_error_details:
       type: boolean
     debug_log_in:

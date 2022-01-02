@@ -1128,6 +1128,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('security_want_name_id') ?? TRUE,
     ];
 
+    $form['responses']['security_allow_repeat_attribute_name'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Allow duplicate attribute names'),
+      '#description' => $this->t('Do not raise an error when the authentication response contains duplicate attribute elements with the same name.'),
+      '#default_value' => $config->get('security_allow_repeat_attribute_name'),
+    ];
+
     // This option's default value is FALSE but according to the SAML spec,
     // signing parameters should always be retrieved from the original request
     // instead of recalculated. (As argued in e.g.
@@ -1571,6 +1578,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'security_messages_sign',
       'request_set_name_id_policy',
       'security_want_name_id',
+      'security_allow_repeat_attribute_name',
       'security_logout_reuse_sigs',
       'security_request_authn_context',
       'security_signature_algorithm',
