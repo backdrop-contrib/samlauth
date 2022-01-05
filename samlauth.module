@@ -235,7 +235,7 @@ function samlauth_metadata() {
  */
 function samlauth_login() {
   $auth = samlauth_get_saml2_auth();
-  $auth->login('/', array(), FALSE, FALSE, FALSE, variable_get('samlauth_set_nameidpolicy', TRUE));
+  $auth->login(_samlauth_pre_destination_url(), array(), FALSE, FALSE, FALSE, variable_get('samlauth_set_nameidpolicy', TRUE));
 }
 
 /**
@@ -262,8 +262,36 @@ function samlauth_logout() {
   else {
     // Redirect to the auth server for logout.
     $auth = samlauth_get_saml2_auth();
-    $auth->logout('/', array(), $nameId, $sessionIndex, FALSE, $nameIdFormat, $nameIdNameQualifier);
+    $auth->logout(_samlauth_pre_destination_url(), array(), $nameId, $sessionIndex, FALSE, $nameIdFormat, $nameIdNameQualifier);
   }
+}
+
+/**
+ * Constructs a full URL from the 'destination' request parameter.
+ *
+ * @return string|null
+ *   The full absolute URL (i.e. our hostname plus the path in the destination
+ *   parameter), or NULL if no destination parameter was given. This value is
+ *   tuned to what login() / logout() expect for an input argument.
+ */
+function _samlauth_pre_destination_url() {
+  return isset($_REQUEST['destination']) ? url($_REQUEST['destination'], ['absolute' => TRUE]) : NULL;
+}
+
+/**
+ * Returns a URL to redirect to, after processing an ACS/logout response.
+ *
+ * @param bool $processing_error
+ *   (Optional) true if an error was encountered while processing the response.
+ *
+ * @return string
+ *   The URL to redirect to.
+ */
+function _samlauth_destination_url($processing_error = FALSE) {
+  // We should be able to trust the RelayState parameter at this point
+  // because the response from the IDP was verified - but check protocol.
+  return isset($_REQUEST['RelayState']) && !$processing_error
+    ? drupal_strip_dangerous_protocols($_REQUEST['RelayState']) : '<front>';
 }
 
 /**
@@ -283,14 +311,6 @@ function samlauth_sls() {
     $errors = $auth->getErrors();
 
     if (empty($errors)) {
-      if (!$url) {
-        // We should be able to trust the RelayState parameter at this point
-        // because the response from the IDP was verified.
-        if (isset($_REQUEST['RelayState'])) {
-          $url = $_REQUEST['RelayState'];
-        }
-      }
-
       // Log out the user, since the logout already happened on the server.
       if (user_is_logged_in()) {
         module_load_include('pages.inc', 'user');
@@ -301,9 +321,10 @@ function samlauth_sls() {
     }
   } catch (Exception $e) {
     drupal_set_message('SLS error: ' . $e->getMessage(), 'error');
+    $errors = TRUE;
   }
 
-  drupal_goto($url ?: '<front>');
+  drupal_goto($url ?: _samlauth_destination_url(!empty($errors)));
 }
 
 /**
@@ -314,7 +335,7 @@ function samlauth_changepw() {
 
   if ($changepw_service === FALSE) {
     drupal_set_message('The site administrator has not configured a password change service. Please change your password according to the normal processes in your organization.', 'error');
-    drupal_goto('/');
+    drupal_goto();
   }
 
   drupal_goto(variable_get('samlauth_changepw_service'), array('external' => TRUE));
@@ -410,7 +431,7 @@ function samlauth_acs() {
   $_SESSION['samlauth']['nameIdNameQualifier'] = $auth->getNameIdNameQualifier();
   $_SESSION['samlauth']['sessionIndex'] = $auth->getSessionIndex();
 
-  drupal_goto();
+  drupal_goto(_samlauth_destination_url());
 }
 
 /**
