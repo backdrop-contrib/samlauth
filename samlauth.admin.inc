@@ -124,23 +124,11 @@ function samlauth_configure_form() {
     '#default_value' => variable_get('samlauth_unique_id_attribute', 'eduPersonTargetedID'),
   );
 
-  $form['user_info']['samlauth_map_users'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Attempt to map SAML users to existing local users?'),
-    '#description' => t('If this option is enabled and a SAML authentication response is received for a user that already exists locally, and the user\'s email matches the configured attribute, the SAML user will be mapped to the local user and then logged in.'),
-    '#default_value' => variable_get('samlauth_map_users', FALSE),
-  );
-
   $form['user_info']['samlauth_map_users_email'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Email attribute (for mapping)'),
-    '#description' => t('This attribute will be used for mapping SAML users to local Drupal users.'),
-    '#default_value' => variable_get('samlauth_map_users_email', FALSE),
-    '#states' => array(
-      'invisible' => array(
-        ':input[name="samlauth_map_users"]' => array('checked' => FALSE),
-      ),
-    ),
+    '#type' => 'checkbox',
+    '#title' => t('Attempt to map SAML users to existing local users by email?'),
+    '#description' => t('If this option is enabled and a SAML authentication response is received for a user that already exists locally, and the user\'s email matches the configured attribute, the SAML user will be mapped to the local user and then logged in.'),
+    '#default_value' => (bool) variable_get('samlauth_map_users_email', FALSE),
   );
 
   $form['user_info']['samlauth_create_users'] = array(

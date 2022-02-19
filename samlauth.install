@@ -24,7 +24,6 @@ function samlauth_uninstall() {
     'samlauth_idp_change_password_service',
     'samlauth_idp_x509_certificate',
     'samlauth_unique_id_attribute',
-    'samlauth_map_users',
     'samlauth_map_users_email',
     'samlauth_create_users',
     'samlauth_user_name_attribute',
@@ -33,6 +32,8 @@ function samlauth_uninstall() {
     'samlauth_security_messages_sign',
     'samlauth_security_name_id_sign',
     'samlauth_security_request_authn_context',
+    // Was used by (at least saved by the UI of) previous versions:
+    'samlauth_map_users',
   );
   foreach ($variables as $variable) {
     variable_del($variable);
