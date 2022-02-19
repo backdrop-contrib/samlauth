@@ -371,8 +371,10 @@ function samlauth_acs() {
       throw new Exception('SAML user is not authenticated.');
     }
 
-    // Get the attributes returned by the IdP.
-    $saml_data = $auth->getAttributes();
+    // Get the attributes returned by the IdP. Having them keyed by botn name
+    // and friendly name is likely easier for code, but means that this cannot
+    // be treated as a single set of unique attributes; values are duplicated.
+    $saml_data = $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
 
     // First, let's see if we have a user.
     $unique_id_attribute = variable_get('samlauth_unique_id_attribute', 'eduPersonTargetedID');
