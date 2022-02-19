@@ -153,7 +153,7 @@ function samlauth_configure_form() {
   $form['user_info']['samlauth_user_mail_attribute'] = array(
     '#type' => 'textfield',
     '#title' => t('User email attribute'),
-    '#description' => t('When SAML users are created, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
+    '#description' => t('When SAML users are created or mapped, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
     '#default_value' => variable_get('samlauth_user_mail_attribute', 'email'),
     '#states' => array(
       'invisible' => array(
