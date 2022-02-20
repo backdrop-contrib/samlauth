@@ -33,9 +33,10 @@ function samlauth_help($route_name, RouteMatchInterface $route_match) {
 function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
   // Only affect SAML-linked users without a role that is allowed to log in
   // locally.
+  $current_uid = \Drupal::currentUser()->id();
   /** @var \Drupal\user\Entity\User $account */
   $account = $form_state->getBuildInfo()['callback_object']->getEntity();
-  if ($account->id() == \Drupal::currentUser()->id() && !array_intersect(
+  if ($current_uid && $account->id() == $current_uid && !array_intersect(
       $account->getRoles(),
       \Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('drupal_login_roles') ?? []
     )) {
