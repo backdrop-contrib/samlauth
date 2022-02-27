@@ -9,6 +9,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Render\RendererInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Error;
 use Drupal\Core\Utility\Token;
@@ -28,6 +29,7 @@ use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 class SamlController extends ControllerBase {
 
   use ExecuteInRenderContextTrait;
+  use StringTranslationTrait;
 
   /**
    * Name of the configuration object containing the setting used by this class.
@@ -334,7 +336,7 @@ class SamlController extends ControllerBase {
     if ($destination) {
       if (UrlHelper::isExternal($destination)) {
         // Disallow redirecting to an external URL after we log in.
-        throw new UserVisibleException("Destination URL query parameter must not be external: $destination");
+        throw new UserVisibleException('Destination URL query parameter must not be external: @destination', ['@destination' => $destination]);
       }
       $destination_url = $GLOBALS['base_url'] . '/' . $destination;
 
@@ -491,9 +493,14 @@ class SamlController extends ControllerBase {
     if ($exception instanceof UserVisibleException || $config->get('debug_display_error_details')) {
       // Show the full error on screen; also log, but with lowered severity.
       // Assume we don't need the "while" part for a user visible error because
-      // it's likely not fully correct.
+      // it's likely to not fully match the detailed message.
       $this->messenger->addError($exception->getMessage());
-      $this->logger->warning($exception->getMessage());
+      if ($exception instanceof UserVisibleException) {
+        $this->logger->warning($exception->getOriginalMessage(), $exception->getReplacements());
+      }
+      else {
+        $this->logger->warning($exception->getMessage());
+      }
     }
     else {
       // Use the same format for logging as Drupal's ExceptionLoggingSubscriber
@@ -508,7 +515,7 @@ class SamlController extends ControllerBase {
       $this->logger->critical("%type encountered$while: @message in %function (line %line of %file).", $error);
       // Don't expose the error to prevent information leakage; the user likely
       // can't do much with it anyway. But hint that more details are available.
-      $this->messenger->addError("Error encountered{$while}; details have been logged.");
+      $this->messenger->addError($this->t("Error encountered{$while}; details have been logged."));
     }
 
     // Get error URL.
