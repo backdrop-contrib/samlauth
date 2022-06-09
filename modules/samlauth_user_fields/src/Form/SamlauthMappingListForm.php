@@ -51,12 +51,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    // I'm using ConfigFormBase for the unified save button / message, but
-    // don't want to use ConfigFormBase::config(), to keep a unified way of
-    // getting config values in forms / not obfuscate call structures and get
-    // confused later. So this method/value is unneeded, but ConfigFormBase
-    // requires it. Let's make it empty.
-    return [];
+    return [UserFieldsEventSubscriber::CONFIG_OBJECT_NAME];
   }
 
   /**
@@ -80,7 +75,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
    *   The form structure.
    */
   public function buildForm(array $form, FormStateInterface $form_state, $mapping_id = NULL) {
-    $config = $this->configFactory()->get(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME);
+    $config = $this->config(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME);
 
     // The bulk of this page is not a form at all, but a table. We're putting
     // that on the same page as the form options, because we have only two
@@ -90,7 +85,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
     $mappings = $config->get('field_mappings');
     $form = $this->listMappings(is_array($mappings) ? $mappings : []);
 
-    if ($this->configFactory()->get(SamlController::CONFIG_OBJECT_NAME)->get('map_users')) {
+    if ($this->config(SamlController::CONFIG_OBJECT_NAME)->get('map_users')) {
       $form['config'] = [
         '#type' => 'fieldset',
         '#title' => $this->t('Configuration for linking'),
@@ -123,7 +118,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $this->configFactory()->getEditable(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)
+    $this->config(UserFieldsEventSubscriber::CONFIG_OBJECT_NAME)
       ->set('link_first_user', $form_state->getValue('link_first_user'))
       ->set('ignore_blocked', $form_state->getValue('ignore_blocked'))
       ->save();
@@ -141,7 +136,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
    *   A renderable content array.
    */
   public function listMappings(array $mappings) {
-    $linking_enabled = $this->configFactory()->get(SamlController::CONFIG_OBJECT_NAME)->get('map_users');
+    $linking_enabled = $this->config(SamlController::CONFIG_OBJECT_NAME)->get('map_users');
 
     $output['table'] = [
       '#theme' => 'table',

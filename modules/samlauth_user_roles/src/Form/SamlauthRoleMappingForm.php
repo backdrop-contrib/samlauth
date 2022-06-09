@@ -49,12 +49,7 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    // I'm using ConfigFormBase for the unified save button / message, but
-    // don't want to use ConfigFormBase::config(), to keep a unified way of
-    // getting config values in forms / not obfuscate call structures and get
-    // confused later. So this method/value is unneeded, but ConfigFormBase
-    // requires it. Let's make it empty.
-    return [];
+    return [UserRolesEventSubscriber::CONFIG_OBJECT_NAME];
   }
 
   /**
@@ -68,7 +63,7 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $config = $this->configFactory()->get(UserRolesEventSubscriber::CONFIG_OBJECT_NAME);
+    $config = $this->config(UserRolesEventSubscriber::CONFIG_OBJECT_NAME);
     $roles = $this->getRoleLabels();
 
     $form['only_first_login'] = [
@@ -258,7 +253,7 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       }
     }
 
-    $this->configFactory()->getEditable(UserRolesEventSubscriber::CONFIG_OBJECT_NAME)
+    $this->config(UserRolesEventSubscriber::CONFIG_OBJECT_NAME)
       ->set('only_first_login', $form_state->getValue('only_first_login'))
       ->set('unassign_roles', array_filter($form_state->getValue('unassign_roles')))
       ->set('default_roles', array_filter($form_state->getValue('default_roles')))

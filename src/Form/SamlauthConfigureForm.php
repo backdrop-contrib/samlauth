@@ -93,12 +93,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   protected function getEditableConfigNames() {
-    // I'm using ConfigFormBase for the unified save button / message, but
-    // don't want to use ConfigFormBase::config(), to keep a unified way of
-    // getting config values in forms / not obfuscate call structures and get
-    // confused later. So this method/value is unneeded, but ConfigFormBase
-    // requires it. Let's make it empty.
-    return [];
+    return [SamlController::CONFIG_OBJECT_NAME];
   }
 
   /**
@@ -112,7 +107,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-    $config = $this->configFactory()->get(SamlController::CONFIG_OBJECT_NAME);
+    $config = $this->config(SamlController::CONFIG_OBJECT_NAME);
 
     $form['saml_login_logout'] = [
       '#type' => 'details',
@@ -1420,7 +1415,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $config = $this->configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
+    $config = $this->config(SamlController::CONFIG_OBJECT_NAME);
 
     $sp_key_type = $form_state->getValue('sp_key_cert_type');
     if ($sp_key_type) {
