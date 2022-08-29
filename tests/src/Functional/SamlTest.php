@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\samlauth\Tests;
+namespace Drupal\Tests\samlauth\Functional;
 
 use Drupal\samlauth\Controller\SamlController;
 use Drupal\Tests\BrowserTestBase;
@@ -27,18 +27,7 @@ class SamlTest extends BrowserTestBase {
    *
    * @var array
    */
-  public static $modules = ['samlauth'];
-
-  /**
-   * Return info on the test.
-   */
-  public static function getInfo() {
-    return [
-      'name' => 'Tests SAML authentication',
-      'description' => 'Functional tests for the samlauth module functionality.',
-      'group' => 'samlauth',
-    ];
-  }
+  protected static $modules = ['samlauth'];
 
   /**
    * {@inheritdoc}
@@ -48,12 +37,11 @@ class SamlTest extends BrowserTestBase {
   /**
    * {@inheritdoc}
    */
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
 
-    // Import testshib config.
-    $config = drupal_get_path('module', 'samlauth') . '/test_resources/samlauth.authentication.yml';
-    $config = file_get_contents($config);
+    // Import testsaml config.
+    $config = file_get_contents(__DIR__ . "/../../fixtures/samlauth.authentication.yml");
     $config = Yaml::decode($config);
     \Drupal::configFactory()->getEditable('samlauth.authentication')->setData($config)->save();
   }
@@ -68,12 +56,12 @@ class SamlTest extends BrowserTestBase {
     $web_user = $this->drupalCreateUser(['configure saml']);
     $this->drupalLogin($web_user);
     $this->drupalGet('admin/config/people/saml');
-    $this->assertText('Login / Logout', 'Login / Logout fieldset present');
-    $this->assertText('Service Provider', 'SP fieldset present');
-    $this->assertText('Identity Provider', 'iDP fieldset present');
-    $this->assertText('User Info and Syncing', 'User Info and Syncing fieldset present');
-    $this->assertText('SAML Message Construction', 'SAML Message Construction fieldset present');
-    $this->assertText('SAML Message Validation', 'SAML Message Validation fieldset present');
+    $this->assertSession()->pageTextContains('Login / Logout');
+    $this->assertSession()->pageTextContains('Service Provider');
+    $this->assertSession()->pageTextContains('Identity Provider');
+    $this->assertSession()->pageTextContains('User Info and Syncing');
+    $this->assertSession()->pageTextContains('SAML Message Construction');
+    $this->assertSession()->pageTextContains('SAML Message Validation');
   }
 
   /**
@@ -85,8 +73,8 @@ class SamlTest extends BrowserTestBase {
 
     // Test that we get metadata.
     $this->drupalGet('saml/metadata');
-    $this->assertResponse(200, 'SP metadata is accessible');
-    $this->assertRaw('entityID="samlauth"', 'Entity ID found in the metadata');
+    $this->assertSession()->statusCodeEquals(200, 'SP metadata is accessible');
+    $this->assertSession()->responseContains('entityID="samlauth"');
   }
 
   /**
