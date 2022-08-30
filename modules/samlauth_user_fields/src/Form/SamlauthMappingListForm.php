@@ -6,6 +6,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\TypedData\DataDefinition;
 use Drupal\Core\Url;
 use Drupal\samlauth\Controller\SamlController;
@@ -25,16 +26,26 @@ class SamlauthMappingListForm extends ConfigFormBase {
   protected $entityFieldManager;
 
   /**
+   * Renderer service.
+   *
+   * @var \Drupal\Core\Render\RendererInterface
+   */
+  protected $renderer;
+
+  /**
    * SamlauthMappingListForm constructor.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The config factory.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager service.
+   * @param \Drupal\Core\Render\RendererInterface $renderer
+   *   The Drupal Renderer service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager) {
+  public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager, RendererInterface $renderer) {
     parent::__construct($config_factory);
     $this->entityFieldManager = $entity_field_manager;
+    $this->renderer = $renderer;
   }
 
   /**
@@ -43,7 +54,8 @@ class SamlauthMappingListForm extends ConfigFormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
-      $container->get('entity_field.manager')
+      $container->get('entity_field.manager').
+      $container->get('renderer')
     );
   }
 
@@ -198,7 +210,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
         $output['table']['#rows'][$id] = [
           $mapping['attribute_name'],
           $user_field,
-          render($operations),
+          $this->renderer->render($operations),
         ];
         if ($linking_enabled) {
           array_splice($output['table']['#rows'][$id], 2, 0, [$mapping['link_user_order'] ?? '']);

@@ -9,6 +9,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Token;
+use Drupal\key\Plugin\KeyPluginBase;
 use Drupal\samlauth\Controller\SamlController;
 use Drupal\user\UserInterface;
 use OneLogin\Saml2\Metadata;
@@ -262,7 +263,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $keys = $this->keyRepository->getKeysByType('asymmetric_public');
       foreach ($keys as $public_key_id => $key) {
         $selectable_public_certs[$public_key_id] = $key->label();
-        $key_type_settings = $key->getKeyType()->getConfiguration();
+        $key_type = $key->getKeyType();
+        assert($key_type instanceof KeyPluginBase);
+        $key_type_settings = $key_type->getConfiguration();
         if (!empty($key_type_settings['private_key'])) {
           $selectable_public_keypairs[$public_key_id] = $key->label();
           $referenced_private_key_ids[$public_key_id] = $key_type_settings['private_key'];
@@ -270,13 +273,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       }
     }
     else {
-      unset($key_cert_type_options['key_key'], $key_cert_type_options['file_key'], $key_cert_type_options['config_key']);
+      unset($key_cert_type_options['key_key'], $key_cert_type_options['key_file'], $key_cert_type_options['key_config']);
     }
 
     // Get cert + key; see which types they are and do custom checks.
-    $sp_private_key = $config->get('sp_private_key');
-    $sp_cert = $config->get('sp_x509_certificate');
-    $sp_new_cert = $config->get('sp_new_certificate');
+    $sp_private_key = $config->get('sp_private_key') ?? '';
+    $sp_cert = $config->get('sp_x509_certificate') ?? '';
+    $sp_new_cert = $config->get('sp_new_certificate') ?? '';
     // @todo remove reference to $cert_folder in 4.x.
     $cert_folder = $config->get('sp_cert_folder');
     if ($cert_folder && is_string($cert_folder)) {
@@ -358,7 +361,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     elseif ($sp_cert) {
       $sp_cert_type = 'config';
     }
-    $sp_new_cert_type = strstr($sp_new_cert, ':', TRUE);
+    $sp_new_cert_type = $sp_new_cert ? strstr($sp_new_cert, ':', TRUE) : NULL;
     if ($sp_new_cert_type) {
       $sp_new_cert = substr($sp_new_cert, strlen($sp_new_cert_type) + 1);
       if ($sp_new_cert_type === 'key' && !isset($selectable_public_keypairs[$sp_new_cert])) {
@@ -714,7 +717,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // handle that fine (if someone saved the configuration that way) but the
     // UI cannot; it would make things look more complicated and I don't see a
     // reason to do so.
-    $cert_types = strstr($encryption_cert, ':', TRUE);
+    $cert_types = $encryption_cert ? strstr($encryption_cert, ':', TRUE) : NULL;
     foreach ($certs as $value) {
       $cert_type = strstr($value, ':', TRUE);
       if (!$cert_type) {
@@ -1353,7 +1356,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // at this stage; we'll warn while displaying the form).
       $key = $this->keyRepository->getKey($cert_keyname);
       if ($key) {
-        $key_type_settings = $key->getKeyType()->getConfiguration();
+        $key_type = $key->getKeyType();
+        assert($key_type instanceof KeyPluginBase);
+        $key_type_settings = $key_type->getConfiguration();
         if (!empty($key_type_settings['private_key'])) {
           $key = $this->keyRepository->getKey($key_type_settings['private_key']);
         }
