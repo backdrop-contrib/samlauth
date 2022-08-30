@@ -73,7 +73,7 @@ class SamlTest extends BrowserTestBase {
 
     // Test that we get metadata.
     $this->drupalGet('saml/metadata');
-    $this->assertSession()->statusCodeEquals(200, 'SP metadata is accessible');
+    $this->assertSession()->statusCodeEquals(200);
     $this->assertSession()->responseContains('entityID="samlauth"');
   }
 
