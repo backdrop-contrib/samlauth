@@ -357,13 +357,11 @@ class SamlService {
       $this->flood->register('samlauth.failed_login_ip', $flood_config->get('ip_window'));
       throw $acs_exception;
     }
-    if (isset($unique_id) && !$unique_id) {
+    if (!$unique_id) {
       throw new \RuntimeException('Configured unique ID is not present in SAML response.');
     }
 
-    if (isset($unique_id) && isset($account)) {
-      $this->doLogin($unique_id, $account);
-    }
+    $this->doLogin($unique_id, $account);
 
     // Remember SAML session values that may be necessary for logout.
     $auth = $this->getSamlAuth('acs');
@@ -443,7 +441,7 @@ class SamlService {
       // then by name, then by email.
       if ($config->get('map_users')) {
         $event = new SamlauthUserLinkEvent($this->getAttributes());
-        $this->eventDispatcher->dispatch($event, SamlauthEvents::USER_LINK);
+        $this->eventDispatcher->dispatch(SamlauthEvents::USER_LINK, $event);
         $account = $event->getLinkedAccount();
         if ($account) {
           $this->logger->info('Existing user @name (@uid) was newly matched to SAML login attributes; linking user and logging in.', [
@@ -531,7 +529,7 @@ class SamlService {
         throw new UserVisibleException('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
       }
     }
-    elseif ($account instanceof UserInterface && $account->isBlocked()) {
+    elseif ($account->isBlocked()) {
       throw new UserVisibleException('Requested account is blocked.');
     }
     else {
@@ -547,7 +545,7 @@ class SamlService {
    *
    * @param string $unique_id
    *   The unique ID (attribute value) contained in the SAML response.
-   * @param \Drupal\user\UserInterface $account
+   * @param \Drupal\Core\Session\AccountInterface|null $account
    *   The existing user account derived from the unique ID, if any.
    *
    * @throws \Drupal\samlauth\UserVisibleException
@@ -751,7 +749,7 @@ class SamlService {
   public function synchronizeUserAttributes(UserInterface $account, $skip_save = FALSE, $first_saml_login = FALSE) {
     // Dispatch a user_sync event.
     $event = new SamlauthUserSyncEvent($account, $this->getAttributes(), $first_saml_login);
-    $this->eventDispatcher->dispatch($event, SamlauthEvents::USER_SYNC);
+    $this->eventDispatcher->dispatch(SamlauthEvents::USER_SYNC, $event);
 
     if (!$skip_save && $event->isAccountChanged()) {
       $account->save();
