@@ -387,14 +387,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // Warn if the files don't exist; not on validation but on every form
       // display. (They may be missing if we're looking at a copy of the site,
       // and we still want to be able to test other form interactions.)
-      if ($sp_key_type === 'file' && !file_exists($sp_private_key)) {
-        $this->messenger()->addWarning($this->t('SP private key file is missing.'));
+      if ($sp_key_type === 'file' && !@file_exists($sp_private_key)) {
+        $this->messenger()->addWarning($this->t('SP private key file is missing or not accessible.'));
       }
-      if ($sp_cert_type === 'file' && !file_exists($sp_cert)) {
-        $this->messenger()->addWarning($this->t('SP certificate file is missing.'));
+      if ($sp_cert_type === 'file' && !@file_exists($sp_cert)) {
+        $this->messenger()->addWarning($this->t('SP certificate file is missing or not accessible.'));
       }
-      if ($sp_new_cert_type === 'file' && !file_exists($sp_new_cert)) {
-        $this->messenger()->addWarning($this->t('SP new certificate file is missing.'));
+      if ($sp_new_cert_type === 'file' && !@file_exists($sp_new_cert)) {
+        $this->messenger()->addWarning($this->t('SP new certificate file is missing or not accessible.'));
       }
     }
 
@@ -828,8 +828,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
           in_array($cert_type, ['key', 'file'], TRUE)
             ? [$cert_type => substr($value, strlen($cert_type) + 1)]
             : ['cert' => $this->formatKeyOrCert($value, TRUE)];
-        if (!$form_state->getUserInput() && $cert_type === 'file' && !file_exists(substr($value, 5))) {
-          $this->messenger()->addWarning($this->t('IdP certificate file@index is missing.', [
+        if (!$form_state->getUserInput() && $cert_type === 'file' && !@file_exists(substr($value, 5))) {
+          $this->messenger()->addWarning($this->t('IdP certificate file@index is missing or not accessible.', [
             '@index' => $index ? " $index" : '',
           ]));
         }
@@ -899,8 +899,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
         ],
       ],
     ];
-    if (!$form_state->getUserInput() && $cert_types === 'file' && $encryption_cert && !file_exists(substr($encryption_cert, 5))) {
-      $this->messenger()->addWarning($this->t('IdP encryption certificate file is missing.'));
+    if (!$form_state->getUserInput() && $cert_types === 'file' && $encryption_cert && !@file_exists(substr($encryption_cert, 5))) {
+      $this->messenger()->addWarning($this->t('IdP encryption certificate file is missing or not accessible.'));
     }
 
     $form['user_info'] = [
