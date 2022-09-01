@@ -307,6 +307,7 @@ class SamlService {
     }
     catch (\Exception $acs_exception) {
     }
+    $account = $unique_id = NULL;
     if (!isset($acs_exception)) {
       $unique_id = $this->getAttributeByConfig('unique_id_attribute');
       if ($unique_id) {
@@ -357,13 +358,11 @@ class SamlService {
       $this->flood->register('samlauth.failed_login_ip', $flood_config->get('ip_window'));
       throw $acs_exception;
     }
-    if (isset($unique_id) && !$unique_id) {
+    if (!$unique_id) {
       throw new \RuntimeException('Configured unique ID is not present in SAML response.');
     }
 
-    if (isset($unique_id) && isset($account)) {
-      $this->doLogin($unique_id, $account);
-    }
+    $this->doLogin($unique_id, $account);
 
     // Remember SAML session values that may be necessary for logout.
     $auth = $this->getSamlAuth('acs');
@@ -531,7 +530,7 @@ class SamlService {
         throw new UserVisibleException('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
       }
     }
-    elseif ($account instanceof UserInterface && $account->isBlocked()) {
+    elseif ($account->isBlocked()) {
       throw new UserVisibleException('Requested account is blocked.');
     }
     else {
@@ -547,14 +546,14 @@ class SamlService {
    *
    * @param string $unique_id
    *   The unique ID (attribute value) contained in the SAML response.
-   * @param \Drupal\user\UserInterface $account
+   * @param \Drupal\user\UserInterface|null $account
    *   The existing user account derived from the unique ID, if any.
    *
    * @throws \Drupal\samlauth\UserVisibleException
    *   If linking fails or is denied.
    */
-  protected function linkExistingAccount($unique_id, UserInterface $account) {
-    $allowed_roles = $this->configFactory->get('samlauth.authentication')->get('map_users_roles') ? $this->configFactory->get('samlauth.authentication')->get('map_users_roles') : [];
+  protected function linkExistingAccount($unique_id, ?UserInterface $account) {
+    $allowed_roles = $this->configFactory->get('samlauth.authentication')->get('map_users_roles') ?: [];
     $disallowed_roles = array_diff($account->getRoles(), (array)$allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
     if ($disallowed_roles) {
       $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
