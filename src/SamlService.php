@@ -915,7 +915,7 @@ class SamlService {
         'NameIDFormat' => $config->get('sp_name_id_format') ?: NULL,
       ],
       'idp' => [
-        'entityId' => $config->get('idp_entity_id'),
+        'entityId' => $idp_config->get('idp_entity_id'),
         'singleSignOnService' => [
           'url' => $idp_config->get('idp_single_sign_on_service'),
         ],
