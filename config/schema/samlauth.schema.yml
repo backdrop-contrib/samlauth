@@ -35,19 +35,7 @@ samlauth.authentication:
       type: integer
     metadata_cache_http:
       type: boolean
-    idp_entity_id:
-      type: string
-    idp_single_sign_on_service:
-      type: string
-    idp_single_log_out_service:
-      type: string
-    idp_change_password_service:
-      type: string
-    idp_certs:
-      type: sequence
-      sequence:
-        type: string
-    idp_cert_encryption:
+    default_idp:
       type: string
     unique_id_attribute:
       type: string
@@ -121,3 +109,30 @@ samlauth.authentication:
       type: boolean
     use_base_url:
       type: boolean
+
+samlauth.samlauth_idp.*:
+  type: config_entity
+  label: Identity Provider
+  mapping:
+    id:
+      type: string
+      label: ID
+    label:
+      type: label
+      label: Label
+    uuid:
+      type: string 
+    idp_entity_id:
+      type: string
+    idp_single_sign_on_service:
+      type: string
+    idp_single_log_out_service:
+      type: string
+    idp_change_password_service:
+      type: string
+    idp_cert_encryption:
+      type: string
+    idp_certs:
+      type: sequence
+      sequence:
+        type: string

@@ -897,6 +897,9 @@ class SamlService {
    *   The library configuration array.
    */
   protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
+    $idp_config_id = $config->get('default_idp');
+    $idp_config = \Drupal::entityTypeManager()->getStorage('samlauth_idp')
+      ->load($idp_config_id);
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
@@ -912,12 +915,12 @@ class SamlService {
         'NameIDFormat' => $config->get('sp_name_id_format') ?: NULL,
       ],
       'idp' => [
-        'entityId' => $config->get('idp_entity_id'),
+        'entityId' => $idp_config->get('idp_entity_id'),
         'singleSignOnService' => [
-          'url' => $config->get('idp_single_sign_on_service'),
+          'url' => $idp_config->get('idp_single_sign_on_service'),
         ],
         'singleLogoutService' => [
-          'url' => $config->get('idp_single_log_out_service'),
+          'url' => $idp_config->get('idp_single_log_out_service'),
         ],
       ],
       'security' => [
@@ -1197,7 +1200,7 @@ class SamlService {
     $encryption_cert = '';
     $certs = [];
     if ($add_idp_encryption_cert) {
-      $encryption_cert = $config->get('idp_cert_encryption');
+      $encryption_cert = $idp_config->get('idp_cert_encryption');
       if (isset($encryption_cert) && !is_string($encryption_cert)) {
         throw new SamlError('IdP encryption cert setting is not a string.', SamlError::SETTINGS_INVALID);
       }
@@ -1223,7 +1226,7 @@ class SamlService {
       }
     }
     if ($add_idp_cert || ($add_idp_encryption_cert && !$encryption_cert)) {
-      $certs = $config->get('idp_certs');
+      $certs = $idp_config->get('idp_certs');
       foreach ($certs as $i => $cert) {
         if (isset($certs[$i]) && !is_string($certs[$i])) {
           $nr = ($i ? " $i" : '');
