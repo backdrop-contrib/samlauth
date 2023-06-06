@@ -1200,7 +1200,7 @@ class SamlService {
     $encryption_cert = '';
     $certs = [];
     if ($add_idp_encryption_cert) {
-      $encryption_cert = $config->get('idp_cert_encryption');
+      $encryption_cert = $idp_config->get('idp_cert_encryption');
       if (isset($encryption_cert) && !is_string($encryption_cert)) {
         throw new SamlError('IdP encryption cert setting is not a string.', SamlError::SETTINGS_INVALID);
       }
@@ -1226,7 +1226,7 @@ class SamlService {
       }
     }
     if ($add_idp_cert || ($add_idp_encryption_cert && !$encryption_cert)) {
-      $certs = $config->get('idp_certs');
+      $certs = $idp_config->get('idp_certs');
       foreach ($certs as $i => $cert) {
         if (isset($certs[$i]) && !is_string($certs[$i])) {
           $nr = ($i ? " $i" : '');
