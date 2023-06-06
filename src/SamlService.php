@@ -897,6 +897,9 @@ class SamlService {
    *   The library configuration array.
    */
   protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
+    $idp_config_id = $config->get('default_idp');
+    $idp_config = \Drupal::entityTypeManager()->getStorage('samlauth_idp')
+      ->load($idp_config_id);
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
@@ -914,10 +917,10 @@ class SamlService {
       'idp' => [
         'entityId' => $config->get('idp_entity_id'),
         'singleSignOnService' => [
-          'url' => $config->get('idp_single_sign_on_service'),
+          'url' => $idp_config->get('idp_single_sign_on_service'),
         ],
         'singleLogoutService' => [
-          'url' => $config->get('idp_single_log_out_service'),
+          'url' => $idp_config->get('idp_single_log_out_service'),
         ],
       ],
       'security' => [

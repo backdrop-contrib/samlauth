@@ -5,3 +5,8 @@ samlauth.configuration:
   route_name: samlauth.samlauth_configure_form
   base_route: samlauth.samlauth_configure_form
   weight: 0
+entity.samlauth_idp.overview:
+  title: Identity Providers
+  route_name: entity.samlauth_idp.collection
+  base_route: samlauth.samlauth_configure_form
+  weight: 10

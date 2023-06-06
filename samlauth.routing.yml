@@ -80,3 +80,35 @@ samlauth.authmap_delete_form:
     _title: 'Delete authmap entry'
   requirements:
     _permission: 'configure saml'
+
+entity.samlauth_idp.collection:
+  path: '/admin/config/people/saml/idp'
+  defaults:
+    _entity_list: 'samlauth_idp'
+    _title: 'Identity Provider configuration'
+  requirements:
+    _permission: 'administer samlauth_idp'
+
+entity.samlauth_idp.add_form:
+  path: '/admin/config/people/saml/idp/add'
+  defaults:
+    _entity_form: 'samlauth_idp.add'
+    _title: 'Add an identity provider'
+  requirements:
+    _permission: 'administer samlauth_idp'
+
+entity.samlauth_idp.edit_form:
+  path: '/admin/config/people/saml/idp/{samlauth_idp}'
+  defaults:
+    _entity_form: 'samlauth_idp.edit'
+    _title: 'Edit an identity provider'
+  requirements:
+    _permission: 'administer samlauth_idp'
+
+entity.samlauth_idp.delete_form:
+  path: '/admin/config/people/saml/idp/{samlauth_idp}/delete'
+  defaults:
+    _entity_form: 'samlauth_idp.delete'
+    _title: 'Delete an identity provider'
+  requirements:
+    _permission: 'administer samlauth_idp'
