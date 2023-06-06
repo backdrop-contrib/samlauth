@@ -121,9 +121,7 @@ samlauth.samlauth_idp.*:
       type: label
       label: Label
     uuid:
-      type: string
-    idp_metadata_url:
-      type: string
+      type: string 
     idp_entity_id:
       type: string
     idp_single_sign_on_service:
