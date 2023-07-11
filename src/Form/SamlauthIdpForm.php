@@ -127,6 +127,13 @@ class SamlauthIdpForm extends EntityForm {
       '#default_value' => $this->entity->get('idp_entity_id'),
     ];
 
+    $form['sp_entity_id'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('SP Entity ID'),
+      '#description' => $this->t('The identifier representing the SP to be sent to the IdP. If not set, defaults to general configuration.'),
+      '#default_value' => $this->entity->get('sp_entity_id'),
+    ];
+
     $form['idp_single_sign_on_service'] = [
       '#type' => 'url',
       '#title' => $this->t('Single Sign On Service'),
@@ -170,18 +177,21 @@ class SamlauthIdpForm extends EntityForm {
     // reason to do so.
     $cert_types = $encryption_cert ? strstr($encryption_cert, ':', TRUE) : NULL;
     foreach ($certs as $value) {
-      $cert_type = strstr($value, ':', TRUE);
-      if (!$cert_type) {
-        $cert_type = 'config';
-      }
-      if ($cert_types && $cert_types !== $cert_type) {
-        if (!$form_state->getUserInput()) {
-          $this->messenger()->addWarning($this->t("IdP certificates are not all of the same type. The effect is that the UI probably looks confusing, without much clarity about which entries will get saved. Careful when editing."));
+      if(!is_array($value)) {
+
+        $cert_type = strstr($value, ':', TRUE);
+        if (!$cert_type) {
+          $cert_type = 'config';
         }
-        $cert_types = ':';
-        break;
+        if ($cert_types && $cert_types !== $cert_type) {
+          if (!$form_state->getUserInput()) {
+            $this->messenger()->addWarning($this->t("IdP certificates are not all of the same type. The effect is that the UI probably looks confusing, without much clarity about which entries will get saved. Careful when editing."));
+          }
+          $cert_types = ':';
+          break;
+        }
+        $cert_types = $cert_type;
       }
-      $cert_types = $cert_type;
     }
 
     $options = [
@@ -274,15 +284,18 @@ class SamlauthIdpForm extends EntityForm {
     if ($certs) {
       $form['idp_certs']['#default_value'] = [];
       foreach ($certs as $index => $value) {
-        $cert_type = strstr($value, ':', TRUE);
-        $form['idp_certs']['#default_value'][] =
-          in_array($cert_type, ['key', 'file'], TRUE)
-            ? [$cert_type => substr($value, strlen($cert_type) + 1)]
-            : ['cert' => $this->formatKeyOrCert($value, TRUE)];
-        if (!$form_state->getUserInput() && $cert_type === 'file' && !@file_exists(substr($value, 5))) {
-          $this->messenger()->addWarning($this->t('IdP certificate file@index is missing or not accessible.', [
-            '@index' => $index ? " $index" : '',
-          ]));
+        if(!is_array($value)) {
+
+          $cert_type = strstr($value, ':', TRUE);
+          $form['idp_certs']['#default_value'][] =
+            in_array($cert_type, ['key', 'file'], TRUE)
+              ? [$cert_type => substr($value, strlen($cert_type) + 1)]
+              : ['cert' => $this->formatKeyOrCert($value, TRUE)];
+          if (!$form_state->getUserInput() && $cert_type === 'file' && !@file_exists(substr($value, 5))) {
+            $this->messenger()->addWarning($this->t('IdP certificate file@index is missing or not accessible.', [
+              '@index' => $index ? " $index" : '',
+            ]));
+          }
         }
       }
     }
@@ -427,6 +440,7 @@ class SamlauthIdpForm extends EntityForm {
 
     foreach ([
       'idp_entity_id',
+      'sp_entity_id',
       'idp_single_sign_on_service',
       'idp_single_log_out_service',
       'idp_change_password_service',

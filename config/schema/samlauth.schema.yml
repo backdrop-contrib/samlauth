@@ -21,8 +21,6 @@ samlauth.authentication:
       type: sequence
       sequence:
         type: string
-    sp_entity_id:
-      type: string
     sp_name_id_format:
       type: string
     sp_x509_certificate:
@@ -121,7 +119,9 @@ samlauth.samlauth_idp.*:
       type: label
       label: Label
     uuid:
-      type: string 
+      type: string
+    sp_entity_id:
+      type: string
     idp_entity_id:
       type: string
     idp_single_sign_on_service:

@@ -42,6 +42,7 @@ use Drupal\samlauth\SamlauthIdpInterface;
  *   config_export = {
  *     "id",
  *     "label",
+ *     "sp_entity_id",
  *     "idp_entity_id",
  *     "idp_single_sign_on_service",
  *     "idp_single_log_out_service",
@@ -79,6 +80,13 @@ class SamlauthIdp extends ConfigEntityBase implements SamlauthIdpInterface {
    * @var string
    */
   protected string $idp_entity_id;
+
+  /**
+   * The identity provider SP ID.
+   *
+   * @var string
+   */
+  protected string $sp_entity_id;
 
   /**
    * The identity provider single sign on service URL.

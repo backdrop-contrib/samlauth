@@ -909,7 +909,7 @@ class SamlService {
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
-        'entityId' => $config->get('sp_entity_id'),
+        'entityId' => $idp_config->get('sp_entity_id') ? $idp_config->get('sp_entity_id') : $config->get('sp_entity_id'),
         'assertionConsumerService' => [
           // See ExecuteInRenderContextTrait if curious why the long chained
           // call is necessary.
