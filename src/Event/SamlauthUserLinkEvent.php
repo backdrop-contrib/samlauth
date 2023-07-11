@@ -27,7 +27,7 @@ class SamlauthUserLinkEvent extends Event {
   protected $attributes;
 
   /**
-   * Constructs a samlouth user link event object.
+   * Constructs a samlauth user link event object.
    *
    * @param array $attributes
    *   The SAML attributes received from the IdP.

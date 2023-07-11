@@ -48,4 +48,22 @@ final class SamlauthEvents {
    */
   const USER_SYNC = 'samlauth.user_sync';
 
+  /**
+   * Name of the event fired when the site decides which idp to use.
+   *
+   * The event allows module to decide which idp to use depending on the
+   * context and the need of the user. By default, the default_idp will be used,
+   * but this can be overridden by the event.
+   *
+   * The event is fired everytime the reformatConfig is called, before
+   * sending the user to the idp and when the user gets back from the idp.
+   *
+   * @Event
+   *
+   * @see \Drupal\samlauth\Event\SamlauthUserSyncEvent
+   *
+   * @var string
+   */
+  const IDP_SWITCH = 'samlauth.idp_switch';
+
 }

@@ -15,6 +15,7 @@ use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\key\KeyRepositoryInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
+use Drupal\samlauth\Event\SamlauthIdpSwitch;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
@@ -898,8 +899,13 @@ class SamlService {
    */
   protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
     $idp_config_id = $config->get('default_idp');
+    // Dispatch a idp_switch event.
+    $event = new SamlauthIdpSwitch($idp_config_id);
+    $event_dispatcher = \Drupal::service('event_dispatcher');
+    $event_dispatcher->dispatch($event, SamlauthEvents::IDP_SWITCH);
     $idp_config = \Drupal::entityTypeManager()->getStorage('samlauth_idp')
-      ->load($idp_config_id);
+      ->load($event->getSelectedIdp());
+    //  ->load($idp_config_id);
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
