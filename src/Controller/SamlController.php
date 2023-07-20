@@ -9,6 +9,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Render\RendererInterface;
+use Drupal\Core\Site\Settings;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Error;
@@ -369,11 +370,35 @@ class SamlController extends ControllerBase {
     if (!$ignore_relay_state) {
       $relay_state = $this->requestStack->getCurrentRequest()->get('RelayState');
       if ($relay_state) {
-        // We should be able to trust the RelayState parameter at this point
-        // because the response from the IdP was verified. Only validate general
-        // syntax.
+        // Trusted host patterns decleared in settings.php.
+        $trusted_patterns = Settings::get('trusted_host_patterns');
+        $match_trusted_patterns = FALSE;
+        if (!empty($trusted_patterns)) {
+          $this->logger->debug('trusted host patterns' . implode(' ', $trusted_patterns));
+          // Format the regular expression.
+          $patterns = array_map(fn ($hostPattern) => sprintf('{%s}i', $hostPattern), $trusted_patterns);
+          // The host name in the RelayState parameter.
+          $redirect_host = parse_url($relay_state, PHP_URL_HOST);
+          // Check whether the redirect host can be trusted
+          // against the trusted patterns.
+          foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $redirect_host)) {
+              $match_trusted_patterns = TRUE;
+              break;
+            }
+          }
+        }
+        // Check if the RelayState is a validate general syntax.
         if (!UrlHelper::isValid($relay_state, TRUE)) {
           $this->logger->error('Invalid RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
+        }
+        // In order to avoid 'Open Redirect' attacks,
+        // we have to make sure the RelayState is a trustd URL.
+        // If it match the trusted host patterns,
+        // or it is a internal URL. Then it can be trusted.
+        // @see https://github.com/SAML-Toolkits/php-saml#avoiding-open-redirect-attacks
+        elseif (!$match_trusted_patterns && UrlHelper::isExternal($relay_state) && !UrlHelper::externalIsLocal($relay_state, $GLOBALS['base_url'])) {
+          $this->logger->warning('Untrusted external RelayState parameter found in request: @relaystate', ['@relaystate' => $relay_state]);
         }
         // The SAML toolkit set a default RelayState to itself
         // (saml/log(in|out)) when starting the process, which will just cause
