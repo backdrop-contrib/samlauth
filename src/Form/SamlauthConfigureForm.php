@@ -205,6 +205,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#description' => $this->t("No redirection or meaningful logging is done. This better enables custom code to handle errors."),
       '#default_value' => $config->get('error_throw'),
     ];
+    $form['saml_login_logout']['bypass_relay_state_check'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Bypass safety check for dynamic redirect URLs"),
+      '#description' => $this->t("When checked, a response's RelayState parameter is redirected to, even if not a known safe hostname. (This will be removed in a newer version of the module.)"),
+      '#default_value' => $config->get('bypass_relay_state_check'),
+    ];
 
     $form['service_provider'] = [
       '#type' => 'details',
@@ -1549,6 +1555,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'drupal_login_roles',
       'error_redirect_url',
       'error_throw',
+      'bypass_relay_state_check',
       'sp_entity_id',
       'sp_name_id_format',
       'metadata_cache_http',
