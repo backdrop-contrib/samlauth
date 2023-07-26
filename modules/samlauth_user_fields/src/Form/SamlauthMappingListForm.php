@@ -54,7 +54,7 @@ class SamlauthMappingListForm extends ConfigFormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
-      $container->get('entity_field.manager').
+      $container->get('entity_field.manager'),
       $container->get('renderer')
     );
   }
