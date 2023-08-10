@@ -187,7 +187,7 @@ class MultiValue extends FormElement {
       // The default value should always have numeric keys. The initial count
       // is based on the default value... except if #add_empty says to add an
       // extra item only for 0 values.
-      if (!$element['#default_value'] && isset($element['#add_empty']) && $element['#add_empty'] === FALSE) {
+      if (empty($element['#default_value']) && isset($element['#add_empty']) && $element['#add_empty'] === FALSE) {
         $element_state = ['items_count' => 1];
       }
       else {
