@@ -5,16 +5,16 @@ samlauth.authentication:
   type: config_object
   mapping:
     login_menu_item_title:
-      type: string
+      type: label
       label: 'Login menu item title'
     logout_menu_item_title:
-      type: string
+      type: label
       label: 'Logout menu item title'
     login_link_show:
       type: boolean
       label: 'Display a link to SAML login on the user login form'
     login_link_title:
-      type: string
+      type: label
       label: 'SAML login link title'
     login_redirect_url:
       type: string

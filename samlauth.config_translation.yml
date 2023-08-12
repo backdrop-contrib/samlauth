@@ -1,0 +1,5 @@
+samlauth.authentication:
+  title: 'SAML UI labels'
+  base_route_name: samlauth.samlauth_configure_form
+  names:
+    - samlauth.authentication
