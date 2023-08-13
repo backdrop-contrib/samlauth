@@ -147,6 +147,26 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('logout_different_user'),
     ];
 
+    // Login link has two settings (boolean + string) so it can be disabled
+    // while still remembering the title.
+    $form['saml_login_logout']['login_link_show'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Display a link to SAML login on the user login form'),
+      '#default_value' => $config->get('login_link_show'),
+    ];
+
+    $form['saml_login_logout']['login_link_title'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('SAML login link title'),
+      '#default_value' => $config->get('login_link_title'),
+      '#description' => $this->t('Text to display as the link to SAML login.'),
+      '#states' => [
+        'disabled' => [
+          ':input[name="login_link_show"]' => ['checked' => FALSE],
+        ],
+      ],
+    ];
+
     /** @var \Drupal\user\Entity\Role[] $roles */
     $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
     unset($roles[UserInterface::ANONYMOUS_ROLE]);
@@ -1556,6 +1576,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'error_redirect_url',
       'error_throw',
       'bypass_relay_state_check',
+      'login_link_show',
+      'login_link_title',
       'sp_entity_id',
       'sp_name_id_format',
       'metadata_cache_http',

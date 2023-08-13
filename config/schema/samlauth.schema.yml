@@ -5,6 +5,10 @@ samlauth.authentication:
       type: string
     logout_menu_item_title:
       type: string
+    login_link_show:
+      type: boolean
+    login_link_title:
+      type: string
     login_redirect_url:
       type: string
     logout_redirect_url:
