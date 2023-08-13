@@ -115,7 +115,7 @@ class SamlTest extends BrowserTestBase {
     $this->drupalLogin($web_user);
 
     // Baseline: The 'real' error about being a SAML user is suppressed.
-    $this->assertEquals(FALSE, $config->get('local_login_saml_error'), "'local_login_saml_error' config is FALSE.");
+    $this->assertEquals(FALSE, $config->get('local_login_saml_error'), "'local_login_saml_error' config must be FALSE.");
 
     // Baseline: un-linked users can still reset their password.
     $this->drupalGet('user/password');

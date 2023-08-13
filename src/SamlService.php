@@ -284,7 +284,8 @@ class SamlService {
         }
       }
       else {
-        // Not sure if we should be more detailed...
+        // Continue and let Saml2\Auth throw the error after logging. Not sure
+        // if we should be more detailed...
         $this->logger->warning("HTTP request to ACS is not a POST request, or contains no 'SAMLResponse' parameter.");
       }
     }
@@ -653,29 +654,21 @@ class SamlService {
    */
   public function sls() {
     $config = $this->configFactory->get('samlauth.authentication');
-    // We might at some point check if this code can be abstracted a bit...
     if ($config->get('debug_log_in')) {
-      if (isset($_GET['SAMLResponse'])) {
-        $response = base64_decode($_GET['SAMLResponse']);
-        if ($response) {
-          $this->logger->debug("SLS received 'SAMLResponse' in GET request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
-        }
-        else {
-          $this->logger->warning("SLS received 'SAMLResponse' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLResponse']]);
-        }
-      }
-      elseif (isset($_GET['SAMLRequest'])) {
-        $response = base64_decode($_GET['SAMLRequest']);
-        if ($response) {
-          $this->logger->debug("SLS received 'SAMLRequest' in GET request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
-        }
-        else {
-          $this->logger->warning("SLS received 'SAMLRequest' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLRequest']]);
-        }
+      if (!isset($_GET['SAMLResponse']) && !isset($_GET['SAMLRequest'])) {
+        // Continue and let Saml2\Auth throw the error after logging. Not sure
+        // if we should be more detailed...
+        $this->logger->warning("HTTP request to SLS is not a GET request, or contains no 'SAMLResponse'/'SAMLRequest' parameters.");
       }
       else {
-        // Not sure if we should be more detailed...
-        $this->logger->warning("HTTP request to SLS is not a GET request, or contains no 'SAMLResponse'/'SAMLRequest' parameters.");
+        $type = isset($_GET['SAMLResponse']) ? 'SAMLResponse' : 'SAMLRequest';
+        $response = base64_decode($_GET[$type]);
+        if ($response) {
+          $this->logger->debug("SLS received '@type' in GET request (base64 decoded): <pre>@message</pre>", ['@type' => $type, '@message' => $response]);
+        }
+        else {
+          $this->logger->warning("SLS received '@type' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@type' => $type, '@message' => $_GET[$type]]);
+        }
       }
     }
 
@@ -959,10 +952,12 @@ class SamlService {
         // (*): also influences Settings:__construct() checks for SP cert+key.
         // (**): if either of these properties is true, an extra 'encryption'
         // certificate is always included in the metadata. (With the same value
-        // as the 'signing' certificate; we don't support different ones.)
+        // as the 'signing' certificate; we don't support different ones - only
+        // support including two different 'signing' ccertificates.)
       ],
       'strict' => (bool) $config->get('strict'),
     ];
+    // Passing NULL for signatureAlgorithm would be OK, but not ''.
     $sig_alg = $config->get('security_signature_algorithm');
     if ($sig_alg) {
       $library_config['security']['signatureAlgorithm'] = $sig_alg;
@@ -1000,9 +995,6 @@ class SamlService {
     $add_idp_encryption_cert = FALSE;
     switch ($purpose) {
       case 'metadata':
-        // signMetadata / wantNameIdEncrypted are not implemented yet but that
-        // doesn't mean we can't already use them here: they potentially
-        // influence metadata but then we can't turn off $add_key.
         $add_key = !empty($library_config['security']['signMetadata'])
           || !empty($library_config['security']['wantNameIdEncrypted'])
           || !empty($library_config['security']['wantAssertionsEncrypted']);
@@ -1121,6 +1113,7 @@ class SamlService {
               throw new SamlError("SP private key '$key' not found.", SamlError::SETTINGS_INVALID);
             }
             $key = $key_entity->getKeyValue();
+            // @TODO it is possible for this to be NULL (if e.g. the file is not readable) (Do we also validate this in config screen?)
           }
           else {
             throw new SamlError('SP private key setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
@@ -1129,7 +1122,7 @@ class SamlService {
         elseif ($type === 'file') {
           $key = file_get_contents(substr($key, 5));
           if ($key === FALSE) {
-            throw new SamlError('SP private key not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+            throw new SamlError('Could not read SP private key file.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
           }
         }
         $library_config['sp']['privateKey'] = $key;
@@ -1157,7 +1150,7 @@ class SamlService {
           elseif ($type === 'file') {
             $cert = file_get_contents(substr($cert, 5));
             if ($cert === FALSE) {
-              throw new SamlError('SP public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
+              throw new SamlError('Could not read SP public cert file.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
             }
           }
           $library_config['sp']['x509cert'] = $cert;
@@ -1186,7 +1179,7 @@ class SamlService {
           elseif ($type === 'file') {
             $cert = file_get_contents(substr($cert, 5));
             if ($cert === FALSE) {
-              throw new SamlError('SP new public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
+              throw new SamlError('Could not read SP new public cert file.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
             }
           }
           $library_config['sp']['x509certNew'] = $cert;
@@ -1218,7 +1211,7 @@ class SamlService {
       elseif ($type === 'file') {
         $encryption_cert = file_get_contents(substr($encryption_cert, 5));
         if ($encryption_cert === FALSE) {
-          throw new SamlError('IdP encryption cert not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+          throw new SamlError('Could not read IdP encryption cert file.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
         }
       }
     }
@@ -1240,14 +1233,15 @@ class SamlService {
             $certs[$i] = $key_entity->getKeyValue();
           }
           else {
-            throw new SamlError('IdP cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+            $nr = ($i ? " $i" : '');
+            throw new SamlError("IdP cert setting$nr is of type \"key\" but the Key module is not installed.", SamlError::SETTINGS_INVALID);
           }
         }
         elseif ($type === 'file') {
           $certs[$i] = file_get_contents(substr($cert, 5));
           if ($certs[$i] === FALSE) {
             $nr = ($i ? " $i" : '');
-            throw new SamlError("IdP cert$nr not found.", SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+            throw new SamlError("Could not read IdP cert$nr file.", SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
           }
         }
       }

@@ -2,10 +2,20 @@ These are selected quick notes for developers and administrators of the settings
 form. For all changes, see the
 [release notes on drupal.org](https://www.drupal.org/project/samlauth/releases).
 
+8.x-3.10:
+
+* Configuration: Added login_link_show (boolean) and login_link_title (string),
+  to show link to /saml/login on user login form.
+
+* Configuration: values for sp_private_key / sp_x509_certificate /
+  sp_new_certificate / idp_cert_encryption / idp_certs (sequence of strings)
+  could already contain relative paths after "file:", but the edit form
+  produced an error for them. The error is fixed.
+
 8.x-3.9:
 
 * After processing login/logout, the ACS/SLS endpoints now refuse to redirect
-  to URLS deemed unsafe. New configuration ignore_check_relay_state added, to
+  to URLS deemed unsafe. New configuration bypass_relay_state_check added, to
   enable reverting to the 8.x-3.8 behavior. It will disappear in the next major
   version. If your IDP sets the RelayState to an 'external' URL in their
   login / logout responses:

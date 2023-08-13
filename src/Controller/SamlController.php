@@ -152,7 +152,7 @@ class SamlController extends ControllerBase {
     };
     // This response redirects to an external URL in all/common cases. We count
     // on the routing.yml to specify that it's not cacheable.
-    return $this->getShortenedRedirectResponse($function, 'initiating SAML login', '<front>');
+    return $this->getShortenedRedirectResponse($function, $this->t('initiating SAML login'), '<front>');
   }
 
   /**
@@ -175,7 +175,7 @@ class SamlController extends ControllerBase {
     };
     // This response redirects to an external URL in all/common cases. We count
     // on the routing.yml to specify that it's not cacheable.
-    return $this->getShortenedRedirectResponse($function, 'initiating SAML logout', '<front>');
+    return $this->getShortenedRedirectResponse($function, $this->t('initiating SAML logout'), '<front>');
   }
 
   /**
@@ -243,7 +243,7 @@ class SamlController extends ControllerBase {
       $function = function () use ($e) {
         throw $e;
       };
-      $response = $this->getTrustedRedirectResponse($function, 'processing SAML SP metadata', '<front>');
+      $response = $this->getTrustedRedirectResponse($function, $this->t('processing SAML SP metadata'), '<front>');
     }
 
     return $response;
@@ -270,7 +270,7 @@ class SamlController extends ControllerBase {
       $ok = $this->saml->acs();
       return $this->getRedirectUrlAfterProcessing(TRUE, !$ok);
     };
-    return $this->getTrustedRedirectResponse($function, 'processing SAML authentication response', '<front>');
+    return $this->getTrustedRedirectResponse($function, $this->t('processing SAML authentication response'), '<front>');
   }
 
   /**
@@ -290,7 +290,7 @@ class SamlController extends ControllerBase {
     // SP-initiated logout that was initially started from this SP, i.e.
     // through the logout() route). We count on the routing.yml to specify that
     // it's not cacheable.
-    return $this->getShortenedRedirectResponse($function, 'processing SAML single-logout response', '<front>');
+    return $this->getShortenedRedirectResponse($function, $this->t('processing SAML single-logout response'), '<front>');
   }
 
   /**
@@ -313,7 +313,7 @@ class SamlController extends ControllerBase {
     // endpoint. The current reason for this only being available for logged-in
     // users is "v1 did it this way and there has been no reason/request to
     // change it" but we don't know if this is generally applicable for IdPs.)
-    return $this->getTrustedRedirectResponse($function, '', '<front>');
+    return $this->getTrustedRedirectResponse($function, $this->t('redirecting to changepw URL'), '<front>');
   }
 
   /**
@@ -329,12 +329,17 @@ class SamlController extends ControllerBase {
    *
    * @throws \Drupal\samlauth\UserVisibleException
    *   If the destination is disallowed.
+   *
+   * @see \Drupal\Core\Security\RequestSanitizer::processParameterBag()
    */
   protected function getUrlFromDestination() {
     $destination_url = NULL;
     $request_query_parameters = $this->requestStack->getCurrentRequest()->query;
     $destination = $request_query_parameters->get('destination');
     if ($destination) {
+      // No need to check for external URL because Core >= 8.6.2 filters those;
+      // see processParameterBag().
+      // @todo in 4.x, remove this if() for simplicity?
       if (UrlHelper::isExternal($destination)) {
         // Disallow redirecting to an external URL after we log in.
         throw new UserVisibleException('Destination URL query parameter must not be external: @destination', ['@destination' => $destination]);
@@ -555,26 +560,38 @@ class SamlController extends ControllerBase {
       // it's likely to not fully match the detailed message.
       $this->messenger->addError($exception->getMessage());
       if ($exception instanceof UserVisibleException) {
+        // Log original data; the backend is meant to translate during output.
         $this->logger->warning($exception->getOriginalMessage(), $exception->getReplacements());
       }
       else {
-        $this->logger->warning($exception->getMessage());
+        // Use same format for logging as Drupal's ExceptionLoggingSubscriber
+        // except also specify where the error was encountered.
+        $error = Error::decodeException($exception);
+        unset($error['severity_level']);
+        $error['@while'] = $while;
+        $this->logger->warning('%type encountered during @while: @message in %function (line %line of %file).', $error);
       }
     }
     else {
-      // Use the same format for logging as Drupal's ExceptionLoggingSubscriber
-      // except also specify where the error was encountered. (The options for
-      // the "while" part are limited, so we make this part of the message
-      // rather than a context parameter.)
-      if ($while) {
-        $while = " while $while";
-      }
-      $error = Error::decodeException($exception);
-      unset($error['severity_level']);
-      $this->logger->critical("%type encountered$while: @message in %function (line %line of %file).", $error);
       // Don't expose the error to prevent information leakage; the user likely
       // can't do much with it anyway. But hint that more details are available.
-      $this->messenger->addError($this->t("Error encountered{$while}; details have been logged."));
+      // There's no perfect solution for a translatable message here:
+      // - not translating an English $while will be strange for the UI message,
+      //   which will have some English in the middle of a translated message.
+      // - interpolating $while in the message to be translated, or having
+      //   t($while) as an argument in the addError(), is against Drupal
+      //   standards; it means that message-extraction tools will not pick up
+      //   the right message to translate.
+      // So instead, $while (the argument to getTrustedRedirectResponse() calls)
+      // is pre-translated. Mostly equal to the default site language, but
+      // might be the logged-in user language for logout/sls.
+      $this->messenger->addError($this->t('Error encountered during @while; details have been logged.', ['@while' => $while]));
+      $error = Error::decodeException($exception);
+      unset($error['severity_level']);
+      // Pre-translated string stored as context parameter. There's no good way
+      // to handle this.
+      $error['@while'] = $while;
+      $this->logger->warning('%type encountered during @while: @message in %function (line %line of %file).', $error);
     }
 
     // Get error URL.
