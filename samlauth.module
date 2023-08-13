@@ -149,18 +149,13 @@ function samlauth_check_saml_user(&$form, FormStateInterface $form_state) {
           \Drupal::logger('user')->notice('Local login attempt denied to SAML-only account %user.', ['%user' => $form_state->getValue('name')]);
         }
         else {
-          if (version_compare(\Drupal::VERSION, '9.2.0-dev') >= 0) {
-            \Drupal::messenger()->addStatus(t('If %identifier is a valid account, an email will be sent with instructions to reset your password.', [
-              '%identifier' => $form_state->getValue('name'),
-            ]));
-          }
-          else {
-            \Drupal::messenger()->addStatus(t('Further instructions have been sent to your email address.'));
-          }
-          \Drupal::logger('user')->notice('Prevented sending password reset instructions mailed to %name at %email.', ['%name' => $account->getAccountName(), '%email' => $account->getEmail()]);
+          \Drupal::messenger()->addStatus(t('If %identifier is a valid account, an email will be sent with instructions to reset your password.', [
+            '%identifier' => $form_state->getValue('name'),
+          ]));
           // Prevent executing the submit callback that sends the mail and
-          // prints the same message.
+          // prints the above message.
           $form['#submit'] = [];
+          \Drupal::logger('user')->notice('Prevented sending password reset instructions mailed to %name at %email.', ['%name' => $account->getAccountName(), '%email' => $account->getEmail()]);
         }
       }
     }

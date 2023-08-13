@@ -106,9 +106,7 @@ class SamlTest extends BrowserTestBase {
    * Tests behavior of password reset / login screen.
    */
   public function testPasswordReset() {
-    $core_msg_mail_sent = version_compare(\Drupal::VERSION, '9.2.0-dev') >= 0
-      ? 'an email will be sent with instructions to reset your password.'
-      : 'Further instructions have been sent to your email address.';
+    $core_msg_mail_sent = 'an email will be sent with instructions to reset your password.';
     $mails = $this->drupalGetMails();
     $initial_count_mails = count($mails);
     $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
