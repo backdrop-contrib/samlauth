@@ -498,7 +498,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_key_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Private Key filename'),
-      '#description' => $this->t('Absolute filename.'),
       '#default_value' => $sp_key_type === 'file' ? $sp_private_key : '',
       '#states' => [
         'visible' => [
@@ -552,7 +551,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_cert_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('X.509 Certificate Filename'),
-      '#description' => $this->t('Absolute filename.'),
       '#default_value' => $sp_cert_type === 'file' ? $sp_cert : '',
       '#states' => [
         'visible' => [
@@ -614,7 +612,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_new_cert_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('New X.509 Certificate filename'),
-      '#description' => $this->t("This is announced in the metadata, to plan for using it in the future. Absolute filename."),
+      '#description' => $this->t("This is announced in the metadata, to plan for using it in the future."),
       '#default_value' => $sp_new_cert_type === 'file' ? $sp_new_cert : '',
       '#states' => [
         'visible' => [
@@ -1393,9 +1391,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     $filename = $form_state->getValue('sp_key_file');
     $full_cert = $form_state->getValue('sp_private_key');
-    if ($filename && in_array($sp_key_type, ['', 'file']) && $filename[0] !== '/') {
-      $form_state->setErrorByName('sp_key_file', $this->t('SP private key filename must be absolute.'));
-    }
     // There are 4 elements that reference the key. At least 3 must be empty or
     // invisible. (Checking $sp_key_type=='' is enough to determine if multiple
     // elements are visible.)
@@ -1405,9 +1400,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $filename = $form_state->getValue('sp_cert_file');
     $full_cert = $form_state->getValue('sp_x509_certificate');
-    if ($filename && in_array($sp_cert_type, ['', 'file']) && $filename[0] !== '/') {
-      $form_state->setErrorByName('sp_cert_file', $this->t('SP certificate filename must be absolute.'));
-    }
     if (!$sp_cert_type && (($cert_keyname && $filename) || ($cert_keyname && $full_cert) || ($filename && $full_cert))) {
       $form_state->setErrorByName("sp_private_key", $this->t('Only one certificate (filename) element must be populated.'));
     }
@@ -1424,9 +1416,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $idp_cert_type = $form_state->getValue('idp_cert_type');
     $idp_certs = $form_state->getValue('idp_certs');
     foreach ($idp_certs as $index => $item) {
-      if (!empty($item['file']) && in_array($idp_cert_type, ['', 'file']) && $item['file'][0] !== '/') {
-        $form_state->setErrorByName("idp_certs][$index][file", $this->t('IdP certificate filename must be absolute.'));
-      }
       if (!$idp_cert_type && ((!empty($item['key']) && !empty($item['file'])) || (!empty($item['key']) && !empty($item['cert'])) || (!empty($item['file']) && !empty($item['cert'])))) {
         $form_state->setErrorByName("idp_certs][$index][cert", $this->t('Only one new certificate (filename) element must be populated per row.'));
       }
@@ -1434,9 +1423,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $keyname = $form_state->getValue('idp_certkey_encryption');
     $filename = $form_state->getValue('idp_certfile_encryption');
     $full_cert = $form_state->getValue('idp_cert_encryption');
-    if ($filename && in_array($idp_cert_type, ['', 'file']) && $filename[0] !== '/') {
-      $form_state->setErrorByName('idp_certfile_encryption', $this->t('IdP encryption certificate filename must be absolute.'));
-    }
     if (!$idp_cert_type && (($keyname && $filename) || ($keyname && $full_cert) || ($filename && $full_cert))) {
       $form_state->setErrorByName("idp_cert_encryption", $this->t('IdP certificate and filename cannot both be set.'));
     }
