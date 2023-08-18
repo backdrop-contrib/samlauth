@@ -2,7 +2,9 @@
 
 namespace Drupal\samlauth\Form;
 
+use Drupal\Core\Config\Config;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -21,6 +23,13 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Provides a configuration form for samlauth module settings and IdP/SP info.
  */
 class SamlauthConfigureForm extends ConfigFormBase {
+
+  /**
+   * The typed configuration manager.
+   *
+   * @var \Drupal\Core\Config\TypedConfigManagerInterface
+   */
+  protected $typedConfigManager;
 
   /**
    * The EntityTypeManager service.
@@ -60,6 +69,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    *   The factory for configuration objects.
+   * @param \Drupal\Core\Config\TypedConfigManagerInterface $typed_config_manager
+   *   The typed configuration manager.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The EntityTypeManager service.
    * @param \Drupal\Core\Path\PathValidatorInterface $path_validator
@@ -67,10 +78,11 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * @param \Drupal\Core\Utility\Token $token
    *   The token service.
    * @param \Drupal\key\KeyRepositoryInterface|null $key_repository
-   *   The token service.
+   *   The key repository.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, PathValidatorInterface $path_validator, Token $token, $key_repository) {
+  public function __construct(ConfigFactoryInterface $config_factory, TypedConfigManagerInterface $typed_config_manager, EntityTypeManagerInterface $entity_type_manager, PathValidatorInterface $path_validator, Token $token, $key_repository) {
     parent::__construct($config_factory);
+    $this->typedConfigManager = $typed_config_manager;
     $this->entityTypeManager = $entity_type_manager;
     $this->pathValidator = $path_validator;
     $this->token = $token;
@@ -83,6 +95,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
+      $container->get('config.typed'),
       $container->get('entity_type.manager'),
       $container->get('path.validator'),
       $container->get('token'),
@@ -108,7 +121,24 @@ class SamlauthConfigureForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
+    // The types and labels of all configuration values are defined in the
+    // schema.yml; we want to get them from there instead of repeating them.
+    // A simple definition array without replacements should suffice for this
+    // purpose; it doesn't seem to make sense to wrap it in some typed
+    // DataDefinition class...
+    $schema_definition = $this->typedConfigManager->getDefinition(SamlController::CONFIG_OBJECT_NAME);
+    assert(!empty($schema_definition['mapping']), 'Config schema of ' . SamlController::CONFIG_OBJECT_NAME . ' has unexpected value; ' . self::class . ' needs rework.');
+    $schema_definition = $schema_definition['mapping'];
+
     $config = $this->config(SamlController::CONFIG_OBJECT_NAME);
+
+    /** @var \Drupal\user\Entity\Role[] $roles */
+    $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
+    unset($roles[UserInterface::ANONYMOUS_ROLE]);
+    $role_options = [];
+    foreach ($roles as $name => $role) {
+      $role_options[$name] = $role->label();
+    }
 
     $form['saml_login_logout'] = [
       '#type' => 'details',
@@ -125,112 +155,46 @@ class SamlauthConfigureForm extends ConfigFormBase {
         ]) . '</em>';
     }
 
-    $form['saml_login_logout']['login_menu_item_title'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Login menu item title'),
-      '#description' => $this->t('The title of the SAML login link. Defaults to "Log in".'),
-      '#default_value' => $config->get('login_menu_item_title'),
-    ];
-
-    $form['saml_login_logout']['logout_menu_item_title'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Logout menu item title'),
-      '#description' => $this->t('The title of the SAML logout link. Defaults to "Log out".'),
-      '#default_value' => $config->get('logout_menu_item_title'),
-    ];
-
-    // This is false by default, to maintain parity with core user/reset links.
-    $form['saml_login_logout']['logout_different_user'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Log out different user upon re-authentication.'),
-      '#description' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed. This situation does not apply if the IdP is on another domain and <a href="https://www.drupal.org/node/3275352">cookie_samesite is configured</a> as "Strict" or "Lax", as is standard for new D10.1+ installs, because then the old user is not seen while coming from the IdP.)'),
-      '#default_value' => $config->get('logout_different_user'),
-    ];
-
-    // Login link has two settings (boolean + string) so it can be disabled
-    // while still remembering the title.
-    $form['saml_login_logout']['login_link_show'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Display a link to SAML login on the user login form'),
-      '#default_value' => $config->get('login_link_show'),
-    ];
-
-    $form['saml_login_logout']['login_link_title'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('SAML login link title'),
-      '#default_value' => $config->get('login_link_title'),
-      '#description' => $this->t('Text to display as the link to SAML login.'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="login_link_show"]' => ['checked' => FALSE],
+    $this->addElementsFromSchema($form['saml_login_logout'], $schema_definition, $config, [
+      'login_menu_item_title' => $this->t('The title of the SAML login link in the User account menu. Defaults to "Log in".'),
+      'logout_menu_item_title' => $this->t('The title of the SAML logout link in the User account menu. Defaults to "Log out".'),
+      // Login link has two settings (boolean + string) so it can be disabled
+      // while still remembering the title.
+      'login_link_show' => NULL,
+      'login_link_title' => [
+        '#description' => $this->t('Text to display as the link to SAML login.'),
+        '#states' => [
+          'disabled' => [
+            ':input[name="login_link_show"]' => ['checked' => FALSE],
+          ],
         ],
       ],
-    ];
-
-    /** @var \Drupal\user\Entity\Role[] $roles */
-    $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
-    unset($roles[UserInterface::ANONYMOUS_ROLE]);
-    $role_options = [];
-    foreach ($roles as $name => $role) {
-      $role_options[$name] = $role->label();
-    }
-    $form['saml_login_logout']['linking']['drupal_login_roles'] = [
-      '#type' => 'checkboxes',
-      '#title' => $this->t('Roles allowed to use Drupal login also when linked to a SAML login'),
-      '#description' => $this->t('Users who have previously logged in through the SAML Identity Provider can only use the standard Drupal login method if they have one of the roles selected here. Drupal users that have never logged in through the IdP are not affected by this restriction.'),
-      '#options' => $role_options,
-      '#default_value' => $config->get('drupal_login_roles') ?? [],
-    ];
-
-    $form['saml_login_logout']['local_login_saml_error'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Tell disallowed users they must log in using SAML.'),
-      '#description' => $this->t('If not checked, we show the generic "Unrecognized username or password" message to users who cannot use the standard Drupal login method. This prevents disclosing information about whether the account name exists, but is untrue / potentially confusing.', [
-        ':permission' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
-      ]),
-      // TRUE on existing installations where the checkbox didn't exist before;
-      // FALSE on new installations.
-      '#default_value' => $config->get('local_login_saml_error') ?? TRUE,
-    ];
-
-    $form['saml_login_logout']['login_redirect_url'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Login redirect URL'),
-      '#description' => $this->t("The default URL to redirect the user to after login. This should be an internal path starting with a slash, or an absolute URL. Defaults to the logged-in user's account page."),
-      '#default_value' => $config->get('login_redirect_url'),
-    ];
-
-    $form['saml_login_logout']['logout_redirect_url'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Logout redirect URL'),
-      '#description' => $this->t('The default URL to redirect the user to after logout. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page.'),
-      '#default_value' => $config->get('logout_redirect_url'),
-    ];
-
-    $form['saml_login_logout']['error_redirect_url'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Error redirect URL'),
-      '#description' => $this->t("The default URL to redirect the user to after an error occurred. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page."),
-      '#default_value' => $config->get('error_redirect_url'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="error_throw"]' => ['checked' => TRUE],
+      'logout_different_user' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed. This situation does not apply if the IdP is on another domain and <a href="https://www.drupal.org/node/3275352">cookie_samesite is configured</a> as "Strict" or "Lax", as is standard for new D10.1+ installs, because then the old user is not seen while coming from the IdP.)'),
+      'drupal_login_roles' => [
+        '#description' => $this->t('Users who have previously logged in through the SAML Identity Provider can only use the standard Drupal login method if they have one of the roles selected here. Drupal users that have never logged in through the IdP are not affected by this restriction.'),
+        '#options' => $role_options,
+      ],
+      'local_login_saml_error' => [
+        '#description' => $this->t('If not checked, we show the generic "Unrecognized username or password" message to users who cannot use the standard Drupal login method. This prevents disclosing information about whether the account name exists, but is untrue / potentially confusing.', [
+          ':permission' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
+        ]),
+        // TRUE on existing installations where the checkbox didn't exist before;
+        // FALSE on new installations.
+        '#default_value' => $config->get('local_login_saml_error') ?? TRUE,
+      ],
+      'login_redirect_url' => $this->t("The default URL to redirect the user to after login. This should be an internal path starting with a slash, or an absolute URL. Defaults to the logged-in user's account page."),
+      'logout_redirect_url' => $this->t('The default URL to redirect the user to after logout. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page.'),
+      'error_redirect_url' => [
+        '#description' => $this->t("The default URL to redirect the user to after an error occurred. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page."),
+        '#states' => [
+          'disabled' => [
+            ':input[name="error_throw"]' => ['checked' => TRUE],
+          ],
         ],
       ],
-    ];
-
-    $form['saml_login_logout']['error_throw'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Bypass error handling"),
-      '#description' => $this->t("No redirection or meaningful logging is done. This better enables custom code to handle errors."),
-      '#default_value' => $config->get('error_throw'),
-    ];
-    $form['saml_login_logout']['bypass_relay_state_check'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Bypass safety check for dynamic redirect URLs"),
-      '#description' => $this->t("When checked, a response's RelayState parameter is redirected to, even if not a known safe hostname. (This will be removed in a newer version of the module.)"),
-      '#default_value' => $config->get('bypass_relay_state_check'),
-    ];
+      'error_throw' => $this->t("No redirection or meaningful logging is done. This better enables custom code to handle errors."),
+      'bypass_relay_state_check' => $this->t("When checked, a response's RelayState parameter is redirected to, even if not a known safe hostname. (This will be removed in a newer version of the module.)"),
+    ]);
 
     $form['service_provider'] = [
       '#type' => 'details',
@@ -258,12 +222,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#list_type' => 'ul',
     ];
 
-    $form['service_provider']['sp_entity_id'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Entity ID'),
-      '#description' => $this->t('The identifier representing the SP.'),
-      '#default_value' => $config->get('sp_entity_id'),
-    ];
+    $this->addElementsFromSchema($form['service_provider'], $schema_definition, $config, [
+      'sp_entity_id' => $this->t('The identifier representing the SP.'),
+    ]);
 
     // Create options for cert/key type select element, and list of Keys for
     // 'key' select element.
@@ -413,6 +374,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // Warn if the files don't exist; not on validation but on every form
       // display. (They may be missing if we're looking at a copy of the site,
       // and we still want to be able to test other form interactions.)
+      // '@' suppression was added because of possible open_basedir restriction
+      // but see comment at #3300383.
       if ($sp_key_type === 'file' && !@file_exists($sp_private_key)) {
         $this->messenger()->addWarning($this->t('SP private key file is missing or not accessible.'));
       }
@@ -475,7 +438,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // necessary for saving, can be good for the editing experience.
       $form['service_provider']['sp_key_key'] = [
         '#type' => 'select',
-        '#title' => $this->t('Private Key'),
+        '#title' => $this->t($schema_definition['sp_private_key']['label']),
         '#description' => $this->t('Add private keys in the <a href=":url">Keys</a> list.', [
           ':url' => Url::fromRoute('entity.key.collection')->toString(),
         ]),
@@ -513,7 +476,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
     $form['service_provider']['sp_private_key'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('Private Key'),
+      '#title' => $this->t($schema_definition['sp_private_key']['label']),
       '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
       '#default_value' => $sp_key_type === 'config' ? $this->formatKeyOrCert($sp_private_key, TRUE, TRUE) : '',
       '#states' => [
@@ -530,7 +493,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     if ($this->keyRepository) {
       $form['service_provider']['sp_cert_key'] = [
         '#type' => 'select',
-        '#title' => $this->t('X.509 Certificate with attached private key'),
+        '#title' => $this->t('X.509 certificate with attached private key'),
         '#description' => $this->t("Add private keys and certificates (don't forget to reference the private key) in the <a href=\":url\">Keys</a> list.", [
           ':url' => Url::fromRoute('entity.key.collection')->toString(),
         ]),
@@ -550,7 +513,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     $form['service_provider']['sp_cert_file'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('X.509 Certificate Filename'),
+      '#title' => $this->t('X.509 certificate filename'),
       '#default_value' => $sp_cert_type === 'file' ? $sp_cert : '',
       '#states' => [
         'visible' => [
@@ -566,7 +529,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
     $form['service_provider']['sp_x509_certificate'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('X.509 Certificate'),
+      '#title' => $this->t($schema_definition['sp_x509_certificate']['label']),
       '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
       '#default_value' => $sp_cert_type === 'config' ? $this->formatKeyOrCert($sp_cert, TRUE) : '',
       '#states' => [
@@ -591,8 +554,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // private keys is likely beneficial for longer term maintenance.
       $form['service_provider']['sp_new_cert_key'] = [
         '#type' => 'select',
-        '#title' => $this->t('New X.509 Certificate'),
-        '#description' => $this->t("This is announced in the metadata, to plan for using it in the future. Add the certificate in the <a href=\":url\">Keys</a> list. It must reference a key (even though that won't be used yet), so this cert/key pair is ready to be moved into production.", [
+        '#title' => $this->t($schema_definition['sp_new_certificate']['label']),
+        '#description' => $this->t("Optional; not used for login, only added to the metadata. If you plan to replace the above key/certificate, the future certificate can be added here so the IdP can plan for the switch. Add the certificate in the <a href=\":url\">Keys</a> list. It must reference a key (even though that won't be used yet), so this cert/key pair is ready to be moved into production.", [
           ':url' => Url::fromRoute('entity.key.collection')->toString(),
         ]),
         '#options' => $selectable_public_keypairs,
@@ -611,8 +574,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     $form['service_provider']['sp_new_cert_file'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('New X.509 Certificate filename'),
-      '#description' => $this->t("This is announced in the metadata, to plan for using it in the future."),
+      '#title' => $this->t('New X.509 certificate filename'),
+      '#description' => $this->t('Optional; not used for login, only added to the metadata. If you plan to replace the above key/certificate, the future certificate can be added here so the IdP can plan for the switch.'),
       '#default_value' => $sp_new_cert_type === 'file' ? $sp_new_cert : '',
       '#states' => [
         'visible' => [
@@ -628,8 +591,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
     $form['service_provider']['sp_new_cert'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('New X.509 Certificate'),
-      '#description' => $this->t("This is announced in the metadata, to plan for using it in the future. Line breaks and '-----BEGIN/END' lines are optional."),
+      '#title' => $this->t($schema_definition['sp_new_certificate']['label']),
+      '#description' => $this->t("Optional; not used for login, only added to the metadata. If you plan to replace the above key/certificate, the future certificate can be added here so the IdP can plan for the switch. Line breaks and '-----BEGIN/END' lines are optional."),
       '#default_value' => $sp_new_cert_type === 'config' ? $this->formatKeyOrCert($sp_new_cert, TRUE) : '',
       '#states' => [
         'visible' => [
@@ -646,38 +609,32 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
     ];
 
-    $form['service_provider']['security_metadata_sign'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Sign metadata'),
-      '#description' => $this->t('Add a UUID to the metadata XML and sign it (using the key whose public equivalent is published inside this same metadata).'),
-      '#default_value' => $config->get('security_metadata_sign'),
-    ];
+    $this->addElementsFromSchema($form['service_provider'], $schema_definition, $config, [
+      'security_metadata_sign' => $this->t('Add a UUID to the metadata XML and sign it (using the key whose public equivalent is published inside this same metadata).'),
+    ]);
 
     $form['service_provider']['caching'] = [
       '#type' => 'details',
       '#open' => TRUE,
       '#title' => $this->t('Caching / Validity'),
-      '#description' => $this->t('These values are low for newly installed sites, and should be raised when login is working.'),
+      '#description' => $this->t('These values are low/off for newly installed sites, and should be raised/enabled when login is working.'),
     ];
 
     $value = $config->get('metadata_valid_secs');
     $default = $this->makeReadableDuration(Metadata::TIME_VALID);
-    $form['service_provider']['caching']['metadata_valid_secs'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Metadata validity'),
-      // Default is inside the translatable string; it will almost never change.
-      '#description' => $this->t("The maximum amount of time that the metadata (which is often cached by IdPs) should be considered valid, in readable format, e.g. \"1 day 8 hours\". As the XML expresses \"validUntil\" as a specific date, a HTTP cache will contain XML with slowly decreasing validity. The default (when left empty) is $default."),
-      '#default_value' => $value ? $this->makeReadableDuration($value) : NULL,
-    ];
-
-    $form['service_provider']['caching']['metadata_cache_http'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Cache HTTP responses containing metadata'),
-      '#description' => $this->t("This affects just (Drupal's and external) response caches, whereas the above also affects caching by the IdP. Caching is only important if the metadata URL can be reached by anonymous visitors. The Max-Age value is derived from the validity."),
-      // TRUE on existing installations where the checkbox didn't exist before;
-      // FALSE on new installations.
-      '#default_value' => $config->get('metadata_cache_http') ?? TRUE,
-    ];
+    $this->addElementsFromSchema($form['service_provider']['caching'], $schema_definition, $config, [
+      'metadata_valid_secs' => [
+        '#type' => 'textfield',
+        '#description' => $this->t('The maximum amount of time that the metadata (which is often cached by IdPs) should be considered valid, in readable format, e.g. "1 day 8 hours". As the XML expresses "validUntil" as a specific date, a HTTP cache will contain XML with slowly decreasing validity. The default (when left empty) is @default.', ['@default' => $default]),
+        '#default_value' => $value ? $this->makeReadableDuration($value) : NULL,
+      ],
+      'metadata_cache_http' => [
+        '#description' => $this->t("This affects just (Drupal's and external) response caches, whereas the above also affects caching by the IdP. Caching is only important if the metadata URL can be reached by anonymous visitors. The Max-Age value is derived from the validity."),
+        // TRUE on existing installations where the checkbox didn't exist before;
+        // FALSE on new installations.
+        '#default_value' => $config->get('metadata_cache_http') ?? TRUE,
+      ],
+    ]);
 
     $form['identity_provider'] = [
       '#type' => 'details',
@@ -693,33 +650,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // '#description' => $this->t('URL of the XML metadata for the IdP.'),
     // '#default_value' => $config->get('idp_metadata_url'),
     // ];
-    $form['identity_provider']['idp_entity_id'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Entity ID'),
-      '#description' => $this->t('The identifier representing the IdP.'),
-      '#default_value' => $config->get('idp_entity_id'),
-    ];
-
-    $form['identity_provider']['idp_single_sign_on_service'] = [
-      '#type' => 'url',
-      '#title' => $this->t('Single Sign On Service'),
-      '#description' => $this->t('URL where the SP will direct authentication requests.'),
-      '#default_value' => $config->get('idp_single_sign_on_service'),
-    ];
-
-    $form['identity_provider']['idp_single_log_out_service'] = [
-      '#type' => 'url',
-      '#title' => $this->t('Single Logout Service'),
-      '#description' => $this->t('URL where the SP will direct logout requests.'),
-      '#default_value' => $config->get('idp_single_log_out_service'),
-    ];
-
-    $form['identity_provider']['idp_change_password_service'] = [
-      '#type' => 'url',
-      '#title' => $this->t('Change Password URL'),
-      '#description' => $this->t("URL where users will be directed to change their password. (This is something your IdP might implement but it's outside of the SAML specification. SAML users who are disallowed from logging in locally see a link to this URL on their account edit form.)"),
-      '#default_value' => $config->get('idp_change_password_service'),
-    ];
+    $this->addElementsFromSchema($form['identity_provider'], $schema_definition, $config, [
+      'idp_entity_id' => $this->t('The identifier representing the IdP.'),
+      'idp_single_sign_on_service' => $this->t('URL where the SP will direct authentication requests.'),
+      'idp_single_log_out_service' => $this->t('URL where the SP will direct logout requests.'),
+      // @todo move this into Drupal/login section?
+      'idp_change_password_service' => $this->t("URL where users will be directed to change their password. (This is something your IdP might implement but it's outside of the SAML specification. SAML users who are disallowed from logging in locally see a link to this URL on their account edit form.)"),
+    ]);
 
     $certs = $config->get('idp_certs');
     $encryption_cert = $config->get('idp_cert_encryption');
@@ -782,14 +719,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
       //   time so we don't need the #description_suffix anymore.
       '#type' => 'samlmultivalue',
       '#add_empty' => FALSE,
-      '#title' => $this->t('X.509 Certificate(s)'),
+      '#title' => $this->t($schema_definition['idp_certs']['label']),
       '#description' => $this->t('Public X.509 certificate(s) of the IdP, used for validating signatures (and by default also for encryption).'),
       '#add_more_label' => $this->t('Add extra certificate'),
     ];
     if ($this->keyRepository) {
       $form['identity_provider']['idp_certs']['key'] = [
         '#type' => 'select',
-        '#title' => $this->t('Certificate'),
+        '#title' => $this->t($schema_definition['idp_certs']['sequence']['label']),
         '#description' => $this->t('Add certificates in the <a href=":url">Keys</a> list.', [
           ':url' => Url::fromRoute('entity.key.collection')->toString(),
         ]),
@@ -809,7 +746,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['identity_provider']['idp_certs'] += [
       'file' => [
         '#type' => 'textfield',
-        '#title' => $this->t('Certificate Filename'),
+        '#title' => $this->t('Certificate filename'),
         '#states' => [
           'visible' => [
             ':input[name="idp_cert_type"]' => [
@@ -822,7 +759,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
       'cert' => [
         '#type' => 'textarea',
-        '#title' => $this->t('Certificate'),
+        '#title' => $this->t($schema_definition['idp_certs']['sequence']['label']),
         '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
         '#states' => [
           'visible' => [
@@ -868,7 +805,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       // only very few installations use a separate encryption certificate.
       $form['identity_provider']['idp_certkey_encryption'] = [
         '#type' => 'select',
-        '#title' => $this->t('Encryption Certificate'),
+        '#title' => $this->t($schema_definition['idp_cert_encryption']['label']),
         '#description' => $description,
         '#default_value' => $cert_types === 'key' && $encryption_cert ? substr($encryption_cert, 4) : '',
         '#options' => $selectable_public_certs,
@@ -889,7 +826,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     $form['identity_provider']['idp_certfile_encryption'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Encryption Certificate Filename'),
+      '#title' => $this->t('Encryption certificate filename'),
       '#description' => $description,
       '#default_value' => $cert_types === 'file' && $encryption_cert ? substr($encryption_cert, 5) : '',
       '#states' => [
@@ -907,7 +844,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
     $form['identity_provider']['idp_cert_encryption'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('Encryption Certificate'),
+      '#title' => $this->t($schema_definition['idp_cert_encryption']['label']),
       '#description' => $description,
       '#default_value' => $cert_types === 'config' && $encryption_cert ? $this->formatKeyOrCert($encryption_cert, TRUE) : '',
       '#states' => [
@@ -933,12 +870,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#open' => TRUE,
     ];
 
-    $form['user_info']['unique_id_attribute'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Unique ID attribute'),
-      '#description' => $this->t("A SAML attribute whose value is unique per user and does not change over time. Its value is stored by Drupal and linked to the Drupal user that is logged in. (In principle, a non-transient NameID could also be used for this value; the SAML Authentication module does not support this yet.)<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
-      '#default_value' => $config->get('unique_id_attribute') ?: 'eduPersonTargetedID',
-    ];
+    $this->addElementsFromSchema($form['user_info'], $schema_definition, $config, [
+      'unique_id_attribute' => $this->t("A SAML attribute whose value is unique per user and does not change over time. Its value is stored by Drupal and linked to the Drupal user that is logged in. (In principle, a non-transient NameID could also be used for this value; the SAML Authentication module does not support this yet.)<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
+    ]);
 
     $form['user_info']['linking'] = [
       '#title' => $this->t('Attempt to link SAML data to existing local users'),
@@ -948,84 +882,42 @@ class SamlauthConfigureForm extends ConfigFormBase {
       . '<br><br><em>' . t('Warning: if the data used for matching can be changed by the IdP user, this has security implications; it enables a user to influence which Drupal user they take over.') . '</em>',
     ];
 
-    $form['user_info']['linking']['map_users'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable custom matching'),
-      '#description' => $this->t("Allows user matching by the included 'User Fields Mapping' module as well as any other code (event subscriber) installed for this purpose."),
-      '#default_value' => $config->get('map_users'),
-    ];
-
-    $form['user_info']['linking']['map_users_name'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable matching on name'),
-      '#description' => $this->t('Allows matching an existing local user name with value of the user name attribute.'),
-      '#default_value' => $config->get('map_users_name'),
-    ];
-
-    $form['user_info']['linking']['map_users_mail'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Enable matching on email'),
-      '#description' => $this->t('Allows matching an existing local user email with value of the user email attribute.'),
-      '#default_value' => $config->get('map_users_mail'),
-    ];
-
     unset($role_options[UserInterface::AUTHENTICATED_ROLE]);
-    $form['user_info']['linking']['map_users_roles'] = [
-      '#type' => 'checkboxes',
-      '#title' => $this->t('Roles allowed for linking'),
-      '#description' => $this->t('If a matched account has any role that is not explicitly allowed here, linking/login is denied.'),
-      '#options' => $role_options,
-      '#default_value' => $config->get('map_users_roles') ?? [],
-    ];
+    $this->addElementsFromSchema($form['user_info']['linking'], $schema_definition, $config, [
+      'map_users' => $this->t("Allows user matching by the included 'User Fields Mapping' module as well as any other code (event subscriber) installed for this purpose."),
+      'map_users_name' => $this->t('Allows matching an existing local user name with value of the user name attribute.'),
+      'map_users_mail' => $this->t('Allows matching an existing local user email with value of the user email attribute.'),
+      'map_users_roles' => [
+        '#description' => $this->t('If a matched account has any role that is not explicitly allowed here, linking/login is denied.'),
+        '#options' => $role_options,
+      ],
+    ]);
 
-    $form['user_info']['create_users'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Create users from SAML data'),
-      '#description' => $this->t('If data in the SAML assertion is not linked to a Drupal user, a new user is created using the name / email attributes from the response.'),
-      '#default_value' => $config->get('create_users'),
-    ];
-
-    $form['user_info']['sync_name'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Synchronize user name on every login'),
-      '#default_value' => $config->get('sync_name'),
-      '#description' => $this->t('The name attribute in the SAML assertion will be propagated to the linked Drupal user on every login. (By default, the Drupal user name is not changed after user creation.)'),
-    ];
-
-    $form['user_info']['sync_mail'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Synchronize email address on every login'),
-      '#default_value' => $config->get('sync_mail'),
-      '#description' => $this->t('The email attribute in the SAML assertion will be propagated to the linked Drupal user on every login. (By default, the Drupal user email is not changed after user creation.)'),
-    ];
-
-    $form['user_info']['user_name_attribute'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('User name attribute'),
-      '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal user name.<br />Example: <em>cn</em> or <em>eduPersonPrincipalName</em>'),
-      '#default_value' => $config->get('user_name_attribute'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="map_users_name"]' => ['checked' => FALSE],
-          ':input[name="create_users"]' => ['checked' => FALSE],
-          ':input[name="sync_name"]' => ['checked' => FALSE],
+    $this->addElementsFromSchema($form['user_info'], $schema_definition, $config, [
+      'create_users' => $this->t('If data in the SAML assertion is not linked to a Drupal user, a new user is created using the name / email attributes from the response.'),
+      'sync_name' => $this->t('The name attribute in the SAML assertion is propagated to the linked Drupal user on every login. (When unchecked, the Drupal user name is not changed after user creation.)'),
+      'sync_mail' => $this->t('The email attribute in the SAML assertion is propagated to the linked Drupal user on every login. (When unchecked, the Drupal user email is not changed after user creation.)'),
+      'user_name_attribute' => [
+        '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal user name.<br />Example: <em>cn</em> or <em>eduPersonPrincipalName</em>'),
+        '#states' => [
+          'disabled' => [
+            ':input[name="map_users_name"]' => ['checked' => FALSE],
+            ':input[name="create_users"]' => ['checked' => FALSE],
+            ':input[name="sync_name"]' => ['checked' => FALSE],
+          ],
         ],
       ],
-    ];
-
-    $form['user_info']['user_mail_attribute'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('User email attribute'),
-      '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
-      '#default_value' => $config->get('user_mail_attribute'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="map_users_mail"]' => ['checked' => FALSE],
-          ':input[name="create_users"]' => ['checked' => FALSE],
-          ':input[name="sync_mail"]' => ['checked' => FALSE],
+      'user_mail_attribute' => [
+        '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal email address.<br />Example: <em>mail</em>'),
+        '#states' => [
+          'disabled' => [
+            ':input[name="map_users_mail"]' => ['checked' => FALSE],
+            ':input[name="create_users"]' => ['checked' => FALSE],
+            ':input[name="sync_mail"]' => ['checked' => FALSE],
+          ],
         ],
       ],
-    ];
+    ]);
 
     $form['security'] = [
       '#title' => $this->t('SAML Message Construction'),
@@ -1033,105 +925,62 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#open' => TRUE,
     ];
 
-    $form['security']['security_authn_requests_sign'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Sign authentication requests'),
-      '#description' => $this->t('Requests sent to the Single Sign-On Service of the IdP will include a signature.') . '*',
-      '#default_value' => $config->get('security_authn_requests_sign'),
-    ];
-
-    $form['security']['security_logout_requests_sign'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Sign logout requests'),
-      '#description' => $this->t('Requests sent to the Single Logout Service of the IdP will include a signature.'),
-      '#default_value' => $config->get('security_logout_requests_sign'),
-    ];
-
-    $form['security']['security_logout_responses_sign'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Sign logout responses'),
-      '#description' => $this->t('Responses sent back to the IdP will include a signature.'),
-      '#default_value' => $config->get('security_logout_responses_sign'),
-    ];
-
-    $form['security']['security_signature_algorithm'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Signature algorithm'),
-      '#options' => [
-        '' => $this->t('library default'),
-        XMLSecurityKey::RSA_SHA1 => 'RSA-SHA1',
-        XMLSecurityKey::HMAC_SHA1 => 'HMAC-SHA1',
-        XMLSecurityKey::RSA_SHA256 => 'SHA256',
-        XMLSecurityKey::RSA_SHA384 => 'SHA384',
-        XMLSecurityKey::RSA_SHA512 => 'SHA512',
-      ],
-      '#description' => $this->t('Algorithm used by the signing process.'),
-      '#default_value' => $config->get('security_signature_algorithm'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
-          ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
-          ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
+    $this->addElementsFromSchema($form['security'], $schema_definition, $config, [
+      'security_authn_requests_sign' => $this->t('Requests sent to the Single Sign-On Service of the IdP will include a signature.'). '*',
+      'security_logout_requests_sign' => $this->t('Requests sent to the Single Logout Service of the IdP will include a signature.'),
+      'security_logout_responses_sign' => $this->t('Responses sent back to the IdP will include a signature.'),
+      'security_signature_algorithm' => [
+        '#type' => 'select',
+        '#options' => [
+          '' => $this->t('library default'),
+          XMLSecurityKey::RSA_SHA1 => 'RSA-SHA1',
+          XMLSecurityKey::HMAC_SHA1 => 'HMAC-SHA1',
+          XMLSecurityKey::RSA_SHA256 => 'SHA256',
+          XMLSecurityKey::RSA_SHA384 => 'SHA384',
+          XMLSecurityKey::RSA_SHA512 => 'SHA512',
+        ],
+        '#description' => $this->t('Algorithm used by the signing process.'),
+        '#states' => [
+          'disabled' => [
+            ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
+            ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
+            ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
+          ],
         ],
       ],
-    ];
-
-    $form['security']['security_nameid_encrypt'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Encrypt NameID in logout requests'),
-      '#description' => $this->t("The NameID included in requests sent to the Single Logout Service of the IdP will be encrypted."),
-      '#default_value' => $config->get('security_nameid_encrypt'),
-    ];
-
-    // I am not a crypto expert and do not know if we can/should add
-    // AESnnn/GCM and others here as well. The library default can be found in
-    // the Utils::generateNameId() definition.
-    $form['security']['security_encryption_algorithm'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Encryption algorithm'),
-      '#options' => [
-        '' => $this->t('library default'),
-        XMLSecurityKey::AES128_CBC => 'AES128/CBC',
-        XMLSecurityKey::AES192_CBC => 'AES192/CBC',
-        XMLSecurityKey::AES256_CBC => 'AES256/CBC',
-      ],
-      '#description' => $this->t('Algorithm used by the encryption process.'),
-      '#default_value' => $config->get('security_encryption_algorithm'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="security_nameid_encrypt"]' => ['checked' => FALSE],
+      'security_nameid_encrypt' => $this->t("The NameID included in requests sent to the Single Logout Service of the IdP is encrypted."),
+      'security_encryption_algorithm' => [
+        '#type' => 'select',
+        // I am not a crypto expert and do not know if we can/should add
+        // AESnnn/GCM and others here as well. The library default can be found
+        // in the Utils::generateNameId() definition.
+        '#options' => [
+          '' => $this->t('library default'),
+          XMLSecurityKey::AES128_CBC => 'AES128/CBC',
+          XMLSecurityKey::AES192_CBC => 'AES192/CBC',
+          XMLSecurityKey::AES256_CBC => 'AES256/CBC',
+        ],
+        '#description' => $this->t('Algorithm used by the encryption process.'),
+        '#states' => [
+          'disabled' => [
+            ':input[name="security_nameid_encrypt"]' => ['checked' => FALSE],
+          ],
         ],
       ],
-    ];
+      'security_request_authn_context' => $this->t('Specify that only a subset of authentication methods available at the IdP should be used. (If checked, the "PasswordProtectedTransport" authentication method is specified, which is default behavior for the SAML Toolkit library. If other restrictions are needed, we should change the checkbox to a text input.)'),
+      'request_set_name_id_policy' => [
+        '#description' => $this->t('A NameIDPolicy element is added in authentication requests, mentioning the below format. This is default behavior for the SAML Toolkit library, but may be unneeded. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
+        // This is one of the few checkboxes that must be TRUE on existing
+        // installations where the checkbox didn't exist before (in older module
+        // versions). Others get their default only from the config/install yml.
+        '#default_value' => $config->get('request_set_name_id_policy') ?? TRUE,
+      ],
+      'sp_name_id_format' => $this->t('The format for the NameID attribute to request from the identity provider / to send in logout requests.*<br>Some common formats (with "unspecified" being the default):<br>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified<br>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress<br>urn:oasis:names:tc:SAML:2.0:nameid-format:transient<br>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'),
+    ]);
 
-    $form['security']['security_request_authn_context'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Specify authentication context'),
-      '#description' => $this->t('Specify that only a subset of authentication methods available at the IdP should be used. (If checked, the "PasswordProtectedTransport" authentication method is specified, which is default behavior for the SAML Toolkit library. If other restrictions are needed, we should change the checkbox to a text input.)'),
-      '#default_value' => $config->get('security_request_authn_context'),
-    ];
-
-    $form['security']['request_set_name_id_policy'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Specify NameID policy'),
-      '#description' => $this->t('A NameIDPolicy element is added in authentication requests, mentioning the below format. This is default behavior for the SAML Toolkit library, but may be unneeded. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
-      // This is one of the few checkboxes that must be TRUE on existing
-      // installations where the checkbox didn't exist before (in older module
-      // versions). Others get their default only from the config/install file.
-      '#default_value' => $config->get('request_set_name_id_policy') ?? TRUE,
-    ];
-
-    $form['security']['sp_name_id_format'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('NameID Format'),
-      '#description' => $this->t('The format for the NameID attribute to request from the identity provider / to send in logout requests.*<br>Some common formats (with "unspecified" being the default):<br>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified<br>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress<br>urn:oasis:names:tc:SAML:2.0:nameid-format:transient<br>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'),
-      '#default_value' => $config->get('sp_name_id_format'),
-    ];
-
-    // Untll #description_display works: (#314385)
     $form['security']['description'] = [
       '#type' => 'markup',
-      '#markup' => '*: ' . $this->t('These options also influence the SP metadata. (They are mentioned as  an attribute or child element of the SPSSODescriptor element.)'),
+      '#markup' => '*: ' . $this->t('These options also influence the SP metadata. (They are mentioned as an attribute or child element of the SPSSODescriptor element.)'),
     ];
 
     $form['responses'] = [
@@ -1140,81 +989,39 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#open' => TRUE,
     ];
 
-    $form['responses']['security_want_name_id'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Require NameID'),
-      '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
-      // This is one of the few checkboxes that must be TRUE on existing
-      // installations where the checkbox didn't exist before (in older module
-      // versions). Others get their default only from the config/install file.
-      '#default_value' => $config->get('security_want_name_id') ?? TRUE,
-    ];
-
-    $form['responses']['security_allow_repeat_attribute_name'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Allow duplicate attribute names'),
-      '#description' => $this->t('Do not raise an error when the authentication response contains duplicate attribute elements with the same name.'),
-      '#default_value' => $config->get('security_allow_repeat_attribute_name'),
-    ];
-
-    // This option's default value is FALSE but according to the SAML spec,
-    // signing parameters should always be retrieved from the original request
-    // instead of recalculated. (As argued in e.g.
-    // https://github.com/onelogin/php-saml/issues/130.) The 'TRUE' option
-    // (which was implemented in #6a828bf, as a result of
-    // https://github.com/onelogin/php-saml/pull/37) reads the parameters from
-    // $_SERVER['REQUEST'] but unfortunately this is not always populated in
-    // all PHP/webserver configurations. IMHO the code should have a fallback
-    // to other 'self encoding' methods if $_SERVER['REQUEST'] is empty; I see
-    // no downside to that and it would enable us to always set TRUE / get rid
-    // of this option in a future version of the SAML Toolkit library.
-    // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
-    $form['responses']['security_logout_reuse_sigs'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Retrieve logout signature parameters from \$_SERVER['REQUEST']"),
-      '#description' => $this->t('Validation of logout requests/responses can fail on some IdPs (among others, ADFS) if this option is not set. This happens independently of the  "Strict validation" option.'),
-      '#default_value' => $config->get('security_logout_reuse_sigs'),
-    ];
-
-    $form['responses']['strict'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Strict validation of responses'),
-      '#description' => $this->t('Validation failures (partly based on the next options) will cause the SAML conversation to be terminated. In production environments, this <em>must</em> be set.'),
-      '#default_value' => $config->get('strict'),
-    ];
-
-    $form['responses']['security_messages_sign'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Require messages to be signed'),
-      '#description' => $this->t('Responses (and logout requests) from the IdP are expected to be signed.'),
-      '#default_value' => $config->get('security_messages_sign'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="strict"]' => ['checked' => FALSE],
+    $this->addElementsFromSchema($form['responses'], $schema_definition, $config, [
+      'security_want_name_id' => [
+        '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
+        // See request_set_name_id_policy.
+        '#default_value' => $config->get('security_want_name_id') ?? TRUE,
+      ],
+      'security_allow_repeat_attribute_name' => $this->t('Do not raise an error when the authentication response contains duplicate attribute elements with the same name.'),
+      // This option's default value is FALSE but according to the SAML spec,
+      // signing parameters should always be retrieved from the original request
+      // instead of recalculated. (As argued in e.g.
+      // https://github.com/onelogin/php-saml/issues/130.) The 'TRUE' option
+      // (which was implemented in #6a828bf, as a result of
+      // https://github.com/onelogin/php-saml/pull/37) reads the parameters from
+      // $_SERVER['REQUEST'] but unfortunately this is not always populated in
+      // all PHP/webserver configurations. IMHO the code should have a fallback
+      // to other 'self encoding' methods if $_SERVER['REQUEST'] is empty; I see
+      // no downside to that and it would enable us to always set TRUE / get rid
+      // of this option in a future version of the SAML Toolkit library.
+      // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
+      'security_logout_reuse_sigs' => $this->t('Validation of logout requests/responses can fail on some IdPs (among others, ADFS) if this option is not set. This happens independently of the  "Strict validation" option.'),
+      'strict' => $this->t('Validation failures (partly based on the next options) will cause the SAML conversation to be terminated. In production environments, this <em>must</em> be set.'),
+      'security_messages_sign' => [
+        '#description' => $this->t('Responses (and logout requests) from the IdP are expected to be signed.'),
+        '#states' => [
+          'disabled' => [
+            ':input[name="strict"]' => ['checked' => FALSE],
+          ],
         ],
       ],
-    ];
-
-    $form['responses']['security_assertions_signed'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Require assertions to be signed'),
-      '#description' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed.*'),
-      '#default_value' => $config->get('security_assertions_signed'),
-    ];
-
-    $form['responses']['security_assertions_encrypt'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Require assertions to be encrypted'),
-      '#description' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.*'),
-      '#default_value' => $config->get('security_assertions_encrypt'),
-    ];
-
-    $form['responses']['security_nameid_encrypted'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Require NameID to be encrypted'),
-      '#description' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.*'),
-      '#default_value' => $config->get('security_nameid_encrypted'),
-    ];
+      'security_assertions_signed' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed.') . '*',
+      'security_assertions_encrypt' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.') . '*',
+      'security_nameid_encrypted' =>$this->t('Assertion elements in responses from the IdP are expected to be encrypted.') . '*',
+    ]);
 
     // Untll #description_display works: (#314385)
     $form['responses']['description'] = [
@@ -1228,99 +1035,63 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#open' => TRUE,
     ];
 
-    $form['other']['use_base_url'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Use Drupal base URL in toolkit library"),
-      '#description' => $this->t('This is supposedly a better version of the below that works for all Drupal configurations and (for reverse proxies) only uses HTTP headers/hostnames when you configured them as <a href=":trusted">trusted</a>. Please turn this on and file an issue if it doesn\'t work for you; it will be standard and non-configurable (and the above option will be removed) in the next major module versoin.', [
-        ':trusted' => 'https://www.drupal.org/docs/installing-drupal/trusted-host-settings#s-trusted-host-security-setting-in-drupal-8',
-      ]),
-      '#default_value' => $config->get('use_base_url'),
-    ];
-
-    $form['other']['use_proxy_headers'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Use 'X-Forwarded-*' headers (deprecated)"),
-      '#description' => $this->t("The SAML Toolkit will use 'X-Forwarded-*' HTTP headers (if present) for constructing/identifying the SP URL in sent/received messages. This used to be necessary if your SP is behind a reverse proxy."),
-      '#default_value' => $config->get('use_proxy_headers'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="use_base_url"]' => ['checked' => TRUE],
+    $this->addElementsFromSchema($form['other'], $schema_definition, $config, [
+      // This option has effect on signing of (login + logout) requests and
+      // logout responses. It's badly named (in the SAML Toolkit;
+      // "lowercaseUrlencoding") because there has never been any connection to
+      // the case of URL-encoded strings. The only thing this does is use
+      // rawurlencode() rather than urlencode() for URL encoding of signatures
+      // sent to the IdP. This option arguably shouldn't even exist because the
+      // use of urlencode() arguably is a bug that should just have been fixed.
+      // (The name "lowercaseUrlencoding" seems to come from a mistake: it
+      // originates from https://github.com/onelogin/python-saml/pull/144/files,
+      // a PR for the signature validation code for incoming messages, which was
+      // then mentioned in https://github.com/onelogin/php-saml/issues/136.
+      // However, the latter / this option is about signature generation for
+      // outgoing messages. Validation concerns different code, and is influenced
+      // by the 'security_logout_reuse_sigs' option below, which has its own
+      // issues.) This means that the default value should actually be TRUE.
+      // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
+      // @todo change default to TRUE; amend description (and d.o issue, and README)
+      'security_lowercase_url_encoding' => [
+        '#description' => $this->t("If there is ever a reason to turn this option off, a bug report is greatly appreciated. (The module author believes this option is unnecessary and plans for a PR to the SAML Toolkit to re-document it / phase it out. If you installed this module prior to 8.x-3.0-alpha2 and this option is turned off already, that's fine - changing it should make no difference.)"),
+        '#states' => [
+          'disabled' => [
+            ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
+            ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
+            ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
+          ],
         ],
       ],
-    ];
+      'use_base_url' => $this->t('This is supposedly a better version of the next option that works for all Drupal configurations and (for reverse proxies) only uses HTTP headers/hostnames when you configured them as <a href=":trusted">trusted</a>. Please turn this on and file an issue if it doesn\'t work for you; it will be standard and non-configurable (and this option will be removed) in the next major module version.', [
+        ':trusted' => 'https://www.drupal.org/docs/installing-drupal/trusted-host-settings#s-trusted-host-security-setting-in-drupal-8',
+      ]),
+      'use_proxy_headers' => [
+        '#description' => $this->t("The SAML Toolkit will use 'X-Forwarded-*' HTTP headers (if present) for constructing/identifying the SP URL in sent/received messages. This used to be necessary if your SP is behind a reverse proxy."),
+        '#states' => [
+          'disabled' => [
+            ':input[name="use_base_url"]' => ['checked' => TRUE],
+          ],
+        ],
+      ],
+    ]);
 
     $form['debugging'] = [
       '#title' => $this->t('Debugging'),
       '#type' => 'details',
-      '#description' => $this->t('When turning off debugging options to go into production mode, also check above "Caching / validity" options.'),
+      '#description' => $this->t('When turning off debugging options to go into production mode, re-check above "Strict validation" and "Caching / validity" values.'),
       '#open' => TRUE,
     ];
 
-    // This option has effect on signing of (login + logout) requests and
-    // logout responses. It's badly named (in the SAML Toolkit;
-    // "lowercaseUrlencoding") because there has never been any connection to
-    // the case of URL-encoded strings. The only thing this does is use
-    // rawurlencode() rather than urlencode() for URL encoding of signatures
-    // sent to the IdP. This option arguably shouldn't even exist because the
-    // use of urlencode() arguably is a bug that should just have been fixed.
-    // (The name "lowercaseUrlencoding" seems to come from a mistake: it
-    // originates from https://github.com/onelogin/python-saml/pull/144/files,
-    // a PR for the signature validation code for incoming messages, which was
-    // then mentioned in https://github.com/onelogin/php-saml/issues/136.
-    // However, the latter / this option is about signature generation for
-    // outgoing messages. Validation concerns different code, and is influenced
-    // by the 'security_logout_reuse_sigs' option below, which has its own
-    // issues.) This means that the default value should actually be TRUE.
-    // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
-    // @todo change default to TRUE; amend description (and d.o issue, and README
-    $form['debugging']['security_lowercase_url_encoding'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("'Raw' encode signatures when signing messages"),
-      '#description' => $this->t("If there is ever a reason to turn this option off, a bug report is greatly appreciated. (The module author believes this option is unnecessary and plans for a PR to the SAML Toolkit to re-document it / phase it out. If you installed this module prior to 8.x-3.0-alpha2 and this option is turned off already, that's fine - changing it should make no difference.)"),
-      '#default_value' => $config->get('security_lowercase_url_encoding'),
-      '#states' => [
-        'disabled' => [
-          ':input[name="security_authn_requests_sign"]' => ['checked' => FALSE],
-          ':input[name="security_logout_requests_sign"]' => ['checked' => FALSE],
-          ':input[name="security_logout_responses_sign"]' => ['checked' => FALSE],
-        ],
-      ],
-    ];
-
-    $form['debugging']['debug_display_error_details'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Show detailed errors to the user"),
-      '#description' => $this->t("This can help testing until SAML login/logout works. (Technical details about failed SAML login/logout are only logged to watchdog by default, to prevent exposing information about a misconfigured system / because it's unlikely they are useful.)"),
-      '#default_value' => $config->get('debug_display_error_details'),
-    ];
-
-    $form['debugging']['debug_log_saml_out'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Log outgoing SAML messages"),
-      '#description' => $this->t("Log messages which the SAML Toolkit 'sends' to the IdP (usually via the web browser through a HTTP redirect, as part of the URL)."),
-      '#default_value' => $config->get('debug_log_saml_out'),
-    ];
-
-    $form['debugging']['debug_log_saml_in'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Log incoming SAML messages"),
-      '#description' => $this->t("Log SAML responses (and logout requests) received by the ACS/SLS endpoints."),
-      '#default_value' => $config->get('debug_log_saml_in'),
-    ];
-
-    $form['debugging']['debug_log_in'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Log incoming messages before validation"),
-      '#description' => $this->t("Log supposed SAML messages received by the ACS/SLS endpoints before validating them as XML. If the other option logs nothing, this still might, but the logged contents may make less sense."),
-      '#default_value' => $config->get('debug_log_in'),
-    ];
-
-    $form['debugging']['debug_phpsaml'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t("Enable debugging in SAML Toolkit library"),
-      '#description' => $this->t("The exact benefit is unclear; as of library v3.4, this prints out certain validation errors to STDOUT / syslog, many of which would also be reported by other means. However, that might change..."),
-      '#default_value' => $config->get('debug_phpsaml'),
-    ];
+    $this->addElementsFromSchema($form['debugging'], $schema_definition, $config, [
+      // A note - if we ever split this config screen in two: this option does
+      // not govern just SAML communication but all errors during login.
+      'debug_display_error_details' => $this->t("This can help testing until login/logout works. (When unchecked, technical details are only logged to watchdog, to prevent exposing information about a misconfigured system / because it's unlikely they are useful.)"),
+      'debug_log_saml_out' => $this->t("Log messages which the SAML Toolkit 'sends' to the IdP (usually via the web browser through a HTTP redirect, as part of the URL)."),
+      'debug_log_saml_in' => $this->t('Log SAML responses (and logout requests) received by the ACS/SLS endpoints.'),
+      'debug_log_in' => $this->t('Log supposed SAML messages received by the ACS/SLS endpoints before validating them as XML. If the other option logs nothing, this still might, but the logged contents may make less sense.'),
+      'debug_phpsaml' => $this->t('The exact benefit is unclear; as of library v3.4, this prints out certain validation errors to STDOUT / syslog, many of which would also be reported by other means. However, that might change...'),
+    ]);
 
     return parent::buildForm($form, $form_state);
   }
@@ -1367,7 +1138,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // @todo Validate key/certs. Might be able to just openssl_x509_parse().
     $sp_key_type = $form_state->getValue('sp_key_cert_type');
     if ($sp_key_type) {
-      list($sp_key_type, $sp_cert_type) = explode('_', $sp_key_type, 2);
+      [$sp_key_type, $sp_cert_type] = explode('_', $sp_key_type, 2);
     }
     else {
       $sp_cert_type = '';
@@ -1436,7 +1207,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $sp_key_type = $form_state->getValue('sp_key_cert_type');
     if ($sp_key_type) {
-      list($sp_key_type, $sp_cert_type) = explode('_', $sp_key_type, 2);
+      [$sp_key_type, $sp_cert_type] = explode('_', $sp_key_type, 2);
     }
     else {
       $sp_cert_type = '';
@@ -1612,6 +1383,69 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $config->save();
 
     parent::submitForm($form, $form_state);
+  }
+
+  /**
+   * Adds form elements using the type and title found in the config schema.
+   *
+   * This way we don't need to define these in two places. (If we don't define
+   * them in the schema, configuration translation/inspector forms look strange;
+   * at least the translation form is important.)
+   */
+  protected function addElementsFromSchema(array &$build, array $schema_definition, Config $config, array $elements) {
+    foreach ($elements as $key => $data) {
+      assert(!empty($schema_definition[$key]['type']), "'$key.type' not found in schema definition for samlauth.authentication.");
+
+      $label = $schema_definition[$key]['label'] ?? 'Label not found.';
+      $default_default = NULL;
+      switch ($schema_definition[$key]['type']) {
+        case 'boolean':
+          $type = 'checkbox';
+          break;
+
+        case 'string':
+        case 'label':
+          $type = 'textfield';
+          break;
+
+        case 'text':
+          $type = 'textarea';
+          break;
+
+        case 'integer':
+          $type = 'number';
+          break;
+
+        case 'sequence':
+          // This one is very much specific to our situation.
+          $type = 'checkboxes';
+          $default_default = [];
+          assert(!empty($data['#options']), "No #options set for $key (type=sequence).");
+          break;
+
+        default:
+          $type = '';
+      }
+      // We must only call this helper function for simple elements.
+      assert(!empty($type), "Unrecognized type $type in addElementsFromSchema().");
+
+      $build[$key] = [
+        '#type' => $type,
+        // A label of any config element (as defined in the schema.yml) is
+        // translatable through 'UI translation'.
+        '#title' => $this->t($label),
+        '#default_value' => $config->get($key),
+      ];
+      if (isset($default_default) && !isset($build[$key]['#default_value'])) {
+        $build[$key]['#default_value'] = $default_default;
+      }
+      if (is_array($data)) {
+        $build[$key] = array_merge($build[$key], $data);
+      }
+      elseif ($data) {
+        $build[$key]['#description'] = $data;
+      }
+    }
   }
 
   /**
