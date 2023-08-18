@@ -1329,7 +1329,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'local_login_saml_error',
       'login_redirect_url',
       'logout_redirect_url',
-      'drupal_login_roles',
       'error_redirect_url',
       'error_throw',
       'bypass_relay_state_check',
@@ -1346,7 +1345,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'map_users',
       'map_users_name',
       'map_users_mail',
-      'map_users_roles',
       'create_users',
       'sync_name',
       'sync_mail',
@@ -1379,6 +1377,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'debug_phpsaml',
     ] as $config_value) {
       $config->set($config_value, $form_state->getValue($config_value));
+    }
+    // Filter out 0 inputs from multivalue checkboxes.
+    foreach ([
+      'drupal_login_roles',
+      'map_users_roles',
+    ] as $config_value) {
+      $config->set($config_value, array_filter($form_state->getValue($config_value)));
     }
     $config->save();
 

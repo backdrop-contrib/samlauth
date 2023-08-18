@@ -15,6 +15,10 @@ form. For all changes, see the
   could already contain relative paths after "file:", but the edit form
   produced an error for them. The error is fixed.
 
+* Configuration: drupal_login_roles / map_users_roles have zero values properly
+  removed when saved through the UI. There's no behavior change, but exported
+  config may show differences.
+
 8.x-3.9:
 
 * After processing login/logout, the ACS/SLS endpoints now refuse to redirect
