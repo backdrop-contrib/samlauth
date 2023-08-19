@@ -717,7 +717,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['identity_provider']['idp_change_password_service'] = [
       '#type' => 'url',
       '#title' => $this->t('Change Password URL'),
-      '#description' => $this->t("URL where users will be directed to change their password. (This is something your IdP might implement but it's outside of the SAML specification. All we do is just redirect /saml/changepw to the configured URL.)"),
+      '#description' => $this->t("URL where users will be directed to change their password. (This is something your IdP might implement but it's outside of the SAML specification. SAML users who are disallowed from logging in locally see a link to this URL on their account edit form.)"),
       '#default_value' => $config->get('idp_change_password_service'),
     ];
 

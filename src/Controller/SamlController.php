@@ -294,7 +294,11 @@ class SamlController extends ControllerBase {
   }
 
   /**
-   * Redirects to the 'Change Password' service.
+   * Redirects to a 'Change Password' URL on the IdP.
+   *
+   * This is not officially SAML functionality. This route is used on the user
+   * account edit form. It's kept accessible to only logged-in users so that
+   * the redirect URL cannot be discovered by anonymous users.
    *
    * @return \Symfony\Component\HttpFoundation\RedirectResponse
    *   The HTTP response to send back.
@@ -307,13 +311,9 @@ class SamlController extends ControllerBase {
       }
       return $url;
     };
-    // This response is cached. (We should probably clear it from the cache
-    // when the configuration is changed. On a half related note: we should
-    // probably also have at least one 'user story' or other note about this
-    // endpoint. The current reason for this only being available for logged-in
-    // users is "v1 did it this way and there has been no reason/request to
-    // change it" but we don't know if this is generally applicable for IdPs.)
-    return $this->getTrustedRedirectResponse($function, $this->t('redirecting to changepw URL'), '<front>');
+    $response = $this->getTrustedRedirectResponse($function, $this->t('redirecting to changepw URL'), '<front>');
+    $response->addCacheableDependency($this->config(self::CONFIG_OBJECT_NAME));
+    return $response;
   }
 
   /**
