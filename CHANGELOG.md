@@ -4,6 +4,9 @@ form. For all changes, see the
 
 8.x-3.10:
 
+* Added /saml/reauth route. (No further documentation provided; expected to
+  only be useful for testing.)
+
 * Configuration: Added login_link_show (boolean) and login_link_title (string),
   to show link to /saml/login on user login form.
 

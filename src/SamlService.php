@@ -243,14 +243,18 @@ class SamlService {
    *   the IdP.
    * @param array $parameters
    *   (optional) Extra query parameters to add to the returned redirect URL.
+   * @param bool $force_auth
+   *   (optional) Tell the IdP to force authentication. This should present an
+   *   authentication mechanism to the user even if they are logged in already
+   *   from the IdP's viewpoint. It's up to the IdP to actually implement this.
    *
    * @return string
    *   The URL of the single sign-on service to redirect to, including query
    *   parameters.
    */
-  public function login($return_to = NULL, array $parameters = []) {
+  public function login($return_to = NULL, array $parameters = [], $force_auth = FALSE) {
     $config = $this->configFactory->get('samlauth.authentication');
-    $url = $this->getSamlAuth('login')->login($return_to, $parameters, FALSE, FALSE, TRUE, $config->get('request_set_name_id_policy') ?? TRUE);
+    $url = $this->getSamlAuth('login')->login($return_to, $parameters, $force_auth, FALSE, TRUE, $config->get('request_set_name_id_policy') ?? TRUE);
     if ($config->get('debug_log_saml_out')) {
       $this->logger->debug('Sending SAML authentication request: <pre>@message</pre>', ['@message' => $this->getSamlAuth('login')->getLastRequestXML()]);
     }

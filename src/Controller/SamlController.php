@@ -140,19 +140,38 @@ class SamlController extends ControllerBase {
    * service on the IdP, which should be redirecting back to our ACS endpoint
    * after authenticating the user.
    *
+   * @param bool $force_auth
+   *   (optional) Tell the IdP to force authentication. This should present an
+   *   authentication mechanism to the user even if they are logged in already
+   *   from the IdP's viewpoint. It's up to the IdP to actually implement this.
+   *
    * @return \Drupal\Core\Routing\TrustedRedirectResponse
    *   The HTTP response to send back.
    */
-  public function login() {
+  public function login($force_auth = FALSE) {
     // $function returns a string and supposedly never calls 'external' Drupal
     // code... so it wouldn't need to be executed inside a render context. The
     // standard exception handling does, though.
-    $function = function () {
-      return $this->saml->login($this->getUrlFromDestination());
+    $function = function () use ($force_auth) {
+      return $this->saml->login($this->getUrlFromDestination(), [], $force_auth);
     };
     // This response redirects to an external URL in all/common cases. We count
     // on the routing.yml to specify that it's not cacheable.
-    return $this->getShortenedRedirectResponse($function, $this->t('initiating SAML login'), '<front>');
+    return $this->getShortenedRedirectResponse($function, $force_auth ? $this->t('initiating SAML login with forced authentication') : $this->t('initiating SAML login'), '<front>');
+  }
+
+  /**
+   * Initiates a SAML2 authentication flow specifying forced (re)authentication.
+   *
+   * This is likely only useful for testing; regular users with an active SSO
+   * session (at the IdP) in their browser do not usually want to
+   * reauthenticate. This route is not mentioned anywhere else.
+   *
+   * @return \Drupal\Core\Routing\TrustedRedirectResponse
+   *   The HTTP response to send back.
+   */
+  public function reauth() {
+    return $this->login(TRUE);
   }
 
   /**
@@ -474,7 +493,7 @@ class SamlController extends ControllerBase {
       // RelayState, we'll have a redirect loop between us and the IdP.
       // @todo hopefully get rid of this, when dropping OneLogin\Auth which
       //   forces a relaystate back onto ourselves (#3211529).
-      if ($safe && !preg_match('|/saml/log|', $relay_state)) {
+      if ($safe && !preg_match('[/saml/(log|reauth)]', $relay_state)) {
         $safe_url = $relay_state;
       }
     }
