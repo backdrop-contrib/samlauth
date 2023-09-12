@@ -147,6 +147,26 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#default_value' => $config->get('logout_different_user'),
     ];
 
+    // Login link has two settings (boolean + string) so it can be disabled
+    // while still remembering the title.
+    $form['saml_login_logout']['login_link_show'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Display a link to SAML login on the user login form'),
+      '#default_value' => $config->get('login_link_show'),
+    ];
+
+    $form['saml_login_logout']['login_link_title'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('SAML login link title'),
+      '#default_value' => $config->get('login_link_title'),
+      '#description' => $this->t('Text to display as the link to SAML login.'),
+      '#states' => [
+        'disabled' => [
+          ':input[name="login_link_show"]' => ['checked' => FALSE],
+        ],
+      ],
+    ];
+
     /** @var \Drupal\user\Entity\Role[] $roles */
     $roles = $this->entityTypeManager->getStorage('user_role')->loadMultiple();
     unset($roles[UserInterface::ANONYMOUS_ROLE]);
@@ -204,6 +224,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#title' => $this->t("Bypass error handling"),
       '#description' => $this->t("No redirection or meaningful logging is done. This better enables custom code to handle errors."),
       '#default_value' => $config->get('error_throw'),
+    ];
+    $form['saml_login_logout']['bypass_relay_state_check'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Bypass safety check for dynamic redirect URLs"),
+      '#description' => $this->t("When checked, a response's RelayState parameter is redirected to, even if not a known safe hostname. (This will be removed in a newer version of the module.)"),
+      '#default_value' => $config->get('bypass_relay_state_check'),
     ];
 
     $form['service_provider'] = [
@@ -446,7 +472,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_key_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Private Key filename'),
-      '#description' => $this->t('Absolute filename.'),
       '#default_value' => $sp_key_type === 'file' ? $sp_private_key : '',
       '#states' => [
         'visible' => [
@@ -500,7 +525,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_cert_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('X.509 Certificate Filename'),
-      '#description' => $this->t('Absolute filename.'),
       '#default_value' => $sp_cert_type === 'file' ? $sp_cert : '',
       '#states' => [
         'visible' => [
@@ -562,7 +586,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['service_provider']['sp_new_cert_file'] = [
       '#type' => 'textfield',
       '#title' => $this->t('New X.509 Certificate filename'),
-      '#description' => $this->t("This is announced in the metadata, to plan for using it in the future. Absolute filename."),
+      '#description' => $this->t("This is announced in the metadata, to plan for using it in the future."),
       '#default_value' => $sp_new_cert_type === 'file' ? $sp_new_cert : '',
       '#states' => [
         'visible' => [
@@ -1111,9 +1135,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     $filename = $form_state->getValue('sp_key_file');
     $full_cert = $form_state->getValue('sp_private_key');
-    if ($filename && in_array($sp_key_type, ['', 'file']) && $filename[0] !== '/') {
-      $form_state->setErrorByName('sp_key_file', $this->t('SP private key filename must be absolute.'));
-    }
     // There are 4 elements that reference the key. At least 3 must be empty or
     // invisible. (Checking $sp_key_type=='' is enough to determine if multiple
     // elements are visible.)
@@ -1123,9 +1144,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $filename = $form_state->getValue('sp_cert_file');
     $full_cert = $form_state->getValue('sp_x509_certificate');
-    if ($filename && in_array($sp_cert_type, ['', 'file']) && $filename[0] !== '/') {
-      $form_state->setErrorByName('sp_cert_file', $this->t('SP certificate filename must be absolute.'));
-    }
     if (!$sp_cert_type && (($cert_keyname && $filename) || ($cert_keyname && $full_cert) || ($filename && $full_cert))) {
       $form_state->setErrorByName("sp_private_key", $this->t('Only one certificate (filename) element must be populated.'));
     }
@@ -1137,6 +1155,20 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     if (!$sp_cert_type && (($keyname && $filename) || ($keyname && $full_cert) || ($filename && $full_cert))) {
       $form_state->setErrorByName("sp_new_cert", $this->t('Only one new certificate (filename) element must be populated.'));
+    }
+
+    $idp_cert_type = $form_state->getValue('idp_cert_type');
+    $idp_certs = $form_state->getValue('idp_certs');
+    foreach ($idp_certs as $index => $item) {
+      if (!$idp_cert_type && ((!empty($item['key']) && !empty($item['file'])) || (!empty($item['key']) && !empty($item['cert'])) || (!empty($item['file']) && !empty($item['cert'])))) {
+        $form_state->setErrorByName("idp_certs][$index][cert", $this->t('Only one new certificate (filename) element must be populated per row.'));
+      }
+    }
+    $keyname = $form_state->getValue('idp_certkey_encryption');
+    $filename = $form_state->getValue('idp_certfile_encryption');
+    $full_cert = $form_state->getValue('idp_cert_encryption');
+    if (!$idp_cert_type && (($keyname && $filename) || ($keyname && $full_cert) || ($filename && $full_cert))) {
+      $form_state->setErrorByName("idp_cert_encryption", $this->t('IdP certificate and filename cannot both be set.'));
     }
   }
 
@@ -1238,6 +1270,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'drupal_login_roles',
       'error_redirect_url',
       'error_throw',
+      'bypass_relay_state_check',
+      'login_link_show',
+      'login_link_title',
       'sp_entity_id',
       'sp_name_id_format',
       'metadata_cache_http',

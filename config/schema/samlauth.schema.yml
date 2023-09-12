@@ -5,6 +5,10 @@ samlauth.authentication:
       type: string
     logout_menu_item_title:
       type: string
+    login_link_show:
+      type: boolean
+    login_link_title:
+      type: string
     login_redirect_url:
       type: string
     logout_redirect_url:
@@ -106,6 +110,8 @@ samlauth.authentication:
     use_proxy_headers:
       type: boolean
     use_base_url:
+      type: boolean
+    bypass_relay_state_check:
       type: boolean
 
 samlauth.samlauth_idp.*:

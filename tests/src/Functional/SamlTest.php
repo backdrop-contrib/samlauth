@@ -78,6 +78,31 @@ class SamlTest extends BrowserTestBase {
   }
 
   /**
+   * Tests UI changes to login screen, excluding login-failure behavior.
+   */
+  public function testLoginUI() {
+    // Assumption: our imported config has no values for show / title. Default
+    // is to show no link.
+    $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
+    $this->drupalGet(Url::fromRoute('user.login'));
+    $this->assertSession()->elementNotExists('css', '.samlauth-auth-login-link');
+    // Still nothing shows if no link title is provided (i.e. no secret empty
+    // link).
+    $config->set('login_link_show', TRUE)->save();
+    $this->drupalGet(Url::fromRoute('user.login'));
+    $this->assertSession()->elementNotExists('css', '.samlauth-auth-login-link');
+
+    $link_title = 'Log in using SAML IdP';
+    $config->set('login_link_title', $link_title)->save();
+    $this->drupalGet(Url::fromRoute('user.login'));
+    $this->assertSession()->elementTextContains('css', '.samlauth-auth-login-link', $link_title);
+    // Turning only the 'show' option off makes the title disappear too.
+    $config->set('login_link_show', FALSE)->save();
+    $this->drupalGet(Url::fromRoute('user.login'));
+    $this->assertSession()->elementNotExists('css', '.samlauth-auth-login-link');
+  }
+
+  /**
    * Tests behavior of password reset / login screen.
    */
   public function testPasswordReset() {

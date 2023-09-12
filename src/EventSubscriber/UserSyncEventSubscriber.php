@@ -11,9 +11,7 @@ use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\TypedData\TypedDataManagerInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
-// @todo replace by Drupal\Component\Utility\EmailValidatorInterface in time,
-//   and remove the comment in the constructor.
-use Egulias\EmailValidator\EmailValidator;
+use Drupal\Component\Utility\EmailValidatorInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -81,17 +79,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
    * @param \Drupal\Core\TypedData\TypedDataManagerInterface $typed_data_manager
    *   The typed data manager.
    * @param \Drupal\Component\Utility\EmailValidatorInterface $email_validator
-   *   The email validator. Note the code defines it as
-   *   \Egulias\EmailValidator\EmailValidator for the time being; reason:
-   *   - The default service used to be \Egulias\EmailValidator\EmailValidator,
-   *     which in v1 only had one required argument. (v2 has two.)
-   *   - From core 8.7, \Drupal\Component\Utility\EmailValidatorInterface was
-   *     introduced, and the service now implements that interface AND still
-   *     extends \Egulias\EmailValidator\EmailValidator, but makes the 2nd
-   *     argument optional (and in fact, unusable) for backward compatibility.
-   *   We already typehint the interface in comments, otherwise the call to
-   *   isValid() will appear to contain errors. But we don't want to mandate
-   *   Core >= 8.7 just yet, so the 'use' statement is still not updated.
+   *   The email validator.
    * @param \Psr\Log\LoggerInterface $logger
    *   A logger instance.
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
@@ -99,7 +87,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
    * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
    *   The string translation service.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, TypedDataManagerInterface $typed_data_manager, EmailValidator $email_validator, LoggerInterface $logger, MessengerInterface $messenger, TranslationInterface $translation) {
+  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, TypedDataManagerInterface $typed_data_manager, EmailValidatorInterface $email_validator, LoggerInterface $logger, MessengerInterface $messenger, TranslationInterface $translation) {
     $this->entityTypeManager = $entity_type_manager;
     $this->emailValidator = $email_validator;
     $this->logger = $logger;
