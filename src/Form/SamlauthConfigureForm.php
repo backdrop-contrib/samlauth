@@ -677,13 +677,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#open' => TRUE,
     ];
 
-    $form['user_info']['unique_id_attribute'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Unique ID attribute'),
-      '#description' => $this->t("A SAML attribute whose value is unique per user and does not change over time. Its value is stored by Drupal and linked to the Drupal user that is logged in. (In principle, a non-transient NameID could also be used for this value; the SAML Authentication module does not support this yet.)<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
-      '#default_value' => $config->get('unique_id_attribute') ?: 'eduPersonTargetedID',
-    ];
-
     $form['user_info']['linking'] = [
       '#title' => $this->t('Attempt to link SAML data to existing local users'),
       '#type' => 'details',
@@ -1276,7 +1269,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'sp_entity_id',
       'sp_name_id_format',
       'metadata_cache_http',
-      'unique_id_attribute',
       'default_idp',
       'map_users',
       'map_users_name',

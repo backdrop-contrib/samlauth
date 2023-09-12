@@ -134,6 +134,13 @@ class SamlauthIdpForm extends EntityForm {
       '#default_value' => $this->entity->get('sp_entity_id'),
     ];
 
+    $form['user_info']['unique_id_attribute'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Unique ID attribute'),
+      '#description' => $this->t("A SAML attribute whose value is unique per user and does not change over time. Its value is stored by Drupal and linked to the Drupal user that is logged in. (In principle, a non-transient NameID could also be used for this value; the SAML Authentication module does not support this yet.)<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
+      '#default_value' => $this->entity->get('unique_id_attribute') ?: 'eduPersonTargetedID',
+    ];
+
     $form['idp_single_sign_on_service'] = [
       '#type' => 'url',
       '#title' => $this->t('Single Sign On Service'),
@@ -444,6 +451,7 @@ class SamlauthIdpForm extends EntityForm {
       'idp_single_sign_on_service',
       'idp_single_log_out_service',
       'idp_change_password_service',
+      'unique_id_attribute',
     ] as $config_value) {
       $this->entity->set($config_value, $form_state->getValue($config_value));
     }

@@ -39,8 +39,6 @@ samlauth.authentication:
       type: boolean
     default_idp:
       type: string
-    unique_id_attribute:
-      type: string
     map_users:
       type: boolean
     map_users_name:
@@ -113,7 +111,6 @@ samlauth.authentication:
       type: boolean
     bypass_relay_state_check:
       type: boolean
-
 samlauth.samlauth_idp.*:
   type: config_entity
   label: Identity Provider
@@ -142,3 +139,5 @@ samlauth.samlauth_idp.*:
       type: sequence
       sequence:
         type: string
+    unique_id_attribute:
+      type: string

@@ -48,6 +48,7 @@ use Drupal\samlauth\SamlauthIdpInterface;
  *     "idp_single_log_out_service",
  *     "idp_change_password_service",
  *     "idp_certs",
+ *     "unique_id_attribute",
  *   }
  * )
  */
