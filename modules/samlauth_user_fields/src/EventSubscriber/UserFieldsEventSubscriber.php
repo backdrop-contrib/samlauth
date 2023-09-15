@@ -11,6 +11,7 @@ use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\samlauth\UserVisibleException;
+use Drupal\samlauth_user_fields\Form\SamlauthMappingEditForm;
 use Drupal\user\UserInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -264,7 +265,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
               '%attribute' => $mapping['attribute_name'],
             ]);
           }
-          elseif ($sub_field_name && $field_definition->getType() !== 'address') {
+          elseif ($sub_field_name && !in_array($field_definition->getType(), SamlauthMappingEditForm::COMPLEX_FIELD_TYPES)) {
             // 'address' is the only compound field type we tested so far.
             $this->logger->warning('Unsuppoted user field type %type; skipping field mapping.', [
               '%type' => $field_definition->getType(),
