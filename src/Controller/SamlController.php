@@ -472,7 +472,9 @@ class SamlController extends ControllerBase {
       // routes us to the same place. Or, if the Drupal site has multiple
       // domains and the user still isn't logged in on the domain in the
       // RelayState, we'll have a redirect loop between us and the IdP.
-      if ($safe && !preg_match('|//[^/]+/saml/log|', $relay_state)) {
+      // @todo hopefully get rid of this, when dropping OneLogin\Auth which
+      //   forces a relaystate back onto ourselves (#3211529).
+      if ($safe && !preg_match('|/saml/log|', $relay_state)) {
         $safe_url = $relay_state;
       }
     }
