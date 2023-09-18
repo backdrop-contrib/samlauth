@@ -307,8 +307,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
                 // - validateAccountFieldValue() likely just works if we skip
                 //   the create() call when $value is an object
                 // but I haven't tried that. So far we just work with arrays.
-                $compound_field_values[$account_field_name] =
-                  $account->get($account_field_name)->get(0)->getValue() ?? [];
+                $compound_field_values[$account_field_name] = $account->get($account_field_name)->getValue()[0] ?? [];
               }
               if (!$this->isInputValueEqual($value, $compound_field_values[$account_field_name][$sub_field_name] ?? NULL, $mapping['field_name'])) {
                 $compound_field_values[$account_field_name][$sub_field_name] = $value;
