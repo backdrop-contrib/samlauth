@@ -4,6 +4,7 @@ namespace Drupal\samlauth\Form;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Path\PathValidatorInterface;
@@ -652,6 +653,58 @@ class SamlauthConfigureForm extends ConfigFormBase {
       '#description' => $this->t('Add a UUID to the metadata XML and sign it (using the key whose public equivalent is published inside this same metadata).'),
       '#default_value' => $config->get('security_metadata_sign'),
     ];
+
+    $form['service_provider']['requested_attr'] = [
+      '#type' => 'details',
+      '#open' => TRUE,
+      '#title' => $this->t('Requested Attributes'),
+      '#description' => $this->t('In case you need to request attributes from the IdP, you can add them here.'),
+      'requested_attr_service_name' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('Service Name'),
+        '#description' => $this->t("An optional service name. Can be left empty."),
+        '#default_value' => $config->get('requested_attr_service_name') ?? '',
+      ],
+      'requested_attributes' => [
+        // @todo sometime: 'multivalue'... if #1091852 has been solved for a long
+        //   time so we don't need the #description_suffix anymore.
+        '#type' => 'samlmultivalue',
+        '#add_empty' => TRUE,
+        '#title' => $this->t('Requested Attributes'),
+        '#add_more_label' => $this->t('Add requested attribute'),
+        'requested_attr_required' => [
+          '#type' => 'checkbox',
+          '#title' => $this->t('Is required'),
+          '#description' => 'Whether the attribute is required.',
+        ],
+        'requested_attr_name' => [
+          '#type' => 'textfield',
+          '#title' => $this->t('Name'),
+          '#description' => 'Field is required. Example: urn:oid:2.5.4.4.',
+          '#required' => TRUE,
+        ],
+        'requested_attr_format' => [
+          '#type' => 'textfield',
+          '#title' => $this->t('Name Format'),
+          '#description' => 'Field is required. Example: urn:oasis:names:tc:SAML:2.0:attrname-format:uri.',
+          '#required' => TRUE,
+        ],
+        'requested_attr_friendly_name' => [
+          '#type' => 'textfield',
+          '#title' => $this->t('Friendly Name'),
+          '#description' => 'Example: eduPersonPrincipalName.',
+        ],
+      ],
+    ];
+
+    foreach ($config->get('requested_attributes') as $attr) {
+      $form['service_provider']['requested_attr']['requested_attributes']['#default_value'][] = [
+        'requested_attr_required' => $attr['requested_attr_required'] ?? FALSE,
+        'requested_attr_name' => $attr['requested_attr_name'] ?? '',
+        'requested_attr_format' => $attr['requested_attr_format'] ?? '',
+        'requested_attr_friendly_name' => $attr['requested_attr_friendly_name'] ?? '',
+      ];
+    }
 
     $form['service_provider']['caching'] = [
       '#type' => 'details',
@@ -1571,6 +1624,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'idp_single_sign_on_service',
       'idp_single_log_out_service',
       'idp_change_password_service',
+      'requested_attr_service_name',
+      'requested_attributes',
       'unique_id_attribute',
       'map_users',
       'map_users_name',

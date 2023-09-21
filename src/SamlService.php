@@ -958,6 +958,25 @@ class SamlService {
       'strict' => (bool) $config->get('strict'),
     ];
     // Passing NULL for signatureAlgorithm would be OK, but not ''.
+
+    if (count($config->get('requested_attributes')) > 0) {
+      $attributes = [];
+      foreach ($config->get('requested_attributes') as $attr) {
+        $attrArray = [
+          "name" => $attr['requested_attr_name'],
+          "isRequired" => (bool) $attr['requested_attr_required'],
+          "nameFormat" => $attr['requested_attr_format'],
+        ];
+        if ($attr['requested_attr_friendly_name']) {
+          $attrArray['friendlyName'] = $attr['requested_attr_friendly_name'];
+        }
+        $attributes[] = $attrArray;
+      }
+      $library_config['sp']['attributeConsumingService'] = [
+        "serviceName" => $config->get('requested_attributes_service_name') ?? 'Ignored',
+        "requestedAttributes" => $attributes,
+      ];
+    }
     $sig_alg = $config->get('security_signature_algorithm');
     if ($sig_alg) {
       $library_config['security']['signatureAlgorithm'] = $sig_alg;
