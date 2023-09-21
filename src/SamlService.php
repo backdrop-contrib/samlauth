@@ -957,8 +957,8 @@ class SamlService {
       ],
       'strict' => (bool) $config->get('strict'),
     ];
-    // Passing NULL for signatureAlgorithm would be OK, but not ''.
 
+    // Add requested attributes if entered.
     if (count($config->get('requested_attributes')) > 0) {
       $attributes = [];
       foreach ($config->get('requested_attributes') as $attr) {
@@ -977,6 +977,8 @@ class SamlService {
         "requestedAttributes" => $attributes,
       ];
     }
+
+    // Passing NULL for signatureAlgorithm would be OK, but not ''.
     $sig_alg = $config->get('security_signature_algorithm');
     if ($sig_alg) {
       $library_config['security']['signatureAlgorithm'] = $sig_alg;
