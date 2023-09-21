@@ -1588,7 +1588,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $requested_attributes = [];
     foreach ($form_state->getValue('requested_attributes') as $item) {
-      // We validated that max. 1 of the values is set if $idp_cert_type == ''.
+      // Validate that we only save attributes that are not empty.
       if (!empty($item['requested_attr_name'])) {
         $requested_attributes[] = $item;
       }
