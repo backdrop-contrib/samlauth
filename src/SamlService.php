@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\Url;
@@ -352,7 +353,9 @@ class SamlService {
         ]));
       }
       else {
-        $this->drupalLogoutHelper();
+        // It doesn't matter whether we delete the old user's data from
+        // the temp store, but why not.
+        $this->drupalLogoutHelper(TRUE, FALSE, TRUE);
         $this->messenger->addStatus($this->t('Another user (%other_user) was already logged into the site on this computer, and has now been logged out.', [
           '%other_user' => $this->currentUser->getAccountName(),
         ]));
@@ -370,6 +373,25 @@ class SamlService {
     $this->doLogin($unique_id, $account);
 
     // Remember SAML session values that may be necessary for logout.
+    // @todo Why are these in SharedTempStorage? There isn't much difference
+    //   with keeping them in the session, except in the latter case we are
+    //   surer that their expiry time doesn't differ from the session.
+    // @todo session_expiration was never used, I'm pretty sure. (This piece of
+    //   code is a holdover from another branch that was merged into the main
+    //   one in 2017.) Unlike the other 3 properties, it does not get used on
+    //   logout. It seems like a good idea to force a maximum session lifetime
+    //   if we get it, but:
+    //   - that seems like more general functionality which ideally shouldn't
+    //     be specific to this module. (If Core does not want to have helper
+    //     code for implementing it, then a general contrib module? Add to
+    //     externalauth like the other functionality we plan to move?)
+    //   - Drupal Core does not implement anything to help with expiring
+    //     individual sessions on demand; the 'created' and 'lifetime' values
+    //     (stored in session data / MetadataBag) are unused. See
+    //     https://symfony.com/doc/current/session.html#session-idle-time-keep-alive
+    //     for example - though since those values are not kept the same when a
+    //     session gets 'regenerate()d', we may want to keep a separate value
+    //     instead.
     $auth = $this->getSamlAuth('acs');
     $values = [
       'session_index' => $auth->getSessionIndex(),
@@ -631,10 +653,6 @@ class SamlService {
     // modify the Drupal logout process to keep the SAML session data available
     // but we won't explore that until there's a practical situation where
     // that's clearly needed.)
-    // @todo should we check session expiration time before sending a logout
-    //   request to the IdP? (What would an IdP do if it received an old
-    //   session index? Is it better to not redirect, and throw an error on
-    //   our side?)
     // @todo include nameId(SP)NameQualifier?
     $url = $this->getSamlAuth('logout')->logout(
       $return_to,
@@ -727,7 +745,7 @@ class SamlService {
     //   for which the SAML Toolkit returned a URL.
     // - after a LogoutResponse we don't need to log out because we already did
     //   that at the start of the process, in logout() - but there's nothing
-    //   against checking. We did not get an URL returned and our caller can
+    //   against checking. We did not get a URL returned and our caller can
     //   decide what to do next.
     $this->drupalLogoutHelper();
 
@@ -830,30 +848,33 @@ class SamlService {
   /**
    * Ensures the user is logged out from Drupal; returns SAML session data.
    *
+   * This method's parameters are tedious on purpose, so each call describes
+   * exactly what it's doing. A lot of the combinations don't make sense.
+   *
    * @param bool $delete_saml_session_data
-   *   (optional) whether to delete the SAML session data. This depends on:
-   *   - how bad (privacy sensitive) it is to keep around? Answer: not.
-   *   - whether we expect the data to ever be reused. That is: could a SAML
-   *     logout attempt be done for the same SAML session multiple times?
-   *     Answer: we don't know. Unlikely, because it is not accessible anymore
-   *     after logout, so the user would need to log in to Drupal locally again
-   *     before anything could be done with it.
+   *   (optional) Delete SAML session data that we got at login. This was never
+   *     a sensible option because, when logging out, the user will lose their
+   *     session (and thereby the access to this data) anyway, regardless
+   *     whether it's still stored.
+   * @param bool $get_saml_session_data
+   *   (optional) Get SAML session data that was stored at login. It has one
+   *     use: to use in a logout request.
+   * @param bool $force_allow_relogin
+   *   (optional) Explicitly circumvent Drupal's (as of 9.2) behavior which
+   *   makes it impossible to log another user in during the same request.
    *
    * @return array
-   *   Array of data about the 'SAML session' that we stored at login. (The
-   *   SAML toolkit itself does not store any data / implement the concept of a
-   *   session.)
+   *   Array of SAML session' data that was stored at login, if
+   *   $get_saml_session_data is TRUE. (The SAML toolkit itself does not store
+   *   any data / implement the concept of a session.)
    */
-  protected function drupalLogoutHelper($delete_saml_session_data = TRUE) {
+  protected function drupalLogoutHelper($delete_saml_session_data = TRUE, $get_saml_session_data = TRUE, $force_allow_relogin = FALSE) {
     $data = [];
 
-    if ($this->currentUser->isAuthenticated()) {
-      // Get data from our temp store which is not accessible after logout.
-      // DEVELOPER NOTE: It depends on our session storage, whether we want to
-      // try this for unauthenticated users too. At the moment, we are sure
-      // only authenticated users have any SAML session data - and trying to
-      // get() a value from our privateTempStore can unnecessarily start a new
-      // PHP session for unauthenticated users.
+    if ($get_saml_session_data || $delete_saml_session_data) {
+      // Get data from our temp store which should ideally be used for
+      // constructing a LogoutRequest, and which is only available when the
+      // user is still logged in.
       $keys = [
         'session_index',
         'session_expiration',
@@ -861,14 +882,60 @@ class SamlService {
         'name_id_format',
       ];
       foreach ($keys as $key) {
-        $data[$key] = $this->privateTempStore->get($key);
-        if ($delete_saml_session_data) {
+        if ($get_saml_session_data) {
+          $data[$key] = $this->privateTempStore->get($key);
+        }
+        if ($delete_saml_session_data && (!$get_saml_session_data || isset($data[$key]))) {
           $this->privateTempStore->delete($key);
         }
       }
+    }
 
-      // @todo properly inject this... after #2012976 lands.
-      user_logout();
+    if ($this->currentUser->isAuthenticated()) {
+      if ($force_allow_relogin) {
+        // Since D9.2 (#2238561) the SessionManager::destroy() call in
+        // user_logout() makes it impossible to log in again, because
+        // - SessionManager::destroy() keeps $this->started == TRUE;
+        // - SessionManager::regenerate() (called on login) does not sidestep
+        //   this fact anymore;
+        // which makes it impossible to start a new session. (It looks like
+        // calling user_login_finalize() after user_logout() was never really
+        // supported; the code path before D9.2 worked but was buggy.)
+        // There are two workarounds:
+        // - save/close the session first, which is unnecessary but the only
+        //   thing that sets $this->started = FALSE. This works, except:
+        //   - With the session already being closed, the session_destroy()
+        //     call in user_logout() will log a warning;
+        //   - If a hook_user_logout implementation does a Session::get(), the
+        //     session gets started again, nullifying the fix. (We could hack
+        //     the session to be lazy-started instead, but that nullifies the
+        //     fix too.)
+        // - pick apart user_logout() and do things ourselves.
+        // Code copied from user_logout(), mostly unchanged. Let's take care of
+        // dependency injection after user_logout() itself is deprecated.
+        $user = $this->currentUser;
+
+        \Drupal::logger('user')->info('Session closed for %name.', ['%name' => $user->getAccountName()]);
+
+        \Drupal::moduleHandler()->invokeAll('user_logout', [$user]);
+
+        // Change: call Session::invalidate(), not SessionManager::destroy().
+        // The comment in user_logout() about this leaving spurious records is
+        // wrong; this was fixed pre-D8.0 in
+        // https://www.drupal.org/project/drupal/issues/2228393#comment-9830813
+        // @todo file Core issues (likely two separate) to
+        // - make logout + login work
+        // - replace destroy() by invalidate() (has no side effects besides
+        //   point 1, as far as I've seen so far)
+        // and remove this code once committed.
+        \Drupal::service('session')->invalidate();
+
+        $user->setAccount(new AnonymousUserSession());
+      }
+      else {
+        // @todo properly inject this (and above) after #2012976 lands.
+        user_logout();
+      }
     }
 
     return $data;

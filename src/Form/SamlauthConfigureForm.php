@@ -143,7 +143,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $form['saml_login_logout']['logout_different_user'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Log out different user upon re-authentication.'),
-      '#description' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed.)'),
+      '#description' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed. This situation does not apply if the IdP is on another domain and <a href="https://www.drupal.org/node/3275352">cookie_samesite is configured</a> as "Strict" or "Lax", as is standard for new D10.1+ installs, because then the old user is not seen while coming from the IdP.)'),
       '#default_value' => $config->get('logout_different_user'),
     ];
 
