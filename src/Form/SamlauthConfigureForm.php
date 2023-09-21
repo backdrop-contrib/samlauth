@@ -1586,9 +1586,18 @@ class SamlauthConfigureForm extends ConfigFormBase {
       }
     }
 
+    $requested_attributes = [];
+    foreach ($form_state->getValue('requested_attributes') as $item) {
+      // We validated that max. 1 of the values is set if $idp_cert_type == ''.
+      if (!empty($item['requested_attr_name'])) {
+        $requested_attributes[] = $item;
+      }
+    }
+
     $config->set('sp_x509_certificate', $sp_cert)
       ->set('sp_new_certificate', $sp_new_cert)
       ->set('sp_private_key', $sp_private_key)
+      ->set('requested_attributes', $requested_attributes)
       ->set('idp_certs', $idp_certs)
       ->set('idp_cert_encryption', $idp_cert_encryption)
       ->clear('sp_cert_folder');
