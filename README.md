@@ -294,6 +294,17 @@ A: No. This is something that a separate module like require_login / r4032login
    duplicate. If there is a reason that this module cannot be used together
    with the samlauth module, feel free to open an issue that clearly states why.
 
+### From Developers
+
+Q: How can I act on the user / custom SAML attributes during user registration?
+
+A: Subscribe to the SamlauthEvents::USER_SYNC event, where you can act on
+   both new and existing accounts. See the constant's definition for more info.
+   There should be no need to have an event listener subscribed to
+   ExternalAuthEvents::REGISTER (or, likely, ExternalAuthEvents::LOGIN). An
+   advantage of SamlauthEvents::USER_SYNC is that an exception can be thrown
+   during registration, before a (partly populated) user is saved.
+
 CONSIDERATIONS REGARDING YOUR DRUPAL USERS
 ------------------------------------------
 
