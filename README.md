@@ -59,11 +59,11 @@ During configuration,
 - You need an SSL public/private key pair - or, more precisely: a private key
   and a related public X.509 certificate. You may have opinions and/or
   procedures around creating safe key pairs, and we won't discuss this here
-  besides giving the most common command for creating keys if it you have none:
+  besides giving a common command for creating a test key if you have none:
   ```
   openssl req -new -x509 -days 3652 -nodes -out sp.crt -keyout sp.key
   ```
-  For the rest, the internet has more information about this topic.
+  Further, the internet has more information about this topic.
 - You need to decide where to store the keys. This module can:
   - Store them in a file on the webserver's file system. (Always keep the
     private key in a safe location outside the webserver's document root.)
@@ -78,7 +78,7 @@ During configuration,
     - Install the appropriate add-on module if you want to use an external key
       provider.
     - Visit admin/config/system/keys and add 'Key' for your private key, using
-      your preferred key provider. Also optionally, create a 'key' for the
+      your preferred key provider. Optionally, also create a 'key' for the
       related X.509 certificate. (This is optional because the certificate is
       not a secret, but it may be beneficial to keep both in the same list.)
 - You need to exchange information with the IdP, because both parties need to
@@ -94,10 +94,7 @@ Other optional installs:
   result  in "Access is blocked because of IP based flood prevention."
   messages, though this is very unlikely to happen. To have an administrative
   UI rather than manipulating the 'flood' table directly in those cases,
-  install the flood_control module. To see all relevant information in the
-  'Flood Unblock' view, make sure issue
-  https://www.drupal.org/project/flood_control/issues/3191346 is fixed, or
-  apply the latest patch from it. (The module works without the patch, though.)
+  install the flood_control module.
 
 CONFIGURATION AND TESTING
 -------------------------
@@ -293,6 +290,18 @@ A: No. This is something that a separate module like require_login / r4032login
    could do, with more fine grained configuration options that we don't want to
    duplicate. If there is a reason that this module cannot be used together
    with the samlauth module, feel free to open an issue that clearly states why.
+
+Q: The 'Metadata URL' (displayed in the configuration screen) has a wrong
+   protocol/host. How can I fix this?
+
+A: Typically, this happens is when your Drupal installation is behind a reverse
+   proxy, and the URL is showing as the one seen by the proxy, instead of the
+   one that browsers should be using. This is often 'http://' where you need
+   'https://'. This is a general issue which has implications beyond this
+   module (e.g. it can influence URL values output by the metatag module).
+   Drupal has settings that must be configured to derive the original URL (as
+   used by the browser) from the proxy's HTTP headers. Documentation can be
+   found at https://www.drupal.org/node/425990, section "Configuration".
 
 ### From Developers
 
