@@ -36,7 +36,7 @@ samlauth.authentication:
       label: 'Log out different user upon re-authentication'
     drupal_login_roles:
       type: sequence
-      label: Roles allowed to use Drupal login also when linked to a SAML login
+      label: Roles allowed to use Drupal login also when associated with a SAML login
       sequence:
         type: string
         label: 'Role'
@@ -159,7 +159,7 @@ samlauth.authentication:
       label: 'Require NameID'
     security_request_authn_context:
       type: boolean
-      label: 'Specify authentication context'
+      label: 'Specify authentication context (as "password")'
     security_lowercase_url_encoding:
       type: boolean
       label: "'Raw' encode signatures when signing messages"
