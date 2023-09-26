@@ -213,6 +213,8 @@ class SamlService {
    * @param int|null $cache_duration
    *   (Optional) number of seconds used for the 'cacheDuration' property of
    *   the metadata. If left empty, the SAML PHP Toolkit will assign a value.
+   * @param bool $allow_invalid
+   *   (Optional) also return metadata if it cannot be validated.
    *
    * @return mixed
    *   XML string representing metadata.
@@ -220,20 +222,50 @@ class SamlService {
    * @throws \OneLogin\Saml2\Error
    *   If the metatdad is invalid.
    */
-  public function getMetadata($validity = NULL, $cache_duration = NULL) {
+  public function getMetadata($validity = NULL, $cache_duration = NULL, bool $allow_invalid = FALSE) {
     // It's actually strange how we need to instantiate an Auth object when
     // we only need the Settings object. We may refactor that when refactoring
     // getSamlAuth().
     $settings = $this->getSamlAuth('metadata')->getSettings();
     $metadata = $settings->getSPMetadata(FALSE, $validity, $cache_duration);
-    $errors = $settings->validateMetadata($metadata);
+    if (!$allow_invalid) {
+      $errors = $settings->validateMetadata($metadata);
 
-    if (empty($errors)) {
-      return $metadata;
+      if ($errors) {
+        // There's usually only one error which is a non-descriptive small
+        // string. In some cases, add our own descriptions.
+        if (in_array('invalid_xml', $errors, TRUE)) {
+          // The library's Utils::validateXML() calls libxml_get_errors() and
+          // outputs to syslog. Let's repeat that to our own logger. They may
+          // be very long, e.g. contain text contents of an invalid key/cert.
+          if (function_exists('libxml_get_errors')) {
+            $xml_errors = libxml_get_errors();
+            if ($xml_errors) {
+              foreach ($xml_errors as $xml_error) {
+                $this->logger->error('XML validation error code @code, level @level, line/col @line/@column: @message', [
+                  '@code' => $xml_error->code,
+                  '@level' => $xml_error->level,
+                  '@line' => $xml_error->line,
+                  '@column' => $xml_error->column,
+                  '@message' => $xml_error->message,
+                ]);
+              }
+              $errors[] = 'detailed XML errors are logged';
+            }
+            else {
+              // Impossible?
+              $errors[] = 'no detailed XML errors known';
+            }
+          }
+          else {
+            $errors[] = 'unable to get detailed XML errors';
+          }
+        }
+        $errors[] = 'add ?check=0 to see the invalid metadata.';
+        throw new SamlError('Invalid SP metadata: ' . implode(', ', $errors), SamlError::METADATA_SP_INVALID);
+      }
     }
-    else {
-      throw new SamlError('Invalid SP metadata: ' . implode(', ', $errors), SamlError::METADATA_SP_INVALID);
-    }
+    return $metadata;
   }
 
   /**

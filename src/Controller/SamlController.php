@@ -206,6 +206,8 @@ class SamlController extends ControllerBase {
   public function metadata() {
     $config = $this->config(self::CONFIG_OBJECT_NAME);
     try {
+      // Undocumented except in warnings: ?with-errors=1 may output invalid XML.
+      $check = $this->requestStack->getCurrentRequest()->get('check');
       // Things we need to take into account:
       // - The validUntil and cacheDuration properties are optional in the
       //   SAML spec, but the SAML PHP Toolkit always assigns values. (At the
@@ -238,7 +240,7 @@ class SamlController extends ControllerBase {
       //   of 10 seconds from now, and a 'cacheDuration' of a week. Is that
       //   bad? Apparently not, if "validUntil is absolute".
       $metadata_valid = $config->get('metadata_valid_secs') ?: Metadata::TIME_VALID;
-      $metadata = $this->saml->getMetadata(time() + $metadata_valid);
+      $metadata = $this->saml->getMetadata(time() + $metadata_valid, NULL, $check === '0');
 
       // Default is TRUE for existing installs.
       if ($config->get('metadata_cache_http') ?? TRUE) {
