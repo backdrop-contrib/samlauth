@@ -1061,7 +1061,7 @@ class SamlService {
     //   key/cert values. It would be nice if the code was... clearer.)
     // So for now, we are adding logic to this method that 'knows' when the key
     // / certs are used.
-    $add_key = $add_cert = $add_idp_cert = TRUE;
+    $add_key = $add_cert = $add_idp_cert = $require_idp_data = TRUE;
     $add_new_cert = in_array($purpose, ['metadata', '']);
     $add_idp_encryption_cert = FALSE;
     switch ($purpose) {
@@ -1069,12 +1069,7 @@ class SamlService {
         $add_key = !empty($library_config['security']['signMetadata'])
           || !empty($library_config['security']['wantNameIdEncrypted'])
           || !empty($library_config['security']['wantAssertionsEncrypted']);
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = FALSE;.
-        // @todo this is a good enough reason for opening a PR to amend
-        //   Auth::construct() (to accept a Settings that was constructed with
-        //   (, TRUE)), regardless of considerations outlined in AuthVolatile.
+        $add_idp_cert = $require_idp_data = FALSE;
         break;
 
       case 'login':
@@ -1084,9 +1079,7 @@ class SamlService {
         $add_cert = !empty($library_config['security']['authnRequestsSigned'])
           || !empty($library_config['security']['wantNameIdEncrypted'])
           ? 'FAKE' : FALSE;
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = FALSE;.
+        $add_idp_cert = FALSE;
         break;
 
       case 'logout':
@@ -1095,13 +1088,9 @@ class SamlService {
         // key), or otherwise checkSPCerts() will freak out.
         $add_cert = !empty($library_config['security']['logoutRequestSigned'])
           ? 'FAKE' : FALSE;
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert=!empty($library_config['security']['nameIdEncrypted']);
-        // ^ This would also need the 2nd parameter to Settings::__construct()
-        // to be !$add_idp_cert.
-        // That just means we should generally add at least 1 IdP cert, though.
-        // We don't need to add the encryption cert specifically - only if:
+        // If nameIdEncrypted, then read at least one cert for encryption: if
+        // the encryption one is not available, take a regular one.
+        $add_idp_cert = FALSE;
         $add_idp_encryption_cert = !empty($library_config['security']['nameIdEncrypted']);
         break;
 
@@ -1120,25 +1109,22 @@ class SamlService {
       case 'sls-request':
         // We need to both interpret the incoming request and probably create a
         // new outgoing one, so we need key and cert.
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = isset($_GET['Signature']); // This would also need
-        // the 2nd parameter to Settings::__construct() to be !$add_idp_cert.
+        $add_idp_cert = isset($_GET['Signature']);
         break;
 
       case 'sls-response':
         $add_key = $add_cert = FALSE;
         // We cannot prevent Settings::checkIdPSettings() from being called
         // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = isset($_GET['Signature']); // This would also need
-        // the 2nd parameter to Settings::__construct() to be !$add_idp_cert.
+        $add_idp_cert = isset($_GET['Signature']);
     }
     if (!$add_key || !$add_cert) {
-      // If these are set, checkSPCerts() will get called, which requires key +
-      // cert presence. Neither of these two variables are (should have been)
-      // set to FALSE if any of these security settings is both true and
-      // relevant for our $purpose. (The full logic including the switch{}
-      // implies the library default is FALSE for all these security settings.)
+      // If below security settings are set, checkSPCerts() will get called,
+      // which requires key + cert presence, so unset them. The $add_*
+      // variables are never (should never have been) set to FALSE if any of
+      // these security settings are both true and relevant for our $purpose.
+      // (The full logic including the switch{} implies the library default is
+      // FALSE for all these security settings.)
       unset($library_config['security']['authnRequestsSigned']);
       unset($library_config['security']['logoutRequestSigned']);
       unset($library_config['security']['logoutResponseSigned']);
@@ -1146,8 +1132,27 @@ class SamlService {
       unset($library_config['security']['wantNameIdEncrypted']);
     }
     if (!$add_idp_cert) {
-      // Same for IdP cert.
+      // Same for IdP cert: checkIdPSettings() will get called, which requires
+      // cert presence. Unsetting would not be necessary here, if we could
+      // construct a Settings object with the 2nd parameter ($spValidationOnly)
+      // TRUE, and pass that to Auth::__construct() - but it only accept arrays.
+      // @todo this is a good enough reason for opening a PR to amend
+      //   Auth::construct() (to accept a Settings that was constructed with
+      //   (, TRUE)), regardless of considerations outlined in AuthVolatile.
       unset($library_config['security']['nameIdEncrypted']);
+      // Additional check requires presence of either cert or fingerprint, so
+      // since we don't want to load the cert now:
+      $library_config['idp']['certFingerprint'] = 'DUMMY_IDP_CERT_FINGERPRINT';
+      if (!$require_idp_data) {
+        // Same for IdP data: checkIdPSettings() always gets called and
+        // requires some unneeded data, so prevent checks failing.
+        if (empty($library_config['idp']['entityId'])) {
+          $library_config['idp']['entityId'] = 'DUMMY_IDP_ENTITY_ID';
+        }
+        if (empty($library_config['idp']['singleSignOnService']['url'])) {
+          $library_config['idp']['singleSignOnService']['url'] = 'https://dummy.idp/sso';
+        }
+      }
     }
 
     // Check if we want to load the certificates from a folder. Either folder
@@ -1288,6 +1293,9 @@ class SamlService {
     }
     if ($add_idp_cert || ($add_idp_encryption_cert && !$encryption_cert)) {
       $certs = $config->get('idp_certs');
+      if ($add_idp_encryption_cert && !$add_idp_cert) {
+        $certs = array_slice($certs, 0, 1);
+      }
       foreach ($certs as $i => $cert) {
         if (isset($certs[$i]) && !is_string($certs[$i])) {
           $nr = ($i ? " $i" : '');
