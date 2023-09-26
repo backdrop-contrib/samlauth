@@ -65,6 +65,18 @@ Other optional installs:
   UI rather than manipulating the 'flood' table directly in those cases,
   install the flood_control module.
 
+IdP requrements:
+
+The SAML PHP Toolkit only works with IdP endpoints that have a "Redirect
+binding" for the SSO/login endpoint. A "POST binding" is not supported. (See
+https://github.com/SAML-Toolkits/php-saml/issues/264.) Which binding your IdP
+uses, is visible either in their metadata XML or hopefully in some other
+information they provide (e.g. the URL itself).
+
+If you must use a POST binding: untested support, without guarantees of working,
+is available indirectly through the previous link or from
+https://www.drupal.org/project/samlauth/issues/2854751.
+
 For Service Provider configuration,
 
 - You need an SSL public/private key pair - or, more precisely: a private key
@@ -201,28 +213,36 @@ attributes.)
 
 ### SAMLtest.id Identity Provider for testing
 
-SAMLtest is a SAML 2.0 IdP and SP testing service. It is useful to test this
-module.
-Configure the module with the "Identity Provider" information:
-- Entity ID: https://samltest.id/saml/idp
-- Single Sign On Service: https://samltest.id/idp/profile/SAML2/Redirect/SSO
-- Primary x509 Certificate: get it from https://samltest.id/download/#SAMLtest%E2%80%99s_IdP
+SAMLtest is a SAML 2.0 IdP and SP testing service. It is useful if you want to
+test login through this module while not having Identity Provider data yet.
+* Configure the 'Service Provider' section as above.
+* In "Caching / Validity", raise the "Metadata validity". (SAMLtest.id will
+  forget that your SP exists, after this amount of time.)
+* Configure the 'Identity Provider' with data found at
+  https://samltest.id/download, "SAMLtest’s IdP" section (doublecheck the below
+  values there):
+  - Entity ID: https://samltest.id/saml/idp
+  - Single Sign On Service: https://samltest.id/idp/profile/SAML2/Redirect/SSO
+  - Type of values to save for the certificate(s): Configuration
+  - Primary x509 Certificate: paste text blurb into the "Certificate" text area.
+* Save the configuration.
+* Edit anonymous role permissions to enable the "View service provider metadata"
+  permission in /admin/people/permissions/anonymous#module-samlauth
+* Download the metadata from your Drupal site at /saml/metadata
+* Upload it at https://samltest.id/upload.php
 
-For the "Drupal Login Using SAML Data" section (see stage 2):
+Now the /saml/login link should redirect you to a functional login page at
+the SAMltest.id website. Check "Don't Remember Login" to try multiple user
+accounts - or if you forgot: try /saml/reauth instead of /saml/login.
+
+For fully working Drupal login, still complete stage 2 below. At the moment,
+the most basic data to configure at "Drupal Login Using SAML Data" seems to be:
 - Unique ID attribute: uid
 - Check "Create users from SAML data"
 - "User name attribute": uid
 - "User email attribute": mail
-
-Save the information so you can see the "Metadata URL": https://example.com/saml/metadata.
-
-Edit anonymous role permissions to enable the "View service provider metadata"
-permission in /admin/people/permissions/anonymous#module-samlauth.
-Go to https://samltest.id/upload.php and fetch the "Metadata URL".
-
-Now go to /saml/login and follow the instructions. Check "Don't Remember
-Login" to try multiple users accounts - or if you forgot: try /saml/reauth
-instead of /saml/login.
+But the SAMltest.id page likely gives you functional data to test with, which
+is a bit more extensive.
 
 ### Further debugging
 
@@ -251,8 +271,10 @@ https://www.samltool.com/saml_tools.php.
 
 ## Stage 2: SAML attributes / Drupal Login
 
-After stage 1, exchange of SAML messages works. Now, the data inside those
+After stage 1, exchange of SAML messages works. Now, the data inside SAML
 messages coming from the IdP needs to be used to log Drupal users in/out.
+The basic configuration for this purpose is done in the "Login / Users" tab
+(admin/config/people/saml), section "Drupal Login Using SAML Data".
 
 The most important configuration value to get right from the start, is the
 "Unique ID attribute". Each user logging in through SAML needs to be identified
