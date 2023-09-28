@@ -160,6 +160,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
 
     // Create options for cert/key type select element, and list of Keys for
     // 'key' select element.
+    $nonconfig_type_options = ['key', 'file'];
     $key_cert_type_options = [
       'key_key' => $this->t('Key storage'),
       'file_file' => $this->t('File'),
@@ -168,6 +169,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       'key_config' => $this->t('Key/Config'),
       'file_config' => $this->t('File/Config'),
     ];
+    $type_error = FALSE;
     // List of certs, for selection in IdP section.
     $selectable_public_certs = [];
     // List of certs referencing a private key, for selection in SP section.
@@ -207,7 +209,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       $sp_cert = "file:$cert_folder/certs/sp.crt";
     }
     $sp_key_type = strstr($sp_private_key, ':', TRUE);
-    if ($sp_key_type) {
+    if ($sp_key_type && in_array($sp_key_type, $nonconfig_type_options, TRUE)) {
       $sp_private_key = substr($sp_private_key, strlen($sp_key_type) + 1);
       if ($sp_key_type === 'key' && !isset($selectable_private_keys[$sp_private_key])) {
         // Warn if the key doesn't exist. If so, we don't want to mess with the
@@ -234,10 +236,11 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       }
     }
     elseif ($sp_private_key) {
+      $type_error = (bool) $sp_key_type;
       $sp_key_type = 'config';
     }
     $sp_cert_type = strstr($sp_cert, ':', TRUE);
-    if ($sp_cert_type) {
+    if ($sp_cert_type && in_array($sp_cert_type, $nonconfig_type_options, TRUE)) {
       $sp_cert = substr($sp_cert, strlen($sp_cert_type) + 1);
       if ($sp_cert_type === 'key') {
         // Warn if the key doesn't exist; not on validation but on every form
@@ -278,10 +281,11 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       }
     }
     elseif ($sp_cert) {
+      $type_error = (bool) $sp_cert_type;
       $sp_cert_type = 'config';
     }
     $sp_new_cert_type = $sp_new_cert ? strstr($sp_new_cert, ':', TRUE) : NULL;
-    if ($sp_new_cert_type) {
+    if ($sp_new_cert_type && in_array($sp_new_cert_type, $nonconfig_type_options, TRUE)) {
       $sp_new_cert = substr($sp_new_cert, strlen($sp_new_cert_type) + 1);
       if ($sp_new_cert_type === 'key' && !isset($selectable_public_keypairs[$sp_new_cert])) {
         if (!$form_state->getUserInput()) {
@@ -299,6 +303,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       }
     }
     elseif ($sp_new_cert) {
+      $type_error = (bool) $sp_new_cert_type;
       $sp_new_cert_type = 'config';
     }
 
@@ -336,12 +341,12 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     // Check if these types make sense and, in case of key_key, the combination
     // of both keys can actually be presented as a keypair.
     $sp_key_cert_type = "{$sp_key_type}_{$sp_cert_type}";
-    if ($sp_new_cert_type !== $sp_cert_type || !isset($key_cert_type_options[$sp_key_cert_type])) {
+    if ($type_error || $sp_new_cert_type !== $sp_cert_type || !isset($key_cert_type_options[$sp_key_cert_type])) {
       $sp_key_cert_type = '';
       $key_cert_type_options = ['' => '?'] + $key_cert_type_options;
       if (!$form_state->getUserInput()) {
         $this->messenger()->addWarning($this->t("Encountered an unexpected combination of SP key / certificate types (@value). The effect is that the UI probably looks confusing, without much clarity about which entries will get saved. Careful when editing.", [
-          '@value' => "$sp_key_type / $sp_cert_type" . ($sp_new_cert_type ? " / $sp_new_cert_type" : ''),
+          '@value' => "$sp_key_type / $sp_cert_type" . ($sp_new_cert ? " / $sp_new_cert_type" : ''),
         ]));
       }
     }

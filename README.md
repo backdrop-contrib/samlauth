@@ -164,7 +164,7 @@ reflected in the metadata XML. So if you're curious and/or know details about
 what the IdP expects, then go through other sections to get the details of
 the XML exactly right:
 * SAML Message Construction
-* SAML Response Validation
+* SAML Message Validation
 * The names of attributes mentioned in "Drupal Login Using SAML Data" (other
   configuration tab) and optionally "User field mapping" (provided by
   samlauth_user_fields module)
@@ -185,11 +185,11 @@ is correct, and you can continue with stage 2.
 
 In other cases, something is going wrong in the SAML communication. If the
 error is not obvious, read through the "SAML Message Construction" / "SAML
-Response Validation" sections to see if there are corresponding settings to
+Message Validation" sections to see if there are corresponding settings to
 adjust. (For instance, if some validation of signatures fails, try to turn
 strictness/validation settings off.)
 
-### SAML Message Construction / SAML Response Validation
+### SAML Message Construction / SAML Message Validation
 
 This ever expanding section of advanced configuration won't be discussed here
 in detail; hopefully the setting descriptions give a clue. Just some hints:
@@ -384,7 +384,7 @@ functionality. They only have acces to that if they have a role which is
 OCCASIONALLY ASKED QUESTIONS
 ----------------------------
 
-Q: How to I redirect users to a specific path after they logged in?
+Q: How do I redirect users to a specific path after they logged in?
 
 A: A specific login URL can do this: /saml/login?destination=drupal/path. To
 instead have all users redirect to a specific destination, regardless of

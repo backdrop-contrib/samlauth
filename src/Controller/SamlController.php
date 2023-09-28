@@ -246,6 +246,9 @@ class SamlController extends ControllerBase {
       if ($config->get('metadata_cache_http') ?? TRUE) {
         $response = new CacheableResponse($metadata, 200, ['Content-Type' => 'text/xml']);
         $response->setMaxAge($metadata_valid > 10 ? $metadata_valid - 10 : $metadata_valid);
+        // Response should be un-cached if the configured validity increases.
+        // Setting a dependency on the whole config is a bit crude but will do.
+        $response->addCacheableDependency($config);
       }
       else {
         $response = new Response($metadata, 200, ['Content-Type' => 'text/xml']);
@@ -261,6 +264,8 @@ class SamlController extends ControllerBase {
       // going on, than if we just return Drupal's plain general exception
       // response. And rendering an error page without redirecting... seems too
       // much effort.)
+      // @todo really, though? Why not just output the response either as
+      //   a small plain text or fake XML, containing just the exception text?
       $function = function () use ($e) {
         throw $e;
       };
