@@ -132,7 +132,7 @@ from the other side:
 * A set of URLs to redirect users to, on login/logout actions;
 * A public SSL certificate (so communication can be encrypted).
 
-How this data is exchanged (e.g. sent by e-mail, or through XML files that
+How this data is exchanged (e.g. sent by email, or through XML files that
 are either sent or retrieved from a URL), and which side sends their data
 first, depends on your organization's structure / preferences.
 

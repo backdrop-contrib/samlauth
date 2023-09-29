@@ -12,6 +12,17 @@ form. For all changes, see the
   This is not expected to cause issues because the return value already was
   overloaded / did not _just_ contain a single copy of all attribute values.
 
+* Initial setup improvements:
+  * Metadata can be generated with only SP data configured.
+  * Errors are logged in case of invalid metadata XML.
+  * URL argument /saml/metadata?check=0 to view metadata anyway, if invalid.
+
+* UI: config screen split in two; "SAML communcation" vs "the rest" (including
+  SAML attributes), because things were just getting too big. No config
+  changes here; both screens still save to the same configuration object.
+
+* Configurable menu titles are properly translatable using config translation.
+
 * Configuration: Added login_link_title (string), to show link to /saml/login
   on user login form. NOTE: there was a short-lived login_link_show (boolean)
   setting that also had to be enabled, but that was removed later.

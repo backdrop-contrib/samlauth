@@ -226,7 +226,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'map_users_mail' => $this->t('Allows matching an existing Drupal user email with value of the user email attribute.'),
       'map_users_roles' => [
         '#description' => $this->t('If a matched account has <em>any</em> role that is not explicitly allowed here, linking/login is denied.'),
-        '#options' => $role_options,
+        '#options' => $real_role_options,
         '#states' => [
           'disabled' => [
             ':input[name="map_users"]' => ['checked' => FALSE],
@@ -362,13 +362,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $config_keys_to_save = [
       'login_menu_item_title',
       'logout_menu_item_title',
-      'logout_different_user',
-      'local_login_saml_error',
-      'login_redirect_url',
-      'logout_redirect_url',
-      'error_redirect_url',
-      'error_throw',
-      'bypass_relay_state_check',
       'login_link_title',
       'login_auto_redirect',
       'map_users',
@@ -379,7 +372,14 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'sync_mail',
       'user_name_attribute',
       'user_mail_attribute',
+      'local_login_saml_error',
       'idp_change_password_service',
+      'logout_different_user',
+      'login_redirect_url',
+      'logout_redirect_url',
+      'error_redirect_url',
+      'error_throw',
+      'bypass_relay_state_check',
     ];
     // unique_id_source indexes is hardcoded: 0 == nameid
     if ($form_state->getValue('unique_id_source')) {
