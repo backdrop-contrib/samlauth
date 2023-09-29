@@ -1154,11 +1154,11 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     foreach ([
       'sp_entity_id',
       'sp_name_id_format',
+      'metadata_valid_secs',
       'metadata_cache_http',
       'idp_entity_id',
       'idp_single_sign_on_service',
       'idp_single_log_out_service',
-      'idp_change_password_service',
       'security_metadata_sign',
       'security_authn_requests_sign',
       'security_logout_requests_sign',

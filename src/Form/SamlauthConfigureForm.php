@@ -340,6 +340,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'sync_mail',
       'user_name_attribute',
       'user_mail_attribute',
+      'idp_change_password_service',
     ] as $config_value) {
       $config->set($config_value, $form_state->getValue($config_value));
     }
