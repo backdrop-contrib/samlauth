@@ -39,7 +39,8 @@ final class SamlauthEvents {
    *
    * Note the distinction between the following methods on the event:
    * - isFirstLogin(): the account is new, OR already exists and is being
-   *   linked during its first SAML login.
+   *   linked during its first SAML login. See isFirstLogin() comments for
+   *   caveats.
    * - getAccount()->isNew(): the account is truly new.
    * If the event subscriber makes changes to the account, it should call the
    * event's markAccountChanged() method rather than saving the account by

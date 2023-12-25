@@ -811,13 +811,17 @@ class SamlService {
    * after samlAuth->processResponse() is called).
    *
    * @return array
-   *   An array with all returned SAML attributes..
+   *   An array with keys being all known SAML attribute names and values being
+   *   the attribute values, which are always arrays. Values can be duplicate
+   *   because they are indexed by 'regular' name as well as 'friendly' name.
+   *
+   * @todo in v4 this should disappear in favor of a value object that does not
+   *   double-index the same values, knows the mapping from 'regular' to
+   *   friendly name, ... See https://drupal.org/i/3211529
    */
   public function getAttributes() {
-    $attributes = $this->getSamlAuth('acs')->getAttributes();
-    $friendly_attributes = $this->getSamlAuth('acs')->getAttributesWithFriendlyName();
-
-    return $attributes + $friendly_attributes;
+    $auth = $this->getSamlAuth('acs');
+    return $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
   }
 
   /**
@@ -833,20 +837,19 @@ class SamlService {
    * @return mixed|null
    *   The SAML attribute value; NULL if the attribute value, or configuration
    *   key, was not found.
+   *
+   * @todo in v4 we should force people to configure things only by 'regular'
+   *   name, not by friendly name, so the equivalent of this method won't
+   *   return anything if $config_key was a friendly name. (Maybe we can have
+   *   temporary backward compatibility to be nice to people who have to redo
+   *   their configuration.) This will be easier and more apparent if we get a
+   *   mapping UI where people can select friendly names, which actually saves
+   *   the regular names.
    */
   public function getAttributeByConfig($config_key) {
+    $attributes = $this->getAttributes();
     $attribute_name = $this->configFactory->get('samlauth.authentication')->get($config_key);
-    if ($attribute_name) {
-      $attribute = $this->getSamlAuth('acs')->getAttribute($attribute_name);
-      if (!empty($attribute[0])) {
-        return $attribute[0];
-      }
-
-      $friendly_attribute = $this->getSamlAuth('acs')->getAttributeWithFriendlyName($attribute_name);
-      if (!empty($friendly_attribute[0])) {
-        return $friendly_attribute[0];
-      }
-    }
+    return $attribute_name && !empty($attributes[$attribute_name][0]) ? $attributes[$attribute_name][0] : NULL;
   }
 
   /**
