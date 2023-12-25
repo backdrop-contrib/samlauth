@@ -2,7 +2,6 @@
 
 namespace Drupal\samlauth\Form;
 
-use Drupal\Core\Config\Config;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -12,6 +11,7 @@ use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Token;
 use Drupal\samlauth\Controller\SamlController;
+use Drupal\samlauth\SamlService;
 use Drupal\user\UserInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -22,6 +22,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * is split up because configuration options became unwieldy.
  */
 class SamlauthConfigureForm extends ConfigFormBase {
+  use SamlauthConfigureTrait;
 
   const MAX_UNCOLLAPSED_ROLES = 10;
 
@@ -168,8 +169,56 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ]),
     ];
 
+    $form['user_info']['unique_id_source'] = [
+      '#title' => $this->t('Unique ID source'),
+      '#description' => $this->t('Never change this setting (and the NameID format / Unique ID Attribute) after users have started logging in.'),
+      '#type' => 'radios',
+      '#options' => [$this->t('NameID'), $this->t('Attribute')],
+      '#default_value' => $config->get('unique_id_attribute') === SamlService::NAMEID_MOCK_ATTRIBUTE_NAME ? 0 : 1,
+    ];
+
     $this->addElementsFromSchema($form['user_info'], $schema_definition, $config, [
-      'unique_id_attribute' => $this->t("A SAML attribute whose value is unique per user and does not change over time. Its value is stored by Drupal and associated with the Drupal user who is logged in. (In principle, a non-transient NameID could also be used for this value; the SAML Authentication module does not support this yet.)<br>Example: <em>eduPersonPrincipalName</em> or <em>eduPersonTargetedID</em>"),
+      'unique_id_attribute' => [
+        '#description' => $this->t('You need to know which attributes your IdP sends along in a SAML login response.'),
+        '#states' => [
+          'visible' => [
+            ':input[name="unique_id_source"]' => ['value' => 1],
+          ],
+        ],
+        '#default_value' => $config->get('unique_id_attribute') === SamlService::NAMEID_MOCK_ATTRIBUTE_NAME ? NULL : $config->get('unique_id_attribute'),
+      ],
+    ]);
+
+    // Make nameID options from (several different groups on) the SAML tab
+    // visible / editable here. Hopefully the descriptions provide at least a
+    // little clarity about what should be configured how (though the way in
+    // which options can influence each other doesn't help). An alternative
+    // would be to have warning messages for certain configuration values in
+    // combined with source "NameID", but I'm not sure that would turn out
+    // clearer.
+    $form['user_info']['nameid'] = [
+      '#title' => $this->t('NameID options, repeated from "SAML" tab'),
+      '#type' => 'details',
+      '#open' => TRUE,
+      '#states' => [
+        'visible' => [
+          ':input[name="unique_id_source"]' => ['value' => 0],
+        ],
+      ],
+    ];
+    $this->addElementsFromSchema($form['user_info']['nameid'], $schema_definition, $config, [
+      'request_set_name_id_policy' => [
+        '#description' => $this->t('A NameIDPolicy element is added in authentication requests, mentioning the below format (if "Require NameID to be encrypted" is off).'),
+        '#default_value' => $config->get('request_set_name_id_policy') ?? TRUE,
+      ],
+    ]);
+    $this->addNameID($form['user_info']['nameid'], $schema_definition, $config);
+    $this->addElementsFromSchema($form['user_info']['nameid'], $schema_definition, $config, [
+      'security_want_name_id' => [
+        '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute.'),
+        '#default_value' => $config->get('security_want_name_id') ?? TRUE,
+      ],
+      'security_nameid_encrypted' => $this->t('The NameID in login responses from the IdP is expected to be encrypted. This overrides the requested NameID Format and sets "Encrypted" in authentication requests\' NameIDPolicy element.') . '*',
     ]);
 
     $form['user_info']['linking'] = [
@@ -319,7 +368,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $config = $this->config(SamlController::CONFIG_OBJECT_NAME);
 
-    foreach ([
+    $config_keys_to_save = [
       'login_menu_item_title',
       'logout_menu_item_title',
       'logout_different_user',
@@ -331,7 +380,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'bypass_relay_state_check',
       'login_link_show',
       'login_link_title',
-      'unique_id_attribute',
       'map_users',
       'map_users_name',
       'map_users_mail',
@@ -341,83 +389,34 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'user_name_attribute',
       'user_mail_attribute',
       'idp_change_password_service',
-    ] as $config_value) {
-      $config->set($config_value, $form_state->getValue($config_value));
+    ];
+    // unique_id_source indexes is hardcoded: 0 == nameid
+    if ($form_state->getValue('unique_id_source')) {
+      $config_keys_to_save[] = 'unique_id_attribute';
+    }
+    else {
+      $config->set('unique_id_attribute', SamlService::NAMEID_MOCK_ATTRIBUTE_NAME);
+      // Only save the NameID config values if they are visible.
+      $this->setNameID($form_state, $config);
+      $config_keys_to_save[] = 'request_set_name_id_policy';
+      $config_keys_to_save[] = 'security_want_name_id';
+      $config_keys_to_save[] = 'security_nameid_encrypted';
+    }
+
+    foreach ($config_keys_to_save as $config_key) {
+      $config->set($config_key, $form_state->getValue($config_key));
     }
     // Filter out 0 inputs from multivalue checkboxes.
     foreach ([
       'drupal_login_roles',
       'map_users_roles',
-    ] as $config_value) {
-      $config->set($config_value, array_filter($form_state->getValue($config_value)));
+    ] as $config_key) {
+      $config->set($config_key, array_filter($form_state->getValue($config_key)));
     }
 
     $config->save();
 
     parent::submitForm($form, $form_state);
-  }
-
-  /**
-   * Adds form elements using the type and title found in the config schema.
-   *
-   * This way we don't need to define these in two places. (If we don't define
-   * them in the schema, configuration translation/inspector forms look strange;
-   * at least the translation form is important.)
-   */
-  protected function addElementsFromSchema(array &$build, array $schema_definition, Config $config, array $elements) {
-    foreach ($elements as $key => $data) {
-      assert(!empty($schema_definition[$key]['type']), "'$key.type' not found in schema definition for samlauth.authentication.");
-
-      $label = $schema_definition[$key]['label'] ?? 'Label not found.';
-      $default_default = NULL;
-      switch ($schema_definition[$key]['type']) {
-        case 'boolean':
-          $type = 'checkbox';
-          break;
-
-        case 'string':
-        case 'label':
-          $type = 'textfield';
-          break;
-
-        case 'text':
-          $type = 'textarea';
-          break;
-
-        case 'integer':
-          $type = 'number';
-          break;
-
-        case 'sequence':
-          // This one is very much specific to our situation.
-          $type = 'checkboxes';
-          $default_default = [];
-          assert(!empty($data['#options']), "No #options set for $key (type=sequence).");
-          break;
-
-        default:
-          $type = '';
-      }
-      // We must only call this helper function for simple elements.
-      assert(!empty($type), "Unrecognized type $type in addElementsFromSchema().");
-
-      $build[$key] = [
-        '#type' => $type,
-        // A label of any config element (as defined in the schema.yml) is
-        // translatable through 'UI translation'.
-        '#title' => $this->t($label),
-        '#default_value' => $config->get($key),
-      ];
-      if (isset($default_default) && !isset($build[$key]['#default_value'])) {
-        $build[$key]['#default_value'] = $default_default;
-      }
-      if (is_array($data)) {
-        $build[$key] = array_merge($build[$key], $data);
-      }
-      elseif ($data) {
-        $build[$key]['#description'] = $data;
-      }
-    }
   }
 
 }

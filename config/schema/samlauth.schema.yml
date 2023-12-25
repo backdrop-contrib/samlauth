@@ -45,7 +45,7 @@ samlauth.authentication:
       label: 'Entity ID'
     sp_name_id_format:
       type: string
-      label: 'NameID Format'
+      label: 'NameID format'
     sp_x509_certificate:
       type: string
       label: 'X.509 certificate'

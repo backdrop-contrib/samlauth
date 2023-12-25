@@ -41,6 +41,8 @@ use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 class SamlService {
   use StringTranslationTrait;
 
+  const NAMEID_MOCK_ATTRIBUTE_NAME = '!nameid';
+
   /**
    * Auth objects (usually 0 or 1) representing the current request state.
    *
@@ -805,7 +807,7 @@ class SamlService {
   }
 
   /**
-   * Returns all attributes in a SAML response.
+   * Returns all attributes in a SAML response + the nameID.
    *
    * This method will return valid data after a response is processed (i.e.
    * after samlAuth->processResponse() is called).
@@ -814,14 +816,18 @@ class SamlService {
    *   An array with keys being all known SAML attribute names and values being
    *   the attribute values, which are always arrays. Values can be duplicate
    *   because they are indexed by 'regular' name as well as 'friendly' name.
+   *   A special attribute value "!nameid" holds the NameID returned in the
+   *   login response.
    *
    * @todo in v4 this should disappear in favor of a value object that does not
    *   double-index the same values, knows the mapping from 'regular' to
-   *   friendly name, ... See https://drupal.org/i/3211529
+   *   friendly name, knows the difference between NameID and attributes...
+   *   See https://drupal.org/i/3211529
    */
   public function getAttributes() {
     $auth = $this->getSamlAuth('acs');
-    return $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
+    return [static::NAMEID_MOCK_ATTRIBUTE_NAME => [$auth->getNameId()]]
+      + $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
   }
 
   /**

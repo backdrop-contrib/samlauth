@@ -2,7 +2,6 @@
 
 namespace Drupal\samlauth\Form;
 
-use Drupal\Core\Config\Config;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
@@ -22,6 +21,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * became unwieldy.
  */
 class SamlauthSamlConfigureForm extends ConfigFormBase {
+  use SamlauthConfigureTrait;
 
   /**
    * The typed configuration manager.
@@ -822,14 +822,15 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       ],
       'security_request_authn_context' => $this->t('Specify that only a subset of authentication methods available at the IdP should be used. (If checked, the "PasswordProtectedTransport" authentication method is specified, which is default behavior for the SAML Toolkit library. If needed, this module should be extended to be able to specify more methods.)'),
       'request_set_name_id_policy' => [
-        '#description' => $this->t('A NameIDPolicy element is added in authentication requests, mentioning the below format. This is default behavior for the SAML Toolkit library, but may be unneeded. If unchecked, the "Require NameID" checkbox may need to be unchecked too.'),
+        '#description' => $this->t('A NameIDPolicy element is added in authentication requests, mentioning the below format (if "Require NameID to be encrypted" is off).'),
         // This is one of the few checkboxes that must be TRUE on existing
         // installations where the checkbox didn't exist before (in older module
         // versions). Others get their default only from the config/install yml.
         '#default_value' => $config->get('request_set_name_id_policy') ?? TRUE,
       ],
-      'sp_name_id_format' => $this->t('The format for the NameID attribute to request from the identity provider / to send in logout requests.*<br>Some common formats (with "unspecified" being the default):<br>urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified<br>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress<br>urn:oasis:names:tc:SAML:2.0:nameid-format:transient<br>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'),
     ]);
+
+    $this->addNameID($form['construction'], $schema_definition, $config);
 
     $form['construction']['description'] = [
       '#type' => 'markup',
@@ -844,7 +845,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
 
     $this->addElementsFromSchema($form['responses'], $schema_definition, $config, [
       'security_want_name_id' => [
-        '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute. (This is default behavior for the SAML Toolkit library, but the SAML Authentication module does not use NameID values, so it seems this can be unchecked safely.)'),
+        '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute.'),
         // See request_set_name_id_policy.
         '#default_value' => $config->get('security_want_name_id') ?? TRUE,
       ],
@@ -873,7 +874,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       ],
       'security_assertions_signed' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed.') . '*',
       'security_assertions_encrypt' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.') . '*',
-      'security_nameid_encrypted' =>$this->t('Assertion elements in responses from the IdP are expected to be encrypted.') . '*',
+      'security_nameid_encrypted' => $this->t('The NameID in login responses from the IdP is expected to be encrypted. This overrides the requested NameID Format and sets "Encrypted" in authentication requests\' NameIDPolicy element.') . '*',
     ]);
 
     // Untll #description_display works: (#314385)
@@ -1151,9 +1152,10 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       $config->clear('metadata_valid_secs');
     }
 
+    $this->setNameID($form_state, $config);
+
     foreach ([
       'sp_entity_id',
-      'sp_name_id_format',
       'metadata_valid_secs',
       'metadata_cache_http',
       'idp_entity_id',
@@ -1191,69 +1193,6 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     $config->save();
 
     parent::submitForm($form, $form_state);
-  }
-
-  /**
-   * Adds form elements using the type and title found in the config schema.
-   *
-   * This way we don't need to define these in two places. (If we don't define
-   * them in the schema, configuration translation/inspector forms look strange;
-   * at least the translation form is important.)
-   */
-  protected function addElementsFromSchema(array &$build, array $schema_definition, Config $config, array $elements) {
-    foreach ($elements as $key => $data) {
-      assert(!empty($schema_definition[$key]['type']), "'$key.type' not found in schema definition for samlauth.authentication.");
-
-      $label = $schema_definition[$key]['label'] ?? 'Label not found.';
-      $default_default = NULL;
-      switch ($schema_definition[$key]['type']) {
-        case 'boolean':
-          $type = 'checkbox';
-          break;
-
-        case 'string':
-        case 'label':
-          $type = 'textfield';
-          break;
-
-        case 'text':
-          $type = 'textarea';
-          break;
-
-        case 'integer':
-          $type = 'number';
-          break;
-
-        case 'sequence':
-          // This one is very much specific to our situation.
-          $type = 'checkboxes';
-          $default_default = [];
-          assert(!empty($data['#options']), "No #options set for $key (type=sequence).");
-          break;
-
-        default:
-          $type = '';
-      }
-      // We must only call this helper function for simple elements.
-      assert(!empty($type), "Unrecognized type $type in addElementsFromSchema().");
-
-      $build[$key] = [
-        '#type' => $type,
-        // A label of any config element (as defined in the schema.yml) is
-        // translatable through 'UI translation'.
-        '#title' => $this->t($label),
-        '#default_value' => $config->get($key),
-      ];
-      if (isset($default_default) && !isset($build[$key]['#default_value'])) {
-        $build[$key]['#default_value'] = $default_default;
-      }
-      if (is_array($data)) {
-        $build[$key] = array_merge($build[$key], $data);
-      }
-      elseif ($data) {
-        $build[$key]['#description'] = $data;
-      }
-    }
   }
 
   /**

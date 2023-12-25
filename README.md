@@ -105,8 +105,9 @@ For Service Provider configuration,
       related X.509 certificate. (This is optional because the certificate is
       not a secret, but it may be beneficial to keep both in the same list.)
 - You need to exchange information with the IdP, because both parties need to
-  configure the other's identity/location. More details are in the respective
-  configuration sections.
+  configure the other's identity/location. You also need to know how the IdP
+  will send a never-changing Unique ID across, that will identify a login. More
+  details are in the respective configuration sections.
 
 CONFIGURATION AND TESTING
 -------------------------
@@ -194,7 +195,7 @@ strictness/validation settings off.)
 This ever expanding section of advanced configuration won't be discussed here
 in detail; hopefully the setting descriptions give a clue. Just some hints:
 
-- Turn strictness / signing / validation settings off only temporarily for
+- Turn strictness / signing / validation settings off only temporarily for ###
   testing / if absolutely needed.
 - The "NameID" related settings can likely be turned off, as long as the Drupal
   module has no support for NameID / if the IdP is using a SAML attribute to
@@ -276,31 +277,73 @@ messages coming from the IdP needs to be used to log Drupal users in/out.
 The basic configuration for this purpose is done in the "Login / Users" tab
 (admin/config/people/saml), section "Drupal Login Using SAML Data".
 
-The most important configuration value to get right from the start, is the
-"Unique ID attribute". Each user logging in through SAML needs to be identified
-with a unique value that never changes over time. This value is stored by
-Drupal in the authmap table. (If you make a mistake configuring things here,
-all authmap entries should be removed after fixing the configuration. A UI
-screen for this exists at admin/config/people/saml/authmap.)
+### Unique IDs
 
-This value must be sent by the IdP as an 'attribute' in the SAML response,
-along with other attributes containing information like the user name and
-email. (SAML also has the concept of "NameID" to use for this unique value
-instead of attributes, but this Drupal module does not support that yet. If
-you must use an 'email' NameID for this purpose: check whether the saml_sp
-module works for your use case. Otherwise please check the status of
-https://www.drupal.org/project/samlauth/issues/3211380.)
+The most important configuration value to get right from the start, is the
+"Unique ID source". Each user logging in through SAML is identified by a unique
+value (sent by the IdP), that is used to identify the Drupal user on subsequent
+logins. In other words:
+- A SAML login is considered 'new' if a certain value sent by the IdP has never
+  been seen before.
+- At that moment, a new Drupal user account is created or an existing (yet
+  unlinked) Drupal account is linked to this unique ID value. (If the module is
+  allowed to create/link users, by its configuration; otherwise, login is
+  denied.)
+- On subsequent logins, the same value is used to identify the Drupal account
+  that will be logged in.
+
+It is very important that this ID value both is unique to a specific SAML login
+and never changes. If it ever changes, the SAML Authentication module does not
+recognize the login as belonging to the right Drupal account anymore. If the
+changed value was not seen in a previous SAML login before, then a new Drupal
+account is created - and duplicate Drupal accounts will likely create
+operational issues for your site. If the changed value was alreayd seen in a
+previous SAML login, then a different/wrong existing Drupal user is logged in,
+which constitutes a security risk.
+
+This is why the value for the "Unique ID source" should be configured once and
+never be changed. If it ever changes, that likely means that all existing
+links between earlier SAML logins and Drupal accounts are invalid, and should
+be deleted. (The links are stored in the authmap table, for which a UI screen
+exists at admin/config/people/saml/authmap, to delete 'wrong' links. There is
+explicitly no edit facility for these links, because they should only be added
+by SAML logins (or prepopulated by a system administrator to allow a specific
+set of users to use SAML login).
+
+There are two possible sources for the ID value:
+
+* The 'NameID', which is a SAML specific construct for sending a special ID
+  value in SAML responses. This is only viable if the IdP is capable of sending
+  a NameID that never changes. To be as sure as possible, you should in the
+  "SAML Message Construction / Validation" sections:
+  - Turn on "Specify NameID policy" and specify a "NameID format" that is
+    guaranteed to stay the same, so certainly not "Transient" or "Unspecified".
+    (Note that the "NameID format" is what the SP requests from the IdP. A
+    'good' IdP either complies with the request or returns an error that this
+    is impossible, but technically there's nothing preventing the IdP from
+    sending a different format. So it's best to check that the value is as
+    expected.)
+  - Turn on "Require NameID", because empty NameID will be useless.
+* The name of a SAML 'attribute'. It is possible that your IdP configures
+  unique user values as attributes to be sent as part of the SAML login
+  response which cannot be configured as a standard NameID. (e.g. an employee
+  number.)
+
+It is up to you and/or the administrator of the IdP, to work out which source
+should be used for the unique ID.
 
 To configure the Unique ID and other attributes, you need to know the names of
-the attributes which the IdP sends in its login assertions. If you do not know
-this information, you need to inspect the contents of such an assertion while a
-user tries to log in. See the section on Debugging.
+the attributes which the IdP sends in its login assertions, and/or verify that
+the NameID is correct. If you do not know this information, you need to inspect
+the contents of such an assertion while a user tries to log in. See the section
+on Debugging.
 
 If there is absolutely no unique non-changing value to set as Unique ID, you
-can take the username or email attribute. However, please note that each time
-that username/email is changed on the IdP side, a new user gets created. Or
-depending on your configuration, the SAML user has the ability to log in as
-a different existing Drupal user, which poses a security risk.
+can take the username or email value. However, please be aware of the
+operational / security risks mentioned earlier, each time the value changes on
+the IdP side.
+
+### Other settings
 
 Other settings / checkboxes are hopefully self-explanatory.
 
@@ -337,7 +380,8 @@ of decreasing preference:
 
 Consider that linking existing Drupal users can constitute a security risk if
 users are able to change the values of any attributes used for matching at the
-IdP side; in this case, they can influence which user they are linked to. Use
+IdP side; in this case, they can influence which user they are linked to.
+(This is a similar risk as discussed earlier for the "Unique ID" value.) Use
 the various 'linking' configuration settings only if you know this is not a
 concern.
 

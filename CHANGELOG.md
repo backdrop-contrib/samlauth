@@ -7,6 +7,11 @@ form. For all changes, see the
 * Added /saml/reauth route. (No further documentation provided; expected to
   only be useful for testing.)
 
+* SamlService::getAttributes() adds the NameID sent in the login response to
+  the returned value, as a single-value array keyed by the value "!nameid".
+  This is not expected to cause issues because the return value already was
+  overloaded / did not _just_ contain a single copy of all attribute values.
+
 * Configuration: Added login_link_show (boolean) and login_link_title (string),
   to show link to /saml/login on user login form.
 
