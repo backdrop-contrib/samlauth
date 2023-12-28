@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Path\PathValidatorInterface;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Token;
 use Drupal\samlauth\Controller\SamlController;
@@ -224,26 +225,58 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'map_users' => $this->t("Allows user matching by the included 'User Fields Mapping' module as well as any other code (event subscriber) installed for this purpose."),
       'map_users_name' => $this->t('Allows matching an existing Drupal user name with value of the user name attribute.'),
       'map_users_mail' => $this->t('Allows matching an existing Drupal user email with value of the user email attribute.'),
-      'map_users_roles' => [
-        '#description' => $this->t('If a matched account has <em>any</em> role that is not explicitly allowed here, linking/login is denied.'),
-        '#options' => $real_role_options,
-        '#states' => [
-          'disabled' => [
-            ':input[name="map_users"]' => ['checked' => FALSE],
-            ':input[name="map_users_name"]' => ['checked' => FALSE],
-            ':input[name="map_users_mail"]' => ['checked' => FALSE],
-          ],
+    ]);
+    // map_users_role special value ['anonymous'] means "Allow all roles".
+    // Otherwise, 'anonymous' and 'authenticated' must not be / are assumed to
+    // not be part of the map_users_role value; they're "reserved" for possible
+    // future use.
+    $roles = $config->get('map_users_roles') ?? [];
+    $allow_all = $roles === [AccountInterface::ANONYMOUS_ROLE];
+    $form['user_info']['linking']['allow_all_roles'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Allow all Drupal users to be linked'),
+      '#description' => $this->t("You may check this if you absolutely trust that the SAML attributes used in your linking configuration can never be manipulated to point to an unintended user."),
+      '#default_value' => $allow_all,
+      '#states' => [
+        'disabled' => [
+          ':input[name="map_users"]' => ['checked' => FALSE],
+          ':input[name="map_users_name"]' => ['checked' => FALSE],
+          ':input[name="map_users_mail"]' => ['checked' => FALSE],
         ],
       ],
-    ]);
+    ];
+    $element = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t($schema_definition['map_users_roles']['label']),
+      '#description' => $this->t('If a matched account has <em>any</em> role that is not explicitly allowed here, linking/login is denied.'),
+      '#options' => $real_role_options,
+      '#default_value'  => $allow_all ? [] : array_diff($roles, [AccountInterface::ANONYMOUS_ROLE, AccountInterface::AUTHENTICATED_ROLE]),
+      '#states' => [
+        'disabled' => [
+          ':input[name="map_users"]' => ['checked' => FALSE],
+          ':input[name="map_users_name"]' => ['checked' => FALSE],
+          ':input[name="map_users_mail"]' => ['checked' => FALSE],
+        ],
+        'invisible' => [
+          ':input[name="allow_all_roles"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
     if ($collapse_rolesets) {
       $form['user_info']['linking']['roles'] = [
         '#title' => $this->t('Allowed roles'),
         '#type' => 'details',
         '#open' => FALSE,
+        '#states' => [
+          'invisible' => [
+            ':input[name="allow_all_roles"]' => ['checked' => TRUE],
+          ],
+        ],
       ];
-      $form['user_info']['linking']['roles']['map_users_roles'] = $form['user_info']['linking']['map_users_roles'];
-      $form['user_info']['linking']['map_users_roles'] = [];
+      $form['user_info']['linking']['roles']['map_users_roles'] = $element;
+    }
+    else {
+      $form['user_info']['linking']['map_users_roles'] = $element;
     }
 
     $this->addElementsFromSchema($form['user_info'], $schema_definition, $config, [
@@ -398,12 +431,9 @@ class SamlauthConfigureForm extends ConfigFormBase {
       $config->set($config_key, $form_state->getValue($config_key));
     }
     // Filter out 0 inputs from multivalue checkboxes.
-    foreach ([
-      'drupal_login_roles',
-      'map_users_roles',
-    ] as $config_key) {
-      $config->set($config_key, array_filter($form_state->getValue($config_key)));
-    }
+    $config->set('drupal_login_roles', array_filter($form_state->getValue('drupal_login_roles')));
+    $config->set('map_users_roles', $form_state->getValue('allow_all_roles') ?
+      [AccountInterface::ANONYMOUS_ROLE] : array_filter($form_state->getValue('map_users_roles')));
 
     $config->save();
 

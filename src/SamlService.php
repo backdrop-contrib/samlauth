@@ -536,7 +536,7 @@ class SamlService {
               '@saml_id' => $unique_id,
               '@name' => $account->getAccountName(),
             ]);
-            throw new UserVisibleException('A local user account with your login name already exists, and we are disallowed from linking it.');
+            throw new UserVisibleException('A local user account with your login name already exists, and the current configuration disallows its use.');
           }
         }
       }
@@ -556,7 +556,7 @@ class SamlService {
               '@saml_id' => $unique_id,
               '@mail' => $account->getEmail(),
             ]);
-            throw new UserVisibleException('A local user account with your login email address name already exists, and we are disallowed from linking it.');
+            throw new UserVisibleException('A local user account with your login email address already exists, and the current configuration disallows its use.');
           }
         }
       }
@@ -615,14 +615,20 @@ class SamlService {
    */
   protected function linkExistingAccount($unique_id, ?UserInterface $account) {
     $allowed_roles = $this->configFactory->get('samlauth.authentication')->get('map_users_roles') ?: [];
-    $disallowed_roles = array_diff($account->getRoles(), (array)$allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
-    if ($disallowed_roles) {
-      $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
-        '@saml_id' => $unique_id,
-        '@uid' => $account->id(),
-        '@roles' => implode(', ', $disallowed_roles),
-      ]);
-      throw new UserVisibleException('A local user account matching your login already exists, and we are disallowed from linking it.');
+    // map_users_role special value ['anonymous'] means "Allow all roles".
+    // Otherwise, 'anonymous' and 'authenticated' must not be / are assumed to
+    // not be part of the map_users_role value; they're "reserved" for possible
+    // future use.
+    if ($allowed_roles !== [AccountInterface::ANONYMOUS_ROLE]) {
+      $disallowed_roles = array_diff($account->getRoles(), (array)$allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
+      if ($disallowed_roles) {
+        $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
+          '@saml_id' => $unique_id,
+          '@uid' => $account->id(),
+          '@roles' => implode(', ', $disallowed_roles),
+        ]);
+        throw new UserVisibleException('A local user account matching your login already exists, and the current configuration disallows its use.');
+      }
     }
     $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
 

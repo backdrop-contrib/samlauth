@@ -39,6 +39,11 @@ form. For all changes, see the
   removed when saved through the UI. There's no behavior change, but exported
   config may show differences.
 
+* Configuration: map_users_roles are retroactively defined as "must not contain
+  the values 'anonymous' or 'authenticated'" (which was never possible through
+  the configuration screen) -- except the new special one-element array value
+  ['anonymous'], which now means "allow all Drupal users to be linked".
+
 8.x-3.9:
 
 * After processing login/logout, the ACS/SLS endpoints now refuse to redirect
