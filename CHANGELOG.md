@@ -12,8 +12,12 @@ form. For all changes, see the
   This is not expected to cause issues because the return value already was
   overloaded / did not _just_ contain a single copy of all attribute values.
 
-* Configuration: Added login_link_show (boolean) and login_link_title (string),
-  to show link to /saml/login on user login form.
+* Configuration: Added login_link_title (string), to show link to /saml/login
+  on user login form. NOTE: there was a short-lived login_link_show (boolean)
+  setting that also had to be enabled, but that was removed later.
+
+* Configuration: Added login_auto_redirect (boolean), to automatically redirect
+  /user/login to the IdP always.
 
 * Configuration: values for sp_private_key / sp_x509_certificate /
   sp_new_certificate / idp_cert_encryption / idp_certs (sequence of strings)

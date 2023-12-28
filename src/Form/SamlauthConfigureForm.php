@@ -129,7 +129,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     unset($real_role_options[UserInterface::AUTHENTICATED_ROLE]);
     $collapse_rolesets = count($role_options) > self::MAX_UNCOLLAPSED_ROLES;
 
-      $form['ui'] = [
+    $form['ui'] = [
       '#type' => 'details',
       '#open' => TRUE,
       '#title' => $this->t('User Interface'),
@@ -147,17 +147,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $this->addElementsFromSchema($form['ui'], $schema_definition, $config, [
       'login_menu_item_title' => $this->t('The title of the SAML login link in the User account menu. Defaults to "Log in".'),
       'logout_menu_item_title' => $this->t('The title of the SAML logout link in the User account menu. Defaults to "Log out".'),
-      // Login link has two settings (boolean + string) so it can be disabled
-      // while still remembering the title.
-      'login_link_show' => NULL,
-      'login_link_title' => [
-        '#description' => $this->t('Text to display as the link to SAML login.'),
-        '#states' => [
-          'disabled' => [
-            ':input[name="login_link_show"]' => ['checked' => FALSE],
-          ],
-        ],
-      ],
+      'login_link_title' => $this->t('Displays a link to SAML login on the login form, with the provided title.'),
+      'login_auto_redirect' => $this->t("When checked, the regular Drupal login screen at /user/login cannot be used. The login block still works, so that's the only place where the login link is still seen (if a titile is provided). /user/logout is still regular Drupal logout (as supposed to /saml/logout which also logs out from any other sites the user is logged into through the same IdP)."),
     ]);
 
     $form['user_info'] = [
@@ -378,8 +369,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'error_redirect_url',
       'error_throw',
       'bypass_relay_state_check',
-      'login_link_show',
       'login_link_title',
+      'login_auto_redirect',
       'map_users',
       'map_users_name',
       'map_users_mail',

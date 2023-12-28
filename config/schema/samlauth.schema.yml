@@ -10,12 +10,12 @@ samlauth.authentication:
     logout_menu_item_title:
       type: label
       label: 'Logout menu item title'
-    login_link_show:
-      type: boolean
-      label: 'Display a link to SAML login on the user login form'
     login_link_title:
       type: label
       label: 'SAML login link title'
+    login_auto_redirect:
+      type: boolean
+      label: 'Auto redirect Drupal login screen to SAML'
     login_redirect_url:
       type: string
       label: 'Login redirect URL'

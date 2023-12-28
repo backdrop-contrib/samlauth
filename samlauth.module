@@ -5,11 +5,12 @@
  * Allows users to authenticate against an external SAML identity provider.
  */
 
-use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Url;
 use Drupal\Component\Utility\UrlHelper;
-use Drupal\samlauth\Controller\SamlController;
+use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Url;
+use Drupal\samlauth\Controller\SamlController;
 use Drupal\user\UserInterface;
 
 /**
@@ -81,23 +82,22 @@ function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
  */
 function samlauth_form_user_login_form_alter(&$form, FormStateInterface $form_state) {
   $config = \Drupal::config(SamlController::CONFIG_OBJECT_NAME);
-  // Make sure the form gets purged from cache when config changes.
-  \Drupal::service('renderer')->addCacheableDependency($form, $config);
 
-  if ($config->get('login_link_show')) {
-    $title = $config->get('login_link_title');
-    if ($title) {
-      $form['samlauth_auth_login_link'] = [
-        '#title' => $title,
-        '#type' => 'link',
-        '#url' => Url::fromRoute('samlauth.saml_controller_login'),
-        '#attributes' => [
-          'title' => $title,
-          'class' => ['samlauth-auth-login-link'],
-        ],
-      ];
-    }
+  $link_title = $config->get('login_link_title');
+  if ($link_title) {
+    $form['samlauth_auth_login_link'] = [
+      '#title' => $link_title,
+      '#type' => 'link',
+      '#url' => Url::fromRoute('samlauth.saml_controller_login'),
+      '#attributes' => [
+        'class' => ['samlauth-auth-login-link'],
+      ],
+    ];
   }
+
+  $metadata = CacheableMetadata::createFromObject($config);
+  $metadata = $metadata->merge(CacheableMetadata::createFromRenderArray($form));
+  $metadata->applyTo($form);
 
   $form['#validate'][] = 'samlauth_check_saml_user';
 }
