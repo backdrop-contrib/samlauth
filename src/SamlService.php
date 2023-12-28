@@ -853,8 +853,11 @@ class SamlService {
    *   the regular names.
    */
   public function getAttributeByConfig($config_key) {
-    $attributes = $this->getAttributes();
     $attribute_name = $this->configFactory->get('samlauth.authentication')->get($config_key);
+    // Protect situations which have no config yet (tests).
+    if ($attribute_name) {
+      $attributes = $this->getAttributes();
+    }
     return $attribute_name && !empty($attributes[$attribute_name][0]) ? $attributes[$attribute_name][0] : NULL;
   }
 
@@ -1221,7 +1224,7 @@ class SamlService {
         if (isset($key) && !is_string($key)) {
           throw new SamlError('SP private key setting is not a string.', SamlError::SETTINGS_INVALID);
         }
-        $type = strstr($key, ':', TRUE);
+        $type = strstr($key ?? '', ':', TRUE);
         if ($type === 'key') {
           if ($key_repository) {
             $key = substr($key, 4);
@@ -1333,7 +1336,7 @@ class SamlService {
       }
     }
     if ($add_idp_cert || ($add_idp_encryption_cert && !$encryption_cert)) {
-      $certs = $config->get('idp_certs');
+      $certs = $config->get('idp_certs') ?? [];
       if ($add_idp_encryption_cert && !$add_idp_cert) {
         $certs = array_slice($certs, 0, 1);
       }
