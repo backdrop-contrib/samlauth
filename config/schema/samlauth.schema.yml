@@ -28,6 +28,9 @@ samlauth.authentication:
     error_throw:
       type: boolean
       label: 'Bypass error handling'
+    login_error_keep_session:
+      type: boolean
+      label: 'Keep SAML session upon Drupal login failure'
     local_login_saml_error:
       type: boolean
       label: 'Tell disallowed users they must log in using SAML'

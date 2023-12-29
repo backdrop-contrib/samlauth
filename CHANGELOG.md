@@ -30,6 +30,10 @@ form. For all changes, see the
 * Configuration: Added login_auto_redirect (boolean), to automatically redirect
   /user/login to the IdP always.
 
+* Configuration: Added login_error_keep_session (boolean, default true for new
+  installs) to keep SAML logout (/saml/logout) working after successful SAML
+  authentication followed by Drupal login failure.
+
 * Configuration: values for sp_private_key / sp_x509_certificate /
   sp_new_certificate / idp_cert_encryption / idp_certs (sequence of strings)
   could already contain relative paths after "file:", but the edit form

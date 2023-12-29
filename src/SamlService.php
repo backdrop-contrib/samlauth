@@ -404,43 +404,17 @@ class SamlService {
       throw new \RuntimeException('Configured unique ID is not present in SAML response.');
     }
 
-    $this->doLogin($unique_id, $account);
-
-    // Remember SAML session values that may be necessary for logout.
-    // @todo Why are these in SharedTempStorage? There isn't much difference
-    //   with keeping them in the session, except in the latter case we are
-    //   surer that their expiry time doesn't differ from the session.
-    // @todo session_expiration was never used, I'm pretty sure. (This piece of
-    //   code is a holdover from another branch that was merged into the main
-    //   one in 2017.) Unlike the other 3 properties, it does not get used on
-    //   logout. It seems like a good idea to force a maximum session lifetime
-    //   if we get it, but:
-    //   - that seems like more general functionality which ideally shouldn't
-    //     be specific to this module. (If Core does not want to have helper
-    //     code for implementing it, then a general contrib module? Add to
-    //     externalauth like the other functionality we plan to move?)
-    //   - Drupal Core does not implement anything to help with expiring
-    //     individual sessions on demand; the 'created' and 'lifetime' values
-    //     (stored in session data / MetadataBag) are unused. See
-    //     https://symfony.com/doc/current/session.html#session-idle-time-keep-alive
-    //     for example - though since those values are not kept the same when a
-    //     session gets 'regenerate()d', we may want to keep a separate value
-    //     instead.
-    $auth = $this->getSamlAuth('acs');
-    $values = [
-      'session_index' => $auth->getSessionIndex(),
-      'session_expiration' => $auth->getSessionExpiration(),
-      'name_id' => $auth->getNameId(),
-      'name_id_format' => $auth->getNameIdFormat(),
-    ];
-    foreach ($values as $key => $value) {
-      if (isset($value)) {
-        $this->privateTempStore->set($key, $value);
-      }
-      else {
-        $this->privateTempStore->delete($key);
-      }
+    try{
+      $this->doLogin($unique_id, $account);
     }
+    catch (UserVisibleException $e) {
+      if ($config->get('login_error_keep_session')) {
+        $this->saveSamlSession();
+      }
+      throw $e;
+    }
+
+    $this->saveSamlSession();
 
     return TRUE;
   }
@@ -646,6 +620,52 @@ class SamlService {
         '@linked_id' => $linked_id,
       ]);
       throw new UserVisibleException('Your login data match an earlier login by a different SAML user.');
+    }
+  }
+
+  /**
+   * Stores the SAML session for later use (on logout).
+   *
+   * @return void
+   */
+  protected function saveSamlSession() {
+    // Remember SAML session values that may be necessary for logout.
+    // @todo Why are these in SharedTempStorage? There isn't much difference
+    //   with keeping them in the session, except in the latter case
+    //   - we are surer that their expiry time doesn't differ from the session;
+    //   - the session gets destroyed automatically if ours is the only
+    //     contained data - whereas the session keeps being active once a
+    //     'private temp store key' exists.
+    // @todo session_expiration was never used, I'm pretty sure. (This piece of
+    //   code is a holdover from another branch that was merged into the main
+    //   one in 2017.) Unlike the other 3 properties, it does not get used on
+    //   logout. It seems like a good idea to force a maximum session lifetime
+    //   if we get it, but:
+    //   - that seems like more general functionality which ideally shouldn't
+    //     be specific to this module. (If Core does not want to have helper
+    //     code for implementing it, then a general contrib module? Add to
+    //     externalauth like the other functionality we plan to move?)
+    //   - Drupal Core does not implement anything to help with expiring
+    //     individual sessions on demand; the 'created' and 'lifetime' values
+    //     (stored in session data / MetadataBag) are unused. See
+    //     https://symfony.com/doc/current/session.html#session-idle-time-keep-alive
+    //     for example - though since those values are not kept the same when a
+    //     session gets 'regenerate()d', we may want to keep a separate value
+    //     instead.
+    $auth = $this->getSamlAuth('acs');
+    $values = [
+      'session_index' => $auth->getSessionIndex(),
+      'session_expiration' => $auth->getSessionExpiration(),
+      'name_id' => $auth->getNameId(),
+      'name_id_format' => $auth->getNameIdFormat(),
+    ];
+    foreach ($values as $key => $value) {
+      if (isset($value)) {
+        $this->privateTempStore->set($key, $value);
+      }
+      else {
+        $this->privateTempStore->delete($key);
+      }
     }
   }
 
@@ -921,10 +941,13 @@ class SamlService {
   protected function drupalLogoutHelper($delete_saml_session_data = TRUE, $get_saml_session_data = TRUE, $force_allow_relogin = FALSE) {
     $data = [];
 
-    if ($get_saml_session_data || $delete_saml_session_data) {
+    if (($get_saml_session_data || $delete_saml_session_data)
+        && $this->requestStack->getCurrentRequest()->hasSession()) {
       // Get data from our temp store which should ideally be used for
       // constructing a LogoutRequest, and which is only available when the
-      // user is still logged in.
+      // user is still logged in. (Only do this when the user has a session,
+      // to prevent get() from starting a new session - which arguably is a
+      // Core bug.)
       $keys = [
         'session_index',
         'session_expiration',

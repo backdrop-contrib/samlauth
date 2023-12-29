@@ -344,6 +344,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
         ],
       ],
       'error_throw' => $this->t("No redirection or meaningful logging is done. This better enables custom code to handle errors."),
+      'login_error_keep_session' => $this->t("When Drupal login fails after successful SAML authentication, the user's state at the IdP is still 'logged in'. This option keeps SAML session data in a Drupal session for the anonymous user, so that a logout request can be started from this site (/saml/logout) successfully afterwards."),
       'bypass_relay_state_check' => $this->t("When checked, a response's RelayState parameter is redirected to, even if not a known safe hostname. (This will be removed in a newer version of the module.)"),
     ]);
     if ($collapse_rolesets) {
@@ -412,6 +413,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'logout_redirect_url',
       'error_redirect_url',
       'error_throw',
+      'login_error_keep_session',
       'bypass_relay_state_check',
     ];
     // unique_id_source indexes is hardcoded: 0 == nameid
