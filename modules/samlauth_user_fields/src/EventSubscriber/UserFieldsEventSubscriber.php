@@ -81,7 +81,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
   /**
    * {@inheritdoc}
    */
-  public static function getSubscribedEvents() {
+  public static function getSubscribedEvents(): array {
     $events[SamlauthEvents::USER_LINK][] = ['onUserLink'];
     $events[SamlauthEvents::USER_SYNC][] = ['onUserSync'];
     return $events;
