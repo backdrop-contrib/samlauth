@@ -88,7 +88,7 @@ trait SamlauthConfigureTrait {
    */
   protected function addNameID(array &$build, array $schema_definition, Config $config) {
     $this->addElementsFromSchema($build, $schema_definition, $config, [
-      'sp_name_id_format' => $this->t('The format for the NameID attribute to request from the identity provider / to send in logout requests.*'),
+      'sp_name_id_format' => $this->t('The format for the NameID attribute to request from the IdP / to send in logout requests.*'),
     ]);
     // Keep default_value and title.
     $build['sp_name_id_format']['#type'] = 'select';

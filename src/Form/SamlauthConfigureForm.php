@@ -116,7 +116,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'login_menu_item_title' => $this->t('The title of the SAML login link in the User account menu. Defaults to "Log in".'),
       'logout_menu_item_title' => $this->t('The title of the SAML logout link in the User account menu. Defaults to "Log out".'),
       'login_link_title' => $this->t('Displays a link to SAML login on the login form, with the provided title.'),
-      'login_auto_redirect' => $this->t("When checked, the regular Drupal login screen at /user/login cannot be used. The login block still works, so that's the only place where the login link is still seen (if a titile is provided). /user/logout is still regular Drupal logout (as supposed to /saml/logout which also logs out from any other sites the user is logged into through the same IdP)."),
+      'login_auto_redirect' => $this->t("When enabled, the regular Drupal login screen at /user/login cannot be used. The login block still works, so that's the only place where the login link is still seen (if a titile is provided). /user/logout is still regular Drupal logout (as supposed to /saml/logout which redirects to the IdP and potentially logs out from other sites)."),
     ]);
 
     $form['user_info'] = [
@@ -201,8 +201,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $allow_all = $roles === [AccountInterface::ANONYMOUS_ROLE];
     $form['user_info']['linking']['allow_all_roles'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Allow all Drupal users to be linked'),
-      '#description' => $this->t("You may check this if you absolutely trust that the SAML attributes used in your linking configuration can never be manipulated to point to an unintended user."),
+      '#title' => $this->t('Allow all Drupal users to be linked (regardless of role)'),
+      '#description' => $this->t("This option may be enabled if you absolutely trust that the SAML attributes used in your linking configuration can never be manipulated to point to an unintended user."),
       '#default_value' => $allow_all,
       '#states' => [
         'disabled' => [
@@ -248,8 +248,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
 
     $this->addElementsFromSchema($form['user_info'], $schema_definition, $config, [
       'create_users' => $this->t('If data in the SAML assertion is not associated with a Drupal user, a new user is created using the name / email attributes from the response.'),
-      'sync_name' => $this->t('The name attribute in the SAML assertion is propagated to the associated Drupal user on every login. (When unchecked, the Drupal user name is not changed after user creation.)'),
-      'sync_mail' => $this->t('The email attribute in the SAML assertion is propagated to the associated Drupal user on every login. (When unchecked, the Drupal user email is not changed after user creation.)'),
+      'sync_name' => $this->t('The name attribute in the SAML assertion is propagated to the associated Drupal user on every login. (When disabled, the Drupal user name is not changed after user creation.)'),
+      'sync_mail' => $this->t('The email attribute in the SAML assertion is propagated to the associated Drupal user on every login. (When disabled, the Drupal user email is not changed after user creation.)'),
       'user_name_attribute' => [
         '#description' => $this->t('When users are linked / created, this field specifies which SAML attribute should be used for the Drupal user name.<br />Example: <em>cn</em> or <em>eduPersonPrincipalName</em>'),
         '#states' => [
@@ -287,19 +287,18 @@ class SamlauthConfigureForm extends ConfigFormBase {
     }
     $this->addElementsFromSchema($form['login_logout'], $schema_definition, $config, [
       'drupal_login_roles' => [
-        '#description' => $this->t('Users who have previously logged in through the SAML Identity Provider can only use the standard Drupal login method if they have one of the roles selected here. Preexisting Drupal users who have never logged in through the IdP are not affected by this restriction.'),
+        '#description' => $this->t('Users who have previously logged in through the IdP can only use the standard Drupal login method if they have one of the roles selected here. Preexisting Drupal users who have never logged in through the IdP are not affected by this restriction.'),
         '#options' => $role_options,
       ],
       'local_login_saml_error' => [
-        '#description' => $this->t('If not checked, we show the generic "Unrecognized username or password" message to users who cannot use the standard Drupal login method. This prevents disclosing information about whether the account name exists, but is untrue / potentially confusing.', [
+        '#description' => $this->t('When disabled, the generic "Unrecognized username or password" message is shown to users who cannot use the standard Drupal login method. This prevents disclosing information about whether the account name exists, but is untrue / potentially confusing.', [
           ':permission' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
         ]),
-        // TRUE on existing installations where the checkbox didn't exist before;
-        // FALSE on new installations.
+        // TRUE on existing installations where the checkbox didn't exist
+        // before; FALSE on new installations.
         '#default_value' => $config->get('local_login_saml_error') ?? TRUE,
       ],
       'idp_change_password_service' => $this->t('URL where disallowed users (who do not have a Drupal password) will be directed to change their password. This is shown on their account edit form.'),
-      'logout_different_user' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed. This situation does not apply if the IdP is on another domain and <a href="https://www.drupal.org/node/3275352">cookie_samesite is configured</a> as "Strict" or "Lax", as is standard for new D10.1+ installs, because then the old user is not seen while coming from the IdP.)'),
       'login_redirect_url' => $this->t("The default URL to redirect the user to after login. This should be an internal path starting with a slash, or an absolute URL. Defaults to the logged-in user's account page."),
       'logout_redirect_url' => $this->t('The default URL to redirect the user to after logout. This should be an internal path starting with a slash, or an absolute URL. Defaults to the front page.'),
       'error_redirect_url' => [
@@ -312,7 +311,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
       ],
       'error_throw' => $this->t("No redirection or meaningful logging is done. This better enables custom code to handle errors."),
       'login_error_keep_session' => $this->t("When Drupal login fails after successful SAML authentication, the user's state at the IdP is still 'logged in'. This option keeps SAML session data in a Drupal session for the anonymous user, so that a logout request can be started from this site (/saml/logout) successfully afterwards."),
-      'bypass_relay_state_check' => $this->t("When checked, a response's RelayState parameter is redirected to, even if not a known safe hostname. (This will be removed in a newer version of the module.)"),
+      'logout_different_user' => $this->t('If a login (coming from the IdP) happens while another user is still logged into the site, that user is logged out and the new user is logged in. (By default, the old user stays logged in and a warning is displayed. This situation does not apply if the IdP is on another domain and <a href="https://www.drupal.org/node/3275352">cookie_samesite is configured</a> as "Strict" or "Lax", as is standard for new D10.1+ installs, because then the old user is not seen while coming from the IdP, and login happens normally.)'),
+      'bypass_relay_state_check' => $this->t("When enabled, a response's RelayState parameter is redirected to, even if not a known safe hostname. (This will be removed in a newer version of the module.)"),
     ]);
     if ($collapse_rolesets) {
       $form['login_logout']['roles']['drupal_login_roles'] = $form['login_logout']['drupal_login_roles'];
@@ -375,12 +375,12 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'user_mail_attribute',
       'local_login_saml_error',
       'idp_change_password_service',
-      'logout_different_user',
       'login_redirect_url',
       'logout_redirect_url',
       'error_redirect_url',
       'error_throw',
       'login_error_keep_session',
+      'logout_different_user',
       'bypass_relay_state_check',
     ];
     // unique_id_source indexes is hardcoded: 0 == nameid

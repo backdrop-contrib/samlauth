@@ -76,7 +76,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
 
     $form['description'] = [
       '#type' => 'markup',
-      '#markup' => $this->t("When the below sections are correctly configured, SAML login through the IdP should result in no errors from the PHP SAML toolkit (though logging into Drupal may still fail, because of e.g. missing 'unique ID')."),
+      '#markup' => $this->t("When the below sections are correctly configured, SAML login through the Identity Provider (IdP) should result in no errors from the PHP SAML toolkit. (Login to Drupal may still fail, because of e.g. missing 'unique ID'.)"),
     ];
 
     $form['service_provider'] = [
@@ -796,7 +796,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
           ],
         ],
       ],
-      'security_request_authn_context' => $this->t('Specify that only a subset of authentication methods available at the IdP should be used. (If checked, the "PasswordProtectedTransport" authentication method is specified, which is default behavior for the SAML Toolkit library. If needed, this module should be extended to be able to specify more methods.)'),
+      'security_request_authn_context' => $this->t('Specify that only a subset of authentication methods available at the IdP should be used. (When enabled, the "PasswordProtectedTransport" authentication method is specified, which is default behavior for the SAML Toolkit library. If needed, this module should be extended to be able to specify more methods.)'),
       'request_set_name_id_policy' => [
         '#description' => $this->t('A NameIDPolicy element is added in authentication requests, mentioning the below format (if "Require NameID to be encrypted" is off).'),
         // This is one of the few checkboxes that must be TRUE on existing
@@ -910,14 +910,14 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     $form['debugging'] = [
       '#title' => $this->t('Debugging'),
       '#type' => 'details',
-      '#description' => $this->t('When turning off debugging options to go into production mode, re-check above "Strict validation" and "Caching / validity" values.'),
+      '#description' => $this->t('When turning off debugging options to go into production mode, re-enable above "Strict validation" and "Caching / validity" options.'),
       '#open' => TRUE,
     ];
 
     $this->addElementsFromSchema($form['debugging'], $schema_definition, $config, [
       // A note - if we ever split this config screen in two: this option does
       // not govern just SAML communication but all errors during login.
-      'debug_display_error_details' => $this->t("This can help testing until login/logout works: when unchecked, technical details are only logged to watchdog (to prevent exposing information about a misconfigured system / because it's unlikely they are useful)."),
+      'debug_display_error_details' => $this->t("This can help testing until login/logout works: when disabled, technical details are only logged to watchdog (to prevent exposing information about a misconfigured system / because it's unlikely they are useful)."),
       'debug_log_saml_out' => $this->t("Log messages which the SAML Toolkit 'sends' to the IdP (usually via the web browser through a HTTP redirect, as part of the URL)."),
       'debug_log_saml_in' => $this->t('Log SAML responses (and logout requests) received by the ACS/SLS endpoints.'),
       'debug_log_in' => $this->t('Log supposed SAML messages received by the ACS/SLS endpoints before validating them as XML. If the other option logs nothing, this still might, but the logged contents may make less sense.'),
