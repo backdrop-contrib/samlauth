@@ -85,6 +85,8 @@ samlauth.saml_configure_form:
     _title: 'SAML communication setup'
   requirements:
     _permission: 'configure saml'
+  options:
+    _admin_route: TRUE
 samlauth.samlauth_configure_form:
   path: '/admin/config/people/saml'
   defaults:
@@ -92,6 +94,8 @@ samlauth.samlauth_configure_form:
     _title: 'SAML login / user configuration'
   requirements:
     _permission: 'configure saml'
+  options:
+    _admin_route: TRUE
 samlauth.authmap_delete_form:
   path: '/admin/config/people/saml/authmap/{uid}/delete'
   defaults:
