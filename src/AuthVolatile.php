@@ -6,7 +6,7 @@ namespace Drupal\samlauth;
  * EMPTY CLASS.
  *
  * After writing up all considerations, I concluded that this wasn't needed yet.
- * So now this is just just a bunch of comments on plans for v4.x, for me to
+ * So now this is just a bunch of comments on plans for v4.x, for me to
  * circle back to - which might as well be committed into 3.x for anyone
  * curious about a future refactor. What I drafted so far:
  * ---

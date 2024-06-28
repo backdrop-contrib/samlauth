@@ -8,6 +8,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\Url;
@@ -39,6 +40,8 @@ use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
  */
 class SamlService {
   use StringTranslationTrait;
+
+  const NAMEID_MOCK_ATTRIBUTE_NAME = '!nameid';
 
   /**
    * Auth objects (usually 0 or 1) representing the current request state.
@@ -212,6 +215,8 @@ class SamlService {
    * @param int|null $cache_duration
    *   (Optional) number of seconds used for the 'cacheDuration' property of
    *   the metadata. If left empty, the SAML PHP Toolkit will assign a value.
+   * @param bool $allow_invalid
+   *   (Optional) also return metadata if it cannot be validated.
    *
    * @return mixed
    *   XML string representing metadata.
@@ -219,20 +224,50 @@ class SamlService {
    * @throws \OneLogin\Saml2\Error
    *   If the metatdad is invalid.
    */
-  public function getMetadata($validity = NULL, $cache_duration = NULL) {
+  public function getMetadata($validity = NULL, $cache_duration = NULL, bool $allow_invalid = FALSE) {
     // It's actually strange how we need to instantiate an Auth object when
     // we only need the Settings object. We may refactor that when refactoring
     // getSamlAuth().
     $settings = $this->getSamlAuth('metadata')->getSettings();
     $metadata = $settings->getSPMetadata(FALSE, $validity, $cache_duration);
-    $errors = $settings->validateMetadata($metadata);
+    if (!$allow_invalid) {
+      $errors = $settings->validateMetadata($metadata);
 
-    if (empty($errors)) {
-      return $metadata;
+      if ($errors) {
+        // There's usually only one error which is a non-descriptive small
+        // string. In some cases, add our own descriptions.
+        if (in_array('invalid_xml', $errors, TRUE)) {
+          // The library's Utils::validateXML() calls libxml_get_errors() and
+          // outputs to syslog. Let's repeat that to our own logger. They may
+          // be very long, e.g. contain text contents of an invalid key/cert.
+          if (function_exists('libxml_get_errors')) {
+            $xml_errors = libxml_get_errors();
+            if ($xml_errors) {
+              foreach ($xml_errors as $xml_error) {
+                $this->logger->error('XML validation error code @code, level @level, line/col @line/@column: @message', [
+                  '@code' => $xml_error->code,
+                  '@level' => $xml_error->level,
+                  '@line' => $xml_error->line,
+                  '@column' => $xml_error->column,
+                  '@message' => $xml_error->message,
+                ]);
+              }
+              $errors[] = 'detailed XML errors are logged';
+            }
+            else {
+              // Impossible?
+              $errors[] = 'no detailed XML errors known';
+            }
+          }
+          else {
+            $errors[] = 'unable to get detailed XML errors';
+          }
+        }
+        $errors[] = 'add ?check=0 to see the invalid metadata.';
+        throw new SamlError('Invalid SP metadata: ' . implode(', ', $errors), SamlError::METADATA_SP_INVALID);
+      }
     }
-    else {
-      throw new SamlError('Invalid SP metadata: ' . implode(', ', $errors), SamlError::METADATA_SP_INVALID);
-    }
+    return $metadata;
   }
 
   /**
@@ -243,14 +278,18 @@ class SamlService {
    *   the IdP.
    * @param array $parameters
    *   (optional) Extra query parameters to add to the returned redirect URL.
+   * @param bool $force_auth
+   *   (optional) Tell the IdP to force authentication. This should present an
+   *   authentication mechanism to the user even if they are logged in already
+   *   from the IdP's viewpoint. It's up to the IdP to actually implement this.
    *
    * @return string
    *   The URL of the single sign-on service to redirect to, including query
    *   parameters.
    */
-  public function login($return_to = NULL, array $parameters = []) {
+  public function login($return_to = NULL, array $parameters = [], $force_auth = FALSE) {
     $config = $this->configFactory->get('samlauth.authentication');
-    $url = $this->getSamlAuth('login')->login($return_to, $parameters, FALSE, FALSE, TRUE, $config->get('request_set_name_id_policy') ?? TRUE);
+    $url = $this->getSamlAuth('login')->login($return_to, $parameters, $force_auth, FALSE, TRUE, $config->get('request_set_name_id_policy') ?? TRUE);
     if ($config->get('debug_log_saml_out')) {
       $this->logger->debug('Sending SAML authentication request: <pre>@message</pre>', ['@message' => $this->getSamlAuth('login')->getLastRequestXML()]);
     }
@@ -284,7 +323,8 @@ class SamlService {
         }
       }
       else {
-        // Not sure if we should be more detailed...
+        // Continue and let Saml2\Auth throw the error after logging. Not sure
+        // if we should be more detailed...
         $this->logger->warning("HTTP request to ACS is not a POST request, or contains no 'SAMLResponse' parameter.");
       }
     }
@@ -347,7 +387,9 @@ class SamlService {
         ]));
       }
       else {
-        $this->drupalLogoutHelper();
+        // It doesn't matter whether we delete the old user's data from
+        // the temp store, but why not.
+        $this->drupalLogoutHelper(TRUE, FALSE, TRUE);
         $this->messenger->addStatus($this->t('Another user (%other_user) was already logged into the site on this computer, and has now been logged out.', [
           '%other_user' => $this->currentUser->getAccountName(),
         ]));
@@ -362,24 +404,17 @@ class SamlService {
       throw new \RuntimeException('Configured unique ID is not present in SAML response.');
     }
 
-    $this->doLogin($unique_id, $account);
-
-    // Remember SAML session values that may be necessary for logout.
-    $auth = $this->getSamlAuth('acs');
-    $values = [
-      'session_index' => $auth->getSessionIndex(),
-      'session_expiration' => $auth->getSessionExpiration(),
-      'name_id' => $auth->getNameId(),
-      'name_id_format' => $auth->getNameIdFormat(),
-    ];
-    foreach ($values as $key => $value) {
-      if (isset($value)) {
-        $this->privateTempStore->set($key, $value);
-      }
-      else {
-        $this->privateTempStore->delete($key);
-      }
+    try{
+      $this->doLogin($unique_id, $account);
     }
+    catch (UserVisibleException $e) {
+      if ($config->get('login_error_keep_session')) {
+        $this->saveSamlSession();
+      }
+      throw $e;
+    }
+
+    $this->saveSamlSession();
 
     return TRUE;
   }
@@ -475,7 +510,7 @@ class SamlService {
               '@saml_id' => $unique_id,
               '@name' => $account->getAccountName(),
             ]);
-            throw new UserVisibleException('A local user account with your login name already exists, and we are disallowed from linking it.');
+            throw new UserVisibleException('A local user account with your login name already exists, and the current configuration disallows its use.');
           }
         }
       }
@@ -495,7 +530,7 @@ class SamlService {
               '@saml_id' => $unique_id,
               '@mail' => $account->getEmail(),
             ]);
-            throw new UserVisibleException('A local user account with your login email address name already exists, and we are disallowed from linking it.');
+            throw new UserVisibleException('A local user account with your login email address already exists, and the current configuration disallows its use.');
           }
         }
       }
@@ -554,14 +589,20 @@ class SamlService {
    */
   protected function linkExistingAccount($unique_id, ?UserInterface $account) {
     $allowed_roles = $this->configFactory->get('samlauth.authentication')->get('map_users_roles') ?: [];
-    $disallowed_roles = array_diff($account->getRoles(), (array)$allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
-    if ($disallowed_roles) {
-      $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
-        '@saml_id' => $unique_id,
-        '@uid' => $account->id(),
-        '@roles' => implode(', ', $disallowed_roles),
-      ]);
-      throw new UserVisibleException('A local user account matching your login already exists, and we are disallowed from linking it.');
+    // map_users_role special value ['anonymous'] means "Allow all roles".
+    // Otherwise, 'anonymous' and 'authenticated' must not be / are assumed to
+    // not be part of the map_users_role value; they're "reserved" for possible
+    // future use.
+    if ($allowed_roles !== [AccountInterface::ANONYMOUS_ROLE]) {
+      $disallowed_roles = array_diff($account->getRoles(), (array)$allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
+      if ($disallowed_roles) {
+        $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
+          '@saml_id' => $unique_id,
+          '@uid' => $account->id(),
+          '@roles' => implode(', ', $disallowed_roles),
+        ]);
+        throw new UserVisibleException('A local user account matching your login already exists, and the current configuration disallows its use.');
+      }
     }
     $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
 
@@ -579,6 +620,52 @@ class SamlService {
         '@linked_id' => $linked_id,
       ]);
       throw new UserVisibleException('Your login data match an earlier login by a different SAML user.');
+    }
+  }
+
+  /**
+   * Stores the SAML session for later use (on logout).
+   *
+   * @return void
+   */
+  protected function saveSamlSession() {
+    // Remember SAML session values that may be necessary for logout.
+    // @todo Why are these in SharedTempStorage? There isn't much difference
+    //   with keeping them in the session, except in the latter case
+    //   - we are surer that their expiry time doesn't differ from the session;
+    //   - the session gets destroyed automatically if ours is the only
+    //     contained data - whereas the session keeps being active once a
+    //     'private temp store key' exists.
+    // @todo session_expiration was never used, I'm pretty sure. (This piece of
+    //   code is a holdover from another branch that was merged into the main
+    //   one in 2017.) Unlike the other 3 properties, it does not get used on
+    //   logout. It seems like a good idea to force a maximum session lifetime
+    //   if we get it, but:
+    //   - that seems like more general functionality which ideally shouldn't
+    //     be specific to this module. (If Core does not want to have helper
+    //     code for implementing it, then a general contrib module? Add to
+    //     externalauth like the other functionality we plan to move?)
+    //   - Drupal Core does not implement anything to help with expiring
+    //     individual sessions on demand; the 'created' and 'lifetime' values
+    //     (stored in session data / MetadataBag) are unused. See
+    //     https://symfony.com/doc/current/session.html#session-idle-time-keep-alive
+    //     for example - though since those values are not kept the same when a
+    //     session gets 'regenerate()d', we may want to keep a separate value
+    //     instead.
+    $auth = $this->getSamlAuth('acs');
+    $values = [
+      'session_index' => $auth->getSessionIndex(),
+      'session_expiration' => $auth->getSessionExpiration(),
+      'name_id' => $auth->getNameId(),
+      'name_id_format' => $auth->getNameIdFormat(),
+    ];
+    foreach ($values as $key => $value) {
+      if (isset($value)) {
+        $this->privateTempStore->set($key, $value);
+      }
+      else {
+        $this->privateTempStore->delete($key);
+      }
     }
   }
 
@@ -626,10 +713,6 @@ class SamlService {
     // modify the Drupal logout process to keep the SAML session data available
     // but we won't explore that until there's a practical situation where
     // that's clearly needed.)
-    // @todo should we check session expiration time before sending a logout
-    //   request to the IdP? (What would an IdP do if it received an old
-    //   session index? Is it better to not redirect, and throw an error on
-    //   our side?)
     // @todo include nameId(SP)NameQualifier?
     $url = $this->getSamlAuth('logout')->logout(
       $return_to,
@@ -653,29 +736,21 @@ class SamlService {
    */
   public function sls() {
     $config = $this->configFactory->get('samlauth.authentication');
-    // We might at some point check if this code can be abstracted a bit...
     if ($config->get('debug_log_in')) {
-      if (isset($_GET['SAMLResponse'])) {
-        $response = base64_decode($_GET['SAMLResponse']);
-        if ($response) {
-          $this->logger->debug("SLS received 'SAMLResponse' in GET request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
-        }
-        else {
-          $this->logger->warning("SLS received 'SAMLResponse' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLResponse']]);
-        }
-      }
-      elseif (isset($_GET['SAMLRequest'])) {
-        $response = base64_decode($_GET['SAMLRequest']);
-        if ($response) {
-          $this->logger->debug("SLS received 'SAMLRequest' in GET request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
-        }
-        else {
-          $this->logger->warning("SLS received 'SAMLRequest' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLRequest']]);
-        }
+      if (!isset($_GET['SAMLResponse']) && !isset($_GET['SAMLRequest'])) {
+        // Continue and let Saml2\Auth throw the error after logging. Not sure
+        // if we should be more detailed...
+        $this->logger->warning("HTTP request to SLS is not a GET request, or contains no 'SAMLResponse'/'SAMLRequest' parameters.");
       }
       else {
-        // Not sure if we should be more detailed...
-        $this->logger->warning("HTTP request to SLS is not a GET request, or contains no 'SAMLResponse'/'SAMLRequest' parameters.");
+        $type = isset($_GET['SAMLResponse']) ? 'SAMLResponse' : 'SAMLRequest';
+        $response = base64_decode($_GET[$type]);
+        if ($response) {
+          $this->logger->debug("SLS received '@type' in GET request (base64 decoded): <pre>@message</pre>", ['@type' => $type, '@message' => $response]);
+        }
+        else {
+          $this->logger->warning("SLS received '@type' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@type' => $type, '@message' => $_GET[$type]]);
+        }
       }
     }
 
@@ -730,7 +805,7 @@ class SamlService {
     //   for which the SAML Toolkit returned a URL.
     // - after a LogoutResponse we don't need to log out because we already did
     //   that at the start of the process, in logout() - but there's nothing
-    //   against checking. We did not get an URL returned and our caller can
+    //   against checking. We did not get a URL returned and our caller can
     //   decide what to do next.
     $this->drupalLogoutHelper();
 
@@ -758,19 +833,27 @@ class SamlService {
   }
 
   /**
-   * Returns all attributes in a SAML response.
+   * Returns all attributes in a SAML response + the nameID.
    *
    * This method will return valid data after a response is processed (i.e.
    * after samlAuth->processResponse() is called).
    *
    * @return array
-   *   An array with all returned SAML attributes..
+   *   An array with keys being all known SAML attribute names and values being
+   *   the attribute values, which are always arrays. Values can be duplicate
+   *   because they are indexed by 'regular' name as well as 'friendly' name.
+   *   A special attribute value "!nameid" holds the NameID returned in the
+   *   login response.
+   *
+   * @todo in v4 this should disappear in favor of a value object that does not
+   *   double-index the same values, knows the mapping from 'regular' to
+   *   friendly name, knows the difference between NameID and attributes...
+   *   See https://drupal.org/i/3211529
    */
   public function getAttributes() {
-    $attributes = $this->getSamlAuth('acs')->getAttributes();
-    $friendly_attributes = $this->getSamlAuth('acs')->getAttributesWithFriendlyName();
-
-    return $attributes + $friendly_attributes;
+    $auth = $this->getSamlAuth('acs');
+    return [static::NAMEID_MOCK_ATTRIBUTE_NAME => [$auth->getNameId()]]
+      + $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
   }
 
   /**
@@ -786,20 +869,22 @@ class SamlService {
    * @return mixed|null
    *   The SAML attribute value; NULL if the attribute value, or configuration
    *   key, was not found.
+   *
+   * @todo in v4 we should force people to configure things only by 'regular'
+   *   name, not by friendly name, so the equivalent of this method won't
+   *   return anything if $config_key was a friendly name. (Maybe we can have
+   *   temporary backward compatibility to be nice to people who have to redo
+   *   their configuration.) This will be easier and more apparent if we get a
+   *   mapping UI where people can select friendly names, which actually saves
+   *   the regular names.
    */
   public function getAttributeByConfig($config_key) {
     $attribute_name = $this->configFactory->get('samlauth.authentication')->get($config_key);
+    // Protect situations which have no config yet (tests).
     if ($attribute_name) {
-      $attribute = $this->getSamlAuth('acs')->getAttribute($attribute_name);
-      if (!empty($attribute[0])) {
-        return $attribute[0];
-      }
-
-      $friendly_attribute = $this->getSamlAuth('acs')->getAttributeWithFriendlyName($attribute_name);
-      if (!empty($friendly_attribute[0])) {
-        return $friendly_attribute[0];
-      }
+      $attributes = $this->getAttributes();
     }
+    return $attribute_name && !empty($attributes[$attribute_name][0]) ? $attributes[$attribute_name][0] : NULL;
   }
 
   /**
@@ -833,30 +918,36 @@ class SamlService {
   /**
    * Ensures the user is logged out from Drupal; returns SAML session data.
    *
+   * This method's parameters are tedious on purpose, so each call describes
+   * exactly what it's doing. A lot of the combinations don't make sense.
+   *
    * @param bool $delete_saml_session_data
-   *   (optional) whether to delete the SAML session data. This depends on:
-   *   - how bad (privacy sensitive) it is to keep around? Answer: not.
-   *   - whether we expect the data to ever be reused. That is: could a SAML
-   *     logout attempt be done for the same SAML session multiple times?
-   *     Answer: we don't know. Unlikely, because it is not accessible anymore
-   *     after logout, so the user would need to log in to Drupal locally again
-   *     before anything could be done with it.
+   *   (optional) Delete SAML session data that we got at login. This was never
+   *     a sensible option because, when logging out, the user will lose their
+   *     session (and thereby the access to this data) anyway, regardless
+   *     whether it's still stored.
+   * @param bool $get_saml_session_data
+   *   (optional) Get SAML session data that was stored at login. It has one
+   *     use: to use in a logout request.
+   * @param bool $force_allow_relogin
+   *   (optional) Explicitly circumvent Drupal's (as of 9.2) behavior which
+   *   makes it impossible to log another user in during the same request.
    *
    * @return array
-   *   Array of data about the 'SAML session' that we stored at login. (The
-   *   SAML toolkit itself does not store any data / implement the concept of a
-   *   session.)
+   *   Array of SAML session' data that was stored at login, if
+   *   $get_saml_session_data is TRUE. (The SAML toolkit itself does not store
+   *   any data / implement the concept of a session.)
    */
-  protected function drupalLogoutHelper($delete_saml_session_data = TRUE) {
+  protected function drupalLogoutHelper($delete_saml_session_data = TRUE, $get_saml_session_data = TRUE, $force_allow_relogin = FALSE) {
     $data = [];
 
-    if ($this->currentUser->isAuthenticated()) {
-      // Get data from our temp store which is not accessible after logout.
-      // DEVELOPER NOTE: It depends on our session storage, whether we want to
-      // try this for unauthenticated users too. At the moment, we are sure
-      // only authenticated users have any SAML session data - and trying to
-      // get() a value from our privateTempStore can unnecessarily start a new
-      // PHP session for unauthenticated users.
+    if (($get_saml_session_data || $delete_saml_session_data)
+        && $this->requestStack->getCurrentRequest()->hasSession()) {
+      // Get data from our temp store which should ideally be used for
+      // constructing a LogoutRequest, and which is only available when the
+      // user is still logged in. (Only do this when the user has a session,
+      // to prevent get() from starting a new session - which arguably is a
+      // Core bug.)
       $keys = [
         'session_index',
         'session_expiration',
@@ -864,14 +955,60 @@ class SamlService {
         'name_id_format',
       ];
       foreach ($keys as $key) {
-        $data[$key] = $this->privateTempStore->get($key);
-        if ($delete_saml_session_data) {
+        if ($get_saml_session_data) {
+          $data[$key] = $this->privateTempStore->get($key);
+        }
+        if ($delete_saml_session_data && (!$get_saml_session_data || isset($data[$key]))) {
           $this->privateTempStore->delete($key);
         }
       }
+    }
 
-      // @todo properly inject this... after #2012976 lands.
-      user_logout();
+    if ($this->currentUser->isAuthenticated()) {
+      if ($force_allow_relogin) {
+        // Since D9.2 (#2238561) the SessionManager::destroy() call in
+        // user_logout() makes it impossible to log in again, because
+        // - SessionManager::destroy() keeps $this->started == TRUE;
+        // - SessionManager::regenerate() (called on login) does not sidestep
+        //   this fact anymore;
+        // which makes it impossible to start a new session. (It looks like
+        // calling user_login_finalize() after user_logout() was never really
+        // supported; the code path before D9.2 worked but was buggy.)
+        // There are two workarounds:
+        // - save/close the session first, which is unnecessary but the only
+        //   thing that sets $this->started = FALSE. This works, except:
+        //   - With the session already being closed, the session_destroy()
+        //     call in user_logout() will log a warning;
+        //   - If a hook_user_logout implementation does a Session::get(), the
+        //     session gets started again, nullifying the fix. (We could hack
+        //     the session to be lazy-started instead, but that nullifies the
+        //     fix too.)
+        // - pick apart user_logout() and do things ourselves.
+        // Code copied from user_logout(), mostly unchanged. Let's take care of
+        // dependency injection after user_logout() itself is deprecated.
+        $user = $this->currentUser;
+
+        \Drupal::logger('user')->info('Session closed for %name.', ['%name' => $user->getAccountName()]);
+
+        \Drupal::moduleHandler()->invokeAll('user_logout', [$user]);
+
+        // Change: call Session::invalidate(), not SessionManager::destroy().
+        // The comment in user_logout() about this leaving spurious records is
+        // wrong; this was fixed pre-D8.0 in
+        // https://www.drupal.org/project/drupal/issues/2228393#comment-9830813
+        // @todo file Core issues (likely two separate) to
+        // - make logout + login work
+        // - replace destroy() by invalidate() (has no side effects besides
+        //   point 1, as far as I've seen so far)
+        // and remove this code once committed.
+        \Drupal::service('session')->invalidate();
+
+        $user->setAccount(new AnonymousUserSession());
+      }
+      else {
+        // @todo properly inject this (and above) after #2012976 lands.
+        user_logout();
+      }
     }
 
     return $data;
@@ -959,10 +1096,12 @@ class SamlService {
         // (*): also influences Settings:__construct() checks for SP cert+key.
         // (**): if either of these properties is true, an extra 'encryption'
         // certificate is always included in the metadata. (With the same value
-        // as the 'signing' certificate; we don't support different ones.)
+        // as the 'signing' certificate; we don't support different ones - only
+        // support including two different 'signing' ccertificates.)
       ],
       'strict' => (bool) $config->get('strict'),
     ];
+    // Passing NULL for signatureAlgorithm would be OK, but not ''.
     $sig_alg = $config->get('security_signature_algorithm');
     if ($sig_alg) {
       $library_config['security']['signatureAlgorithm'] = $sig_alg;
@@ -995,23 +1134,15 @@ class SamlService {
     //   key/cert values. It would be nice if the code was... clearer.)
     // So for now, we are adding logic to this method that 'knows' when the key
     // / certs are used.
-    $add_key = $add_cert = $add_idp_cert = TRUE;
+    $add_key = $add_cert = $add_idp_cert = $require_idp_data = TRUE;
     $add_new_cert = in_array($purpose, ['metadata', '']);
     $add_idp_encryption_cert = FALSE;
     switch ($purpose) {
       case 'metadata':
-        // signMetadata / wantNameIdEncrypted are not implemented yet but that
-        // doesn't mean we can't already use them here: they potentially
-        // influence metadata but then we can't turn off $add_key.
         $add_key = !empty($library_config['security']['signMetadata'])
           || !empty($library_config['security']['wantNameIdEncrypted'])
           || !empty($library_config['security']['wantAssertionsEncrypted']);
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = FALSE;.
-        // @todo this is a good enough reason for opening a PR to amend
-        //   Auth::construct() (to accept a Settings that was constructed with
-        //   (, TRUE)), regardless of considerations outlined in AuthVolatile.
+        $add_idp_cert = $require_idp_data = FALSE;
         break;
 
       case 'login':
@@ -1021,9 +1152,7 @@ class SamlService {
         $add_cert = !empty($library_config['security']['authnRequestsSigned'])
           || !empty($library_config['security']['wantNameIdEncrypted'])
           ? 'FAKE' : FALSE;
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = FALSE;.
+        $add_idp_cert = FALSE;
         break;
 
       case 'logout':
@@ -1032,13 +1161,9 @@ class SamlService {
         // key), or otherwise checkSPCerts() will freak out.
         $add_cert = !empty($library_config['security']['logoutRequestSigned'])
           ? 'FAKE' : FALSE;
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert=!empty($library_config['security']['nameIdEncrypted']);
-        // ^ This would also need the 2nd parameter to Settings::__construct()
-        // to be !$add_idp_cert.
-        // That just means we should generally add at least 1 IdP cert, though.
-        // We don't need to add the encryption cert specifically - only if:
+        // If nameIdEncrypted, then read at least one cert for encryption: if
+        // the encryption one is not available, take a regular one.
+        $add_idp_cert = FALSE;
         $add_idp_encryption_cert = !empty($library_config['security']['nameIdEncrypted']);
         break;
 
@@ -1057,25 +1182,22 @@ class SamlService {
       case 'sls-request':
         // We need to both interpret the incoming request and probably create a
         // new outgoing one, so we need key and cert.
-        // We cannot prevent Settings::checkIdPSettings() from being called
-        // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = isset($_GET['Signature']); // This would also need
-        // the 2nd parameter to Settings::__construct() to be !$add_idp_cert.
+        $add_idp_cert = isset($_GET['Signature']);
         break;
 
       case 'sls-response':
         $add_key = $add_cert = FALSE;
         // We cannot prevent Settings::checkIdPSettings() from being called
         // while using the standard Auth class, so cannot do this:
-        // $add_idp_cert = isset($_GET['Signature']); // This would also need
-        // the 2nd parameter to Settings::__construct() to be !$add_idp_cert.
+        $add_idp_cert = isset($_GET['Signature']);
     }
     if (!$add_key || !$add_cert) {
-      // If these are set, checkSPCerts() will get called, which requires key +
-      // cert presence. Neither of these two variables are (should have been)
-      // set to FALSE if any of these security settings is both true and
-      // relevant for our $purpose. (The full logic including the switch{}
-      // implies the library default is FALSE for all these security settings.)
+      // If below security settings are set, checkSPCerts() will get called,
+      // which requires key + cert presence, so unset them. The $add_*
+      // variables are never (should never have been) set to FALSE if any of
+      // these security settings are both true and relevant for our $purpose.
+      // (The full logic including the switch{} implies the library default is
+      // FALSE for all these security settings.)
       unset($library_config['security']['authnRequestsSigned']);
       unset($library_config['security']['logoutRequestSigned']);
       unset($library_config['security']['logoutResponseSigned']);
@@ -1083,8 +1205,27 @@ class SamlService {
       unset($library_config['security']['wantNameIdEncrypted']);
     }
     if (!$add_idp_cert) {
-      // Same for IdP cert.
+      // Same for IdP cert: checkIdPSettings() will get called, which requires
+      // cert presence. Unsetting would not be necessary here, if we could
+      // construct a Settings object with the 2nd parameter ($spValidationOnly)
+      // TRUE, and pass that to Auth::__construct() - but it only accept arrays.
+      // @todo this is a good enough reason for opening a PR to amend
+      //   Auth::construct() (to accept a Settings that was constructed with
+      //   (, TRUE)), regardless of considerations outlined in AuthVolatile.
       unset($library_config['security']['nameIdEncrypted']);
+      // Additional check requires presence of either cert or fingerprint, so
+      // since we don't want to load the cert now:
+      $library_config['idp']['certFingerprint'] = 'DUMMY_IDP_CERT_FINGERPRINT';
+      if (!$require_idp_data) {
+        // Same for IdP data: checkIdPSettings() always gets called and
+        // requires some unneeded data, so prevent checks failing.
+        if (empty($library_config['idp']['entityId'])) {
+          $library_config['idp']['entityId'] = 'DUMMY_IDP_ENTITY_ID';
+        }
+        if (empty($library_config['idp']['singleSignOnService']['url'])) {
+          $library_config['idp']['singleSignOnService']['url'] = 'https://dummy.idp/sso';
+        }
+      }
     }
 
     // Check if we want to load the certificates from a folder. Either folder
@@ -1112,7 +1253,7 @@ class SamlService {
         if (isset($key) && !is_string($key)) {
           throw new SamlError('SP private key setting is not a string.', SamlError::SETTINGS_INVALID);
         }
-        $type = strstr($key, ':', TRUE);
+        $type = strstr($key ?? '', ':', TRUE);
         if ($type === 'key') {
           if ($key_repository) {
             $key = substr($key, 4);
@@ -1121,6 +1262,7 @@ class SamlService {
               throw new SamlError("SP private key '$key' not found.", SamlError::SETTINGS_INVALID);
             }
             $key = $key_entity->getKeyValue();
+            // @TODO it is possible for this to be NULL (if e.g. the file is not readable) (Do we also validate this in config screen?)
           }
           else {
             throw new SamlError('SP private key setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
@@ -1129,7 +1271,7 @@ class SamlService {
         elseif ($type === 'file') {
           $key = file_get_contents(substr($key, 5));
           if ($key === FALSE) {
-            throw new SamlError('SP private key not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+            throw new SamlError('Could not read SP private key file.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
           }
         }
         $library_config['sp']['privateKey'] = $key;
@@ -1157,7 +1299,7 @@ class SamlService {
           elseif ($type === 'file') {
             $cert = file_get_contents(substr($cert, 5));
             if ($cert === FALSE) {
-              throw new SamlError('SP public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
+              throw new SamlError('Could not read SP public cert file.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
             }
           }
           $library_config['sp']['x509cert'] = $cert;
@@ -1186,7 +1328,7 @@ class SamlService {
           elseif ($type === 'file') {
             $cert = file_get_contents(substr($cert, 5));
             if ($cert === FALSE) {
-              throw new SamlError('SP new public cert not found.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
+              throw new SamlError('Could not read SP new public cert file.', SamlError::PUBLIC_CERT_FILE_NOT_FOUND);
             }
           }
           $library_config['sp']['x509certNew'] = $cert;
@@ -1218,12 +1360,15 @@ class SamlService {
       elseif ($type === 'file') {
         $encryption_cert = file_get_contents(substr($encryption_cert, 5));
         if ($encryption_cert === FALSE) {
-          throw new SamlError('IdP encryption cert not found.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+          throw new SamlError('Could not read IdP encryption cert file.', SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
         }
       }
     }
     if ($add_idp_cert || ($add_idp_encryption_cert && !$encryption_cert)) {
-      $certs = $config->get('idp_certs');
+      $certs = $config->get('idp_certs') ?? [];
+      if ($add_idp_encryption_cert && !$add_idp_cert) {
+        $certs = array_slice($certs, 0, 1);
+      }
       foreach ($certs as $i => $cert) {
         if (isset($certs[$i]) && !is_string($certs[$i])) {
           $nr = ($i ? " $i" : '');
@@ -1240,14 +1385,15 @@ class SamlService {
             $certs[$i] = $key_entity->getKeyValue();
           }
           else {
-            throw new SamlError('IdP cert setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);
+            $nr = ($i ? " $i" : '');
+            throw new SamlError("IdP cert setting$nr is of type \"key\" but the Key module is not installed.", SamlError::SETTINGS_INVALID);
           }
         }
         elseif ($type === 'file') {
           $certs[$i] = file_get_contents(substr($cert, 5));
           if ($certs[$i] === FALSE) {
             $nr = ($i ? " $i" : '');
-            throw new SamlError("IdP cert$nr not found.", SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
+            throw new SamlError("Could not read IdP cert$nr file.", SamlError::PRIVATE_KEY_FILE_NOT_FOUND);
           }
         }
       }

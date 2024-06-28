@@ -17,3 +17,8 @@ services:
     arguments: ['@current_user']
     tags:
       - { name: event_subscriber }
+  samlauth.event_subscriber.redirect_user_login:
+    class: Drupal\samlauth\EventSubscriber\RedirectUserLoginFormSubscriber
+    arguments: ['@config.factory', '@current_route_match', '@current_user']
+    tags:
+      - { name: event_subscriber }

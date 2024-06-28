@@ -29,12 +29,22 @@ final class SamlauthEvents {
   /**
    * Name of the event fired when a user is synchronized from SAML attributes.
    *
+   * This includes new accounts being created for the first time (before being
+   * saved; throw an exception to prevent saving of accounts).
+   *
    * The event allows modules to synchronize user account values with SAML
    * attributes passed by the IdP in the authentication response. Basic required
    * properties (username, email) are already synchronized. The event listener
-   * method receives a \Drupal\samlauth\Event\SamlauthUserSyncEvent instance. If
-   * it changes the account, it should call the event's markAccountChanged()
-   * method rather than saving the account by itself.
+   * method receives a \Drupal\samlauth\Event\SamlauthUserSyncEvent instance.
+   *
+   * Note the distinction between the following methods on the event:
+   * - isFirstLogin(): the account is new, OR already exists and is being
+   *   linked during its first SAML login. See isFirstLogin() comments for
+   *   caveats.
+   * - getAccount()->isNew(): the account is truly new.
+   * If the event subscriber makes changes to the account, it should call the
+   * event's markAccountChanged() method rather than saving the account by
+   * itself. This call is optional if the account is new.
    *
    * The event is fired after the SP / samlauth library validates the IdP's
    * authentication response but before the Drupal user is logged in. An event
