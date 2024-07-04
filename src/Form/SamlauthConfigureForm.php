@@ -32,7 +32,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    *
    * @var \Drupal\Core\Config\TypedConfigManagerInterface
    */
-  protected $typedConfigManager;
+  protected TypedConfigManagerInterface $typedConfigManager;
 
   /**
    * The EntityTypeManager service.
@@ -70,7 +70,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
    *   The token service.
    */
   public function __construct(ConfigFactoryInterface $config_factory, TypedConfigManagerInterface $typed_config_manager, EntityTypeManagerInterface $entity_type_manager, PathValidatorInterface $path_validator, Token $token) {
-    parent::__construct($config_factory);
+    parent::__construct($config_factory, $typed_config_manager);
     $this->typedConfigManager = $typed_config_manager;
     $this->entityTypeManager = $entity_type_manager;
     $this->pathValidator = $path_validator;

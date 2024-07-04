@@ -28,7 +28,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
    *
    * @var \Drupal\Core\Config\TypedConfigManagerInterface
    */
-  protected $typedConfigManager;
+  protected TypedConfigManagerInterface $typedConfigManager;
 
   /**
    * The Key repository service.
@@ -53,7 +53,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
    *   The key repository.
    */
   public function __construct(ConfigFactoryInterface $config_factory, TypedConfigManagerInterface $typed_config_manager, $key_repository) {
-    parent::__construct($config_factory);
+    parent::__construct($config_factory, $typed_config_manager);
     $this->typedConfigManager = $typed_config_manager;
     $this->keyRepository = $key_repository;
   }
