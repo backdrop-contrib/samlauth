@@ -370,7 +370,20 @@ class SamlController extends ControllerBase {
         // Disallow redirecting to an external URL after we log in.
         throw new UserVisibleException('Destination URL query parameter must not be external: @destination', ['@destination' => $destination]);
       }
-      $destination_url = $GLOBALS['base_url'] . '/' . $destination;
+
+      // When a destination is provided with a starting slash, it is assumed to
+      // include the base path already.
+      $base_path = $this->requestStack->getCurrentRequest()->getBasePath();
+      if (str_starts_with($destination, '/')) {
+        if (str_starts_with($destination, $base_path)) {
+          // Remove base_path from the destination URI.
+          $destination = substr($destination, strlen($base_path));
+        }
+      }
+      else {
+        $destination = '/' . $destination;
+      }
+      $destination_url = Url::fromUri('internal:' . $destination)->setAbsolute()->toString();
 
       // After we return from this controller, Drupal immediately redirects to
       // the path set in the 'destination' parameter (for the current URL being
