@@ -2,15 +2,10 @@
 
 namespace Drupal\samlauth\Form;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Config\TypedConfigManagerInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Url;
-use Drupal\Core\Utility\Token;
 use Drupal\samlauth\Controller\SamlController;
 use Drupal\samlauth\SamlService;
 use Drupal\user\UserInterface;
@@ -26,13 +21,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
   use SamlauthConfigureTrait;
 
   const MAX_UNCOLLAPSED_ROLES = 10;
-
-  /**
-   * The typed configuration manager.
-   *
-   * @var \Drupal\Core\Config\TypedConfigManagerInterface
-   */
-  protected $typedConfigManager;
 
   /**
    * The EntityTypeManager service.
@@ -56,38 +44,16 @@ class SamlauthConfigureForm extends ConfigFormBase {
   protected $token;
 
   /**
-   * Constructs a \Drupal\samlauth\Form\SamlauthConfigureForm object.
-   *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The factory for configuration objects.
-   * @param \Drupal\Core\Config\TypedConfigManagerInterface $typed_config_manager
-   *   The typed configuration manager.
-   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The EntityTypeManager service.
-   * @param \Drupal\Core\Path\PathValidatorInterface $path_validator
-   *   The PathValidator service.
-   * @param \Drupal\Core\Utility\Token $token
-   *   The token service.
-   */
-  public function __construct(ConfigFactoryInterface $config_factory, TypedConfigManagerInterface $typed_config_manager, EntityTypeManagerInterface $entity_type_manager, PathValidatorInterface $path_validator, Token $token) {
-    parent::__construct($config_factory);
-    $this->typedConfigManager = $typed_config_manager;
-    $this->entityTypeManager = $entity_type_manager;
-    $this->pathValidator = $path_validator;
-    $this->token = $token;
-  }
-
-  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
-    return new static(
-      $container->get('config.factory'),
-      $container->get('config.typed'),
-      $container->get('entity_type.manager'),
-      $container->get('path.validator'),
-      $container->get('token')
-    );
+    $instance = parent::create($container);
+
+    $instance->token = $container->get('token');
+    $instance->pathValidator = $container->get('path.validator');
+    $instance->entityTypeManager = $container->get('entity_type.manager');
+
+    return $instance;
   }
 
   /**
@@ -113,7 +79,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // A simple definition array without replacements should suffice for this
     // purpose; it doesn't seem to make sense to wrap it in some typed
     // DataDefinition class...
-    $schema_definition = $this->typedConfigManager->getDefinition(SamlController::CONFIG_OBJECT_NAME);
+    // @phpstan-ignore-next-line inorder to keep backward compatibility.
+    $schema_definition = \Drupal::service('config.typed')->getDefinition(SamlController::CONFIG_OBJECT_NAME);
     assert(!empty($schema_definition['mapping']), 'Config schema of ' . SamlController::CONFIG_OBJECT_NAME . ' has unexpected value; ' . self::class . ' needs rework.');
     $schema_definition = $schema_definition['mapping'];
 

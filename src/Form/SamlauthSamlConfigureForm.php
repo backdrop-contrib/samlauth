@@ -2,8 +2,6 @@
 
 namespace Drupal\samlauth\Form;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
@@ -24,13 +22,6 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
   use SamlauthConfigureTrait;
 
   /**
-   * The typed configuration manager.
-   *
-   * @var \Drupal\Core\Config\TypedConfigManagerInterface
-   */
-  protected $typedConfigManager;
-
-  /**
    * The Key repository service.
    *
    * This is used as an indicator whether we can show a 'Key' selector on
@@ -43,30 +34,14 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
   protected $keyRepository;
 
   /**
-   * Constructs a \Drupal\samlauth\Form\SamlauthConfigureForm object.
-   *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The factory for configuration objects.
-   * @param \Drupal\Core\Config\TypedConfigManagerInterface $typed_config_manager
-   *   The typed configuration manager.
-   * @param \Drupal\key\KeyRepositoryInterface|null $key_repository
-   *   The key repository.
-   */
-  public function __construct(ConfigFactoryInterface $config_factory, TypedConfigManagerInterface $typed_config_manager, $key_repository) {
-    parent::__construct($config_factory);
-    $this->typedConfigManager = $typed_config_manager;
-    $this->keyRepository = $key_repository;
-  }
-
-  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
-    return new static(
-      $container->get('config.factory'),
-      $container->get('config.typed'),
-      $container->get('key.repository', ContainerInterface::NULL_ON_INVALID_REFERENCE)
-    );
+    $instance = parent::create($container);
+
+    $instance->keyRepository = $container->get('key.repository', ContainerInterface::NULL_ON_INVALID_REFERENCE);
+
+    return $instance;
   }
 
   /**
@@ -92,7 +67,8 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     // A simple definition array without replacements should suffice for this
     // purpose; it doesn't seem to make sense to wrap it in some typed
     // DataDefinition class...
-    $schema_definition = $this->typedConfigManager->getDefinition(SamlController::CONFIG_OBJECT_NAME);
+    // @phpstan-ignore-next-line inorder to keep backward compatibility.
+    $schema_definition = \Drupal::service('config.typed')->getDefinition(SamlController::CONFIG_OBJECT_NAME);
     assert(!empty($schema_definition['mapping']), 'Config schema of ' . SamlController::CONFIG_OBJECT_NAME . ' has unexpected value; ' . self::class . ' needs rework.');
     $schema_definition = $schema_definition['mapping'];
 
