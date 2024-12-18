@@ -1154,7 +1154,6 @@ class SamlService {
         'url' => $organization_url,
       ];
     }
-    \Drupal::logger('mymodule')->notice(serialize($library_config['organization']));
     // We want to read cert/key values from whereever they are stored, only
     // when we actually need them. This may lead to us creating a custom
     // \OneLogin\Saml2\Settings child class that contains the logic of 'just in
