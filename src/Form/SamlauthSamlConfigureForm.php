@@ -521,6 +521,42 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
         ],
       ],
     ];
+    $form['service_provider']['contact'] = [
+      '#type' => 'details',
+      '#open' => TRUE,
+      '#title' => $this->t('Contact information'),
+      '#description' => $this->t('It is recommended to supply technical and support contacts.'),
+    ];
+    $form['service_provider']['contact']['technical_givenName'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Technical contact given name'),
+      '#default_value' => $config->get('technical_givenName') ?? '',
+    ];
+    $form['service_provider']['contact']['technical_emailAddress'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Technical contact email'),
+      '#default_value' => $config->get('technical_emailAddress') ?? '',
+    ];
+    $form['service_provider']['contact']['support_givenName'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Support contact given name'),
+      '#default_value' => $config->get('support_givenName') ?? '',
+    ];
+    $form['service_provider']['contact']['support_emailAddress'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Support contact email'),
+      '#default_value' => $config->get('support_emailAddress') ?? '',
+    ];
+    $form['service_provider']['contact']['organization_name'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Organization Name'),
+      '#default_value' => $config->get('organization_name') ?? '',
+    ];
+    $form['service_provider']['contact']['organization_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Organization URL'),
+      '#default_value' => $config->get('organization_url') ?? '',
+    ];
 
     $form['identity_provider'] = [
       '#type' => 'details',
@@ -1163,6 +1199,12 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       'debug_log_saml_in',
       'debug_log_in',
       'debug_phpsaml',
+      'technical_givenName',
+      'technical_emailAddress',
+      'support_givenName',
+      'support_emailAddress',
+      'organization_name',
+      'organization_url',
     ] as $config_value) {
       $config->set($config_value, $form_state->getValue($config_value));
     }

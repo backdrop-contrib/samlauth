@@ -196,3 +196,21 @@ samlauth.authentication:
     bypass_relay_state_check:
       type: boolean
       label: 'Bypass safety check for dynamic redirect URLs'
+    technical_givenName:
+      type: string
+      label: 'Technical given name'
+    technical_emailAddress:
+      type: string
+      label: 'Technical email address'
+    support_givenName:
+      type: string
+      label: 'Support given name'
+    support_emailAddress:
+      type: string
+      label: 'Support email address'
+    organization_name:
+      type: string
+      label: 'Organization name'
+    organization_url:
+      type: string
+      label: 'Organization URL'

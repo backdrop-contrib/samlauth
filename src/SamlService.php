@@ -1043,6 +1043,21 @@ class SamlService {
           // call is necessary.
           'url' => Url::fromRoute('samlauth.saml_controller_acs', [], ['absolute' => TRUE])->toString(TRUE)->getGeneratedUrl(),
         ],
+        'attributeConsumingServices' => [
+          "serviceName" => "Ignored",
+          "requestedAttributes" => [
+            [
+              "name" => "https://data.gov.dk/model/core/specVersion",
+              "isRequired" => true,
+              "nameFormat" => "urn:oasis:names:tc:SAML:2.0:attrname-format:uri"
+            ],
+          ],
+        ],
+        'Organization' => [
+          "organizationName" => "The University of Texas at Austin",
+          "organizationDisplayName" => "The University of Texas at Austin",
+          "organizationURL" => "https://www.utexas.edu",
+        ],
         'singleLogoutService' => [
           'url' => Url::fromRoute('samlauth.saml_controller_sls', [], ['absolute' => TRUE])->toString(TRUE)->getGeneratedUrl(),
         ],
@@ -1114,7 +1129,32 @@ class SamlService {
     if ($base_url) {
       $library_config['baseurl'] = $base_url;
     }
-
+    $technical_givenName = $config->get('technical_givenName') ?? FALSE;
+    $technical_emailAddress = $config->get('technical_emailAddress') ?? FALSE;
+    if ($technical_givenName && $technical_emailAddress) {
+      $library_config['contactPerson']['technical'] = [
+        'givenName' => $technical_givenName,
+        'emailAddress' => $technical_emailAddress,
+      ];
+    }
+    $support_givenName = $config->get('support_givenName') ?? FALSE;
+    $support_emailAddress = $config->get('support_emailAddress') ?? FALSE;
+    if ($support_givenName && $support_emailAddress) {
+      $library_config['contactPerson']['support'] = [
+        'givenName' => $support_givenName,
+        'emailAddress' => $support_emailAddress,
+      ];
+    }
+    $organization_name = $config->get('organization_name') ?? FALSE;
+    $organization_url = $config->get('organization_url') ?? FALSE;
+    if ($organization_name && $organization_url) {
+      $library_config['organization']['en-US'] = [
+        'name' => $organization_name,
+        'displayname' => $organization_name,
+        'url' => $organization_url,
+      ];
+    }
+    \Drupal::logger('mymodule')->notice(serialize($library_config['organization']));
     // We want to read cert/key values from whereever they are stored, only
     // when we actually need them. This may lead to us creating a custom
     // \OneLogin\Saml2\Settings child class that contains the logic of 'just in
