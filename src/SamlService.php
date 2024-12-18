@@ -1133,7 +1133,7 @@ class SamlService {
     $technical_emailAddress = $config->get('technical_emailAddress') ?? FALSE;
     if ($technical_givenName && $technical_emailAddress) {
       $library_config['contactPerson']['technical'] = [
-        'givenName' => $technical_givenName,
+        'givenName' => 'mailto:' . $technical_givenName,
         'emailAddress' => $technical_emailAddress,
       ];
     }
@@ -1142,7 +1142,7 @@ class SamlService {
     if ($support_givenName && $support_emailAddress) {
       $library_config['contactPerson']['support'] = [
         'givenName' => $support_givenName,
-        'emailAddress' => $support_emailAddress,
+        'emailAddress' => 'mailto:' . $support_emailAddress,
       ];
     }
     $organization_name = $config->get('organization_name') ?? FALSE;

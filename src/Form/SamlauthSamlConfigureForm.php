@@ -1039,6 +1039,25 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     if (!$idp_cert_type && (($keyname && $filename) || ($keyname && $full_cert) || ($filename && $full_cert))) {
       $form_state->setErrorByName("idp_cert_encryption", $this->t('IdP certificate and filename cannot both be set.'));
     }
+
+    $technical_name = $form_state->getValue('technical_givenName');
+    $technical_email = $form_state->getValue('technical_emailAddress');
+    // If one but not both are present, throw an error.
+    if ((!empty($technical_name) || !empty($technical_email)) && (empty($technical_name) || empty($technical_email))) {
+      $form_state->setErrorByName('technical_emailAddress', $this->t('Both technical contact name and email must be provided.'));
+    }
+    $support_name = $form_state->getValue('support_givenName');
+    $support_email = $form_state->getValue('support_emailAddress');
+    // If one but not both are present, throw an error.
+    if ((!empty($support_name) || !empty($support_email)) && (empty($support_name) || empty($support_email))) {
+      $form_state->setErrorByName('support_emailAddress', $this->t('Both support contact name and email must be provided.'));
+    }
+    $organization_name = $form_state->getValue('organization_name');
+    $organization_url = $form_state->getValue('organization_url');
+    // If one but not both are present, throw an error.
+    if ((!empty($organization_name) || !empty($organization_url)) && (empty($organization_name) || empty($organization_url))) {
+      $form_state->setErrorByName('organization_url', $this->t('Both organization name and URL must be provided.'));
+    }
   }
 
   /**
