@@ -383,7 +383,7 @@ class SamlController extends ControllerBase {
       else {
         $destination = '/' . $destination;
       }
-      $destination_url = Url::fromUri('internal:' . $destination)->setAbsolute()->toString();
+      $destination_url = Url::fromUri('internal:' . $destination)->setAbsolute()->toString(TRUE)->getGeneratedUrl();
 
       // After we return from this controller, Drupal immediately redirects to
       // the path set in the 'destination' parameter (for the current URL being
