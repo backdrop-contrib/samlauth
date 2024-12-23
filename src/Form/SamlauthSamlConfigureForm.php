@@ -1146,7 +1146,6 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       'security_encryption_algorithm',
       'security_request_authn_context',
       'request_set_name_id_policy',
-      'sp_name_id_format',
       'security_want_name_id',
       'security_allow_repeat_attribute_name',
       'security_logout_reuse_sigs',
