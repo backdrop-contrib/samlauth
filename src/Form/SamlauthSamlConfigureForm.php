@@ -5,6 +5,7 @@ namespace Drupal\samlauth\Form;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Drupal\key\Plugin\KeyPluginBase;
 use Drupal\samlauth\Controller\SamlController;
 use OneLogin\Saml2\Metadata;
 use OneLogin\Saml2\Utils as SamlUtils;
