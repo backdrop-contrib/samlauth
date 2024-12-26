@@ -297,7 +297,7 @@ and never changes. If it ever changes, the SAML Authentication module does not
 recognize the login as belonging to the right Drupal account anymore. If the
 changed value was not seen in a previous SAML login before, then a new Drupal
 account is created - and duplicate Drupal accounts will likely create
-operational issues for your site. If the changed value was alreayd seen in a
+operational issues for your site. If the changed value was already seen in a
 previous SAML login, then a different/wrong existing Drupal user is logged in,
 which constitutes a security risk.
 
@@ -363,8 +363,13 @@ admin/config/people/saml:
   (Enabling this is discouraged in favor of prepopulating authmap entries.)
 * "Login / Logout" (Hopefully all options speak for themselves.)
 
+And re-enable "Strict validation" and "Caching / validity" options in
+admin/config/people/saml/saml.
+
 CONSIDERATIONS REGARDING YOUR DRUPAL USERS
 ------------------------------------------
+
+### User linking is a potential security risk
 
 When users log in for the first time through the SAML IdP, they can, in order
 of decreasing preference:
@@ -395,6 +400,8 @@ that can assist here. (Any known links to documentation that gives an overview
 Using the migrate system to populate data is documented at e.g.
 https://www.drupal.org/node/2574707, but that is not a quick example/overview.)
 
+### Login through the IdP vs locally; local password / email change
+
 After users have logged in through the SAML IdP, the association between that
 particular login and the Drupal user gets remembered. From this point on,
 * the above considerations do not apply to this user anymore. (SAML login data
@@ -424,6 +431,23 @@ Users who have been created by the IdP login process get no password, so they
 can only log in locally after using Drupal's 'password reset email'
 functionality. They only have acces to that if they have a role which is
 "allowed to use Drupal login also when associated with a SAML login"
+
+### Exposure of existing user names / email addresses
+
+If a user cannot log in because the username / email provided in the SAML data
+is already used by an existing account (which is linked to a different unique
+ID already, or if the configuration disallows linking), the user sees a message
+that the specific name / email already exists.
+
+This (ability to probe your Drupal application for specific accounts existing)
+can be considered exposure of private information. However:
+- It can only be exploited by anyone, if your configuration does not require
+  SAML messages to be signed, which is very much discouraged.
+- Beyond that, you should be able to trust your IdP (administrators) to not
+  probe your system.
+
+If this is considered a problem, the corresponding UserVisibleExceptions should
+be replaced by 'internal' exceptions.
 
 OCCASIONALLY ASKED QUESTIONS
 ----------------------------
@@ -457,7 +481,7 @@ one that browsers should be using. This is often 'http://' where you need
 module (e.g. it can influence URL values output by the metatag module).
 Drupal has settings that must be configured to derive the original URL (as
 used by the browser) from the proxy's HTTP headers. Documentation can be
-found at https://www.drupal.org/node/425990, section "Configuration".
+found at https://www.drupal.org/docs/getting-started/installing-drupal/using-a-load-balancer-or-reverse-proxy.
 
 ### From Developers
 

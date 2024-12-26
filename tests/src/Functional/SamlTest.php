@@ -6,7 +6,6 @@ use Drupal\samlauth\Controller\SamlController;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Core\Test\AssertMailTrait;
 use Drupal\Core\Url;
-use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
 use OneLogin\Saml2\Utils as SamlUtils;
 

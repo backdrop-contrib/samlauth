@@ -350,7 +350,7 @@ class SamlService {
     $account = $unique_id = NULL;
     if (!isset($acs_exception)) {
       $unique_id = $this->getAttributeByConfig('unique_id_attribute');
-      if ($unique_id) {
+      if (isset($unique_id)) {
         $account = $this->externalAuth->load($unique_id, 'samlauth') ?: NULL;
       }
     }
@@ -488,12 +488,12 @@ class SamlService {
       }
       // Linking by name / email: we also select accounts if they are blocked
       // (and throw an exception later on) because 1) we don't want the
-      // selection to be dependent on the current account's state; 2) name and
-      // email are unique and would otherwise lead to another error while
-      // trying to create a new account with duplicate values.
+      // selection to be dependent on the current account's state; 2) name is
+      // unique and would otherwise lead to another error while trying to
+      // create a new account with duplicate values.
       if (!$account) {
         $name = $this->getAttributeByConfig('user_name_attribute');
-        if ($name && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
+        if (isset($name) && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
           $account = current($account_search);
           if ($config->get('map_users_name')) {
             $this->logger->info('SAML login for name @name (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', [
@@ -502,21 +502,35 @@ class SamlService {
             ]);
           }
           else {
-            // We're not configured to link the account by name, but we still
-            // looked it up by name so we can give a better error message than
-            // the one caused by trying to save a new account with a duplicate
-            // name, later.
-            $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account name @name and we are not configured to automatically link accounts.', [
-              '@saml_id' => $unique_id,
-              '@name' => $account->getAccountName(),
-            ]);
-            throw new UserVisibleException('A local user account with your login name already exists, and the current configuration disallows its use.');
+            // Check ability to link this user by email here, to prevent
+            // another lookup.
+            $account_allowed = FALSE;
+            if ($config->get('map_users_mail') && $mail = $this->getAttributeByConfig('user_mail_attribute')) {
+              if (strcasecmp($mail, $account->getEmail()) == 0) {
+                $this->logger->info('SAML login for email @mail (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', [
+                  '@mail' => $mail,
+                  '@uid' => $account->id(),
+                ]);
+                $account_allowed = TRUE;
+              }
+            }
+            if (!$account_allowed) {
+              // We're not configured to link the account by name, but we still
+              // looked it up by name so we can give a better error message
+              // than the one caused by trying to save a new account with a
+              // duplicate name, later.
+              $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account name @name and we are not configured to automatically link accounts.', [
+                '@saml_id' => $unique_id,
+                '@name' => $account->getAccountName(),
+              ]);
+              throw new UserVisibleException('A local user account with your login name already exists, and the current configuration disallows its use.');
+            }
           }
         }
       }
       if (!$account) {
         $mail = $this->getAttributeByConfig('user_mail_attribute');
-        if ($mail && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
+        if (isset($mail) && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
           $account = current($account_search);
           if ($config->get('map_users_mail')) {
             $this->logger->info('SAML login for email @mail (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', [
@@ -562,7 +576,7 @@ class SamlService {
         $this->externalAuth->userLoginFinalize($account, $unique_id, 'samlauth');
       }
       else {
-        throw new UserVisibleException('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
+        throw new UserVisibleException('No existing user account matches the unique ID in the SAML data. This authentication service does not create new accounts.');
       }
     }
     elseif ($account->isBlocked()) {
@@ -868,7 +882,7 @@ class SamlService {
    *
    * @return mixed|null
    *   The SAML attribute value; NULL if the attribute value, or configuration
-   *   key, was not found.
+   *   key, was not found. Never ''.
    *
    * @todo in v4 we should force people to configure things only by 'regular'
    *   name, not by friendly name, so the equivalent of this method won't
@@ -884,7 +898,8 @@ class SamlService {
     if ($attribute_name) {
       $attributes = $this->getAttributes();
     }
-    return $attribute_name && !empty($attributes[$attribute_name][0]) ? $attributes[$attribute_name][0] : NULL;
+    return $attribute_name && isset($attributes[$attribute_name][0]) && $attributes[$attribute_name][0] !== ''
+      ? $attributes[$attribute_name][0] : NULL;
   }
 
   /**
