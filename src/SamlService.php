@@ -618,16 +618,20 @@ class SamlService {
         throw new UserVisibleException('A local user account matching your login already exists, and the current configuration disallows its use.');
       }
     }
-    $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
 
-    // linkExistingAccount() does not tell us whether the link was actually
-    // successful; it silently continues if the account was already linked
-    // to a different unique ID. This would mean a user who has the power
-    // to change their user name / email on the IdP side, potentially has
-    // the power to log into different accounts (as long as they only log
-    // into accounts that already are linked to a different IdP user).
     $linked_id = $this->authmap->get($account->id(), 'samlauth');
-    if ($linked_id != $unique_id) {
+    if ($linked_id && $linked_id != $unique_id) {
+      // With externalauth <2.0.3, linkExistingAccount() silently continues
+      // without changing anything if $account is already linked to a different
+      // unique ID. This means a user who has the power to change their
+      // username / email on the IdP side, potentially has the power to log
+      // into different accounts (as long as they only log into accounts that
+      // already are linked to a different IdP user; once $unique_id is
+      // actually linked to an account, this situation is over.)
+      // With externalauth >=2.0.3, linkExistingAccount() overwrites the
+      // existing ID, so if accounts somehow have the same [name / email /
+      // other field that is allowed for linking], all those accounts can log
+      // in as the same Drupal user.
       $this->logger->warning('Denying login: existing Drupal account @uid matches SAML login for unique ID @saml_id, but the account is already linked to SAML login ID @linked_id. If a new account should be created despite the earlier match, temporarily turn off matching. If this login should be linked to user @uid, remove the earlier link.', [
         '@uid' => $account->id(),
         '@saml_id' => $unique_id,
@@ -635,6 +639,8 @@ class SamlService {
       ]);
       throw new UserVisibleException('Your login data match an earlier login by a different SAML user.');
     }
+
+    $this->externalAuth->linkExistingAccount($unique_id, 'samlauth', $account);
   }
 
   /**

@@ -397,11 +397,11 @@ class SamlLoginTest extends KernelTestBase {
       //   name is preferred for linking (or giving error). And if sync_mail is
       //   on, that would lead to a duplicate email, per above.
       // - Linking an account that is already linked to another unique ID
-      //   SHOULD give an error AND DOES NOT: BUG. @todo fix.
+      //   throws an error.
       [
         ['map_users_name' => TRUE, 'map_users_mail' => TRUE],
         ['U' => 2, 'n' => 'user1', 'm' => 'user2@example.com'],
-        ['user1', 'user1@example.com'],
+        'Your login data match an earlier login by a different SAML user.',
       ],
       [
         ['map_users_name' => TRUE, 'map_users_mail' => TRUE, 'USERS' => [1, 2]],

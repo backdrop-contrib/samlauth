@@ -116,7 +116,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'login_menu_item_title' => $this->t('The title of the SAML login link in the User account menu. Defaults to "Log in".'),
       'logout_menu_item_title' => $this->t('The title of the SAML logout link in the User account menu. Defaults to "Log out".'),
       'login_link_title' => $this->t('Displays a link to SAML login on the login form, with the provided title.'),
-      'login_auto_redirect' => $this->t("When enabled, the regular Drupal login screen at /user/login cannot be used. The login block still works, so that's the only place where the login link is still seen (if a titile is provided). /user/logout is still regular Drupal logout (as supposed to /saml/logout which redirects to the IdP and potentially logs out from other sites)."),
+      'login_auto_redirect' => $this->t("When enabled, the regular Drupal login screen at /user/login cannot be used. The login block still works, so that's the only place where the login link is still seen (if a title is provided). /user/logout is still regular Drupal logout (as supposed to /saml/logout which redirects to the IdP and potentially logs out from other sites)."),
     ]);
 
     $form['user_info'] = [

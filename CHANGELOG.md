@@ -2,6 +2,13 @@ These are selected quick notes for developers and administrators of the settings
 form. For all changes, see the
 [release notes on drupal.org](https://www.drupal.org/project/samlauth/releases).
 
+8.x-3.11:
+
+* Login behavior:
+  - Linking to an existing already-linked user is disallowed (again, as was
+    the case with externalauth < 2.0.3).
+  - Fixed linking to email address for logins where name is known.
+
 8.x-3.10:
 
 * Added /saml/reauth route. (No further documentation provided; expected to
