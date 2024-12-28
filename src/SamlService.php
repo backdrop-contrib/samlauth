@@ -1043,21 +1043,6 @@ class SamlService {
           // call is necessary.
           'url' => Url::fromRoute('samlauth.saml_controller_acs', [], ['absolute' => TRUE])->toString(TRUE)->getGeneratedUrl(),
         ],
-        'attributeConsumingServices' => [
-          "serviceName" => "Ignored",
-          "requestedAttributes" => [
-            [
-              "name" => "https://data.gov.dk/model/core/specVersion",
-              "isRequired" => true,
-              "nameFormat" => "urn:oasis:names:tc:SAML:2.0:attrname-format:uri"
-            ],
-          ],
-        ],
-        'Organization' => [
-          "organizationName" => "The University of Texas at Austin",
-          "organizationDisplayName" => "The University of Texas at Austin",
-          "organizationURL" => "https://www.utexas.edu",
-        ],
         'singleLogoutService' => [
           'url' => Url::fromRoute('samlauth.saml_controller_sls', [], ['absolute' => TRUE])->toString(TRUE)->getGeneratedUrl(),
         ],
