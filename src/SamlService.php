@@ -139,6 +139,17 @@ class SamlService {
   protected $keyRepository;
 
   /**
+   * The allowed support types by the OneLogin SAML2 library.
+   */
+  public static $contact_types = [
+    'technical',
+    'support',
+    'administrative',
+    'billing',
+    'other',
+  ];
+
+  /**
    * Constructs a new SamlService.
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
@@ -1114,26 +1125,22 @@ class SamlService {
     if ($base_url) {
       $library_config['baseurl'] = $base_url;
     }
-    $technical_givenName = $config->get('technical_givenName') ?? FALSE;
-    $technical_emailAddress = $config->get('technical_emailAddress') ?? FALSE;
-    if ($technical_givenName && $technical_emailAddress) {
-      $library_config['contactPerson']['technical'] = [
-        'givenName' => 'mailto:' . $technical_givenName,
-        'emailAddress' => $technical_emailAddress,
-      ];
+    foreach (self::$contact_types as $type) {
+      $name = $config->get($type . '_givenName') ?? FALSE;
+      $email = $config->get($type . '_emailAddress') ?? FALSE;
+      if ($name && $email) {
+        $library_config['contactPerson'][$type] = [
+          'givenName' => $name,
+          'emailAddress' => 'mailto:' . $email,
+        ];
+      }
     }
-    $support_givenName = $config->get('support_givenName') ?? FALSE;
-    $support_emailAddress = $config->get('support_emailAddress') ?? FALSE;
-    if ($support_givenName && $support_emailAddress) {
-      $library_config['contactPerson']['support'] = [
-        'givenName' => $support_givenName,
-        'emailAddress' => 'mailto:' . $support_emailAddress,
-      ];
-    }
+
     $organization_name = $config->get('organization_name') ?? FALSE;
     $organization_url = $config->get('organization_url') ?? FALSE;
-    if ($organization_name && $organization_url) {
-      $library_config['organization']['en-US'] = [
+    $organization_language = $config->get('organization_language') ?? FALSE;
+    if ($organization_name && $organization_url && $organization_language) {
+      $library_config['organization'][$organization_language] = [
         'name' => $organization_name,
         'displayname' => $organization_name,
         'url' => $organization_url,
