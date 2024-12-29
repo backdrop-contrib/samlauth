@@ -871,9 +871,12 @@ class SamlService {
    *   See https://drupal.org/i/3211529
    */
   public function getAttributes() {
-    $auth = $this->getSamlAuth('acs');
-    return [static::NAMEID_MOCK_ATTRIBUTE_NAME => [$auth->getNameId()]]
-      + $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
+    $auth = $this->getSamlAuth('acs', FALSE);
+    if ($auth) {
+      return [static::NAMEID_MOCK_ATTRIBUTE_NAME => [$auth->getNameId()]]
+        + $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
+    }
+    return [];
   }
 
   /**
@@ -918,9 +921,14 @@ class SamlService {
    *   argument may seem strange, until you realize that _these callers_ only
    *   have one possible purpose too, in practice. This is almost sure to be
    *   refactored away in a future version.)
+   * @param $initialize
+   *   (optional) If False and if the Auth object was not initialized yet,
+   *   return NULL.
+   *
+   * @return ?\OneLogin\Saml2\Auth
    */
-  protected function getSamlAuth($purpose = '') {
-    if (!isset($this->samlAuth[$purpose])) {
+  protected function getSamlAuth($purpose = '', $initialize = TRUE) {
+    if ($initialize && !isset($this->samlAuth[$purpose])) {
       $base_url = '';
       $config = $this->configFactory->get('samlauth.authentication');
       if ($config->get('use_base_url')) {
@@ -933,7 +941,7 @@ class SamlService {
       $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository));
     }
 
-    return $this->samlAuth[$purpose];
+    return $this->samlAuth[$purpose] ?? NULL;
   }
 
   /**

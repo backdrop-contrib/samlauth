@@ -467,7 +467,7 @@ Q: Does this module have an option to redirect all not-logged-in users to the
 IdP login screen?
 
 A: No. This is something that a separate module like require_login / r4032login
-could do, with more fine grained configuration options that we don't want to
+could do, with more fine-grained configuration options that we don't want to
 duplicate. If there is a reason that this module cannot be used together
 with the samlauth module, feel free to open an issue that clearly states why.
 
@@ -482,6 +482,22 @@ module (e.g. it can influence URL values output by the metatag module).
 Drupal has settings that must be configured to derive the original URL (as
 used by the browser) from the proxy's HTTP headers. Documentation can be
 found at https://www.drupal.org/docs/getting-started/installing-drupal/using-a-load-balancer-or-reverse-proxy.
+
+Q: Is there a setting to disable this module's behavior on local installs?
+
+The SAML functionality should not interfere with Drupal in any way; only
+restrictions on using local Drupal login should be undone if necessary.
+
+If the regular login screen is redirected to SAML login, undo this with:
+
+`drush config:set samlauth.authentication login_auto_redirect 0`
+
+If certain users/roles are restricted from logging in, undo this with:
+
+`drush config:set --input-format=yaml samlauth.authentication drupal_login_roles '["authenticated"]'`
+
+Note that this only applies if these users actually have a password to log in
+locally. `drush uli` still works when above restrictions are in place.
 
 ### From Developers
 
