@@ -9,13 +9,15 @@ our site. The Service Provider (SP) is a standalone piece of code (implemented
 by the SAML PHP Toolkit) which takes care of the SAML communication /
 validating the assertions sent back by the IdP.
 
-In our case, the SP is integrated into the Drupal site: the SAML Authentication
-module
+In our case, the SP is integrated into the Drupal site, so "your SP" is "your
+Drupal application". The SAML Authentication module
 - enables configuring most options for the SP
 - exposes some URL paths which pass HTTP requests (which either start the login
   procedure or are redirected back from the IdP) into the SP library/code
 - logs the user in to Drupal / out of Drupal, after the SP has validated the
   assertions in these HTTP requests.
+- configures other things like disabling local Drupal login for users who must
+  only log in through SAML.
 
 For more information about SAML, see: https://en.wikipedia.org/wiki/SAML_2.0
 
@@ -117,13 +119,13 @@ you want to enable links for testing. (This is optional; direct URLs
 /saml/login and /saml/logout can also be used for testing.) Then (save and)
 switch to the "SAML" tab.
 
-## Stage 1: SAML communication setup
-
 Testing SAML login is often a challenge to get right in one go. For those not
 familiar with SAML setup, it may be less confusing to test things in separate
-steps, so several configuration sections below document a specific action to
-take after configuring that one section. You're free to either take those
-steps separately or configure everything at once / in a different order.
+stages, so several configuration sections below document a specific action to
+take after configuring that one section. You're free to either go through those
+stages separately or configure everything at once / in a different order.
+
+## Stage 1: SAML communication setup
 
 The main thing to do in this first stage is: make sure that the SP can talk to
 the IdP and vice versa. For this to happen, both sides will need to know data
@@ -133,16 +135,21 @@ from the other side:
 * A public SSL certificate (so communication can be encrypted).
 
 How this data is exchanged (e.g. sent by email, or through XML files that
-are either sent or retrieved from a URL), and which side sends their data
-first, depends on your organization's structure / preferences.
+are either exchanged manually or retrieved from a URL), and which side sends
+their data first, depends on your organization's structure / preferences.
+
+This information is available / configurable at the "SAML" tab.
 
 ### Service Provider:
 
-The Entity ID can be any value, used to identify this particular SP / Drupal
-application to the IdP - as long as it is unique among all SPs known by the
-IdP. (Many SPs make it equal to the URL for the application or metadata, but
-that's just a convention. Choose anything you like - unless the organization
-operating the IdP mandates a specific value/format.)
+URLs are hardcoded by this module. If you see HTTP where you want to see HTTPS:
+See the question / answer section at the bottom.
+
+The Entity ID is used to identify this particular SP to the IdP, and can be any
+value as long as it is unique among all SPs known by the IdP. (Many SPs make it
+equal to the URL for the application or metadata, but that's just a convention.
+Choose anything you like, unless the organization operating the IdP mandates a
+specific value/format.)
 
 If your SSL certificate / private key is stored safely as discussed above at
 "Requirements", reference them in this section. Alternatively (less safe) select
@@ -166,8 +173,8 @@ what the IdP expects, then go through other sections to get the details of
 the XML exactly right:
 * SAML Message Construction
 * SAML Message Validation
-* The names of attributes mentioned in "Drupal Login Using SAML Data" (other
-  configuration tab) and optionally "User field mapping" (provided by
+* The names of attributes mentioned in "Drupal Login Using SAML Data" (
+  "Login/Users" tab) and optionally "User field mapping" (provided by
   samlauth_user_fields module)
 
 ### Identity Provider:
@@ -195,12 +202,8 @@ strictness/validation settings off.)
 This ever expanding section of advanced configuration won't be discussed here
 in detail; hopefully the setting descriptions give a clue. Just some hints:
 
-- Turn strictness / signing / validation settings off only temporarily for ###
+- Turn strictness / signing / validation settings off only temporarily for
   testing / if absolutely needed.
-- The "NameID" related settings can likely be turned off, as long as the Drupal
-  module has no support for NameID / if the IdP is using a SAML attribute to
-  supply the Unique ID value. (I didn't want to turn them off by default
-  until some further module work was done, though.)
 
 ### Debugging options
 
@@ -212,63 +215,44 @@ Drupal user accounts. (After trying to log in through the IdP, Drupal's "Recent
 log messages" should contain the XML message that contains the assertion /
 attributes.)
 
-### SAMLtest.id Identity Provider for testing
-
-SAMLtest is a SAML 2.0 IdP and SP testing service. It is useful if you want to
-test login through this module while not having Identity Provider data yet.
-* Configure the 'Service Provider' section as above.
-* In "Caching / Validity", raise the "Metadata validity". (SAMLtest.id will
-  forget that your SP exists, after this amount of time.)
-* Configure the 'Identity Provider' with data found at
-  https://samltest.id/download, "SAMLtest’s IdP" section (doublecheck the below
-  values there):
-  - Entity ID: https://samltest.id/saml/idp
-  - Single Sign On Service: https://samltest.id/idp/profile/SAML2/Redirect/SSO
-  - Type of values to save for the certificate(s): Configuration
-  - Primary x509 Certificate: paste text blurb into the "Certificate" text area.
-* Save the configuration.
-* Edit anonymous role permissions to enable the "View service provider metadata"
-  permission in /admin/people/permissions/anonymous#module-samlauth
-* Download the metadata from your Drupal site at /saml/metadata
-* Upload it at https://samltest.id/upload.php
-
-Now the /saml/login link should redirect you to a functional login page at
-the SAMltest.id website. Check "Don't Remember Login" to try multiple user
-accounts - or if you forgot: try /saml/reauth instead of /saml/login.
-
-For fully working Drupal login, still complete stage 2 below. At the moment,
-the most basic data to configure at "Drupal Login Using SAML Data" seems to be:
-- Unique ID attribute: uid
-- Check "Create users from SAML data"
-- "User name attribute": uid
-- "User email attribute": mail
-But the SAMltest.id page likely gives you functional data to test with, which
-is a bit more extensive.
-
 ### Further debugging
 
-If needed, you can use third party tools to help debug your SSO flow with SAML.
-The following are browser extensions that can be used on Linux, macOS and
-Windows:
-
-Google Chrome:
-- SAML Chrome Panel: https://chrome.google.com/webstore/detail/saml-chrome-panel/paijfdbeoenhembfhkhllainmocckace
-
-FireFox:
-- SAML Tracer: https://addons.mozilla.org/en-US/firefox/addon/saml-tracer/
-
-These tools will allow you to see the SAML request/response and the method
-(GET, POST or Artifact) the serialized document is sent/received.
-
-If you are configuring a new SAML connection it is wise to first test without
-encryption enabled and then enable encryption once a non encrypted assertion
-is successful.
-
-The listed third party tools do not decrypt SAML assertions, but you can use
-OneLogin's Decrypt XML tool at https://www.samltool.com/decrypt.php.
-
-You can also find more debugging tools located at
+Third party tools to help debug your SSO flow with SAML can be found at
 https://www.samltool.com/saml_tools.php.
+
+### Using a test Identity Provider
+
+If you want to test SAML login against a different (test) IdP than the
+'production' one you should connect to in the end, here's a few options:
+
+1. Use an online service. (Search e.g. "SAML test service" and look for an IdP.
+   None of the currently available options are documented in detail, here.)
+
+2. Locally install a Docker instance containing a preconfigured IdP. Note that,
+   since all communication happens through browser redirects, there is nothing
+   preventing a remotely hosted Drupal application from configuring 'localhost'
+   as Single Sign-On Service.
+
+One Docker based IDP can be found at https://github.com/kenchan0130/docker-simplesamlphp
+/ https://github.com/3breadt/docker-simplesamlphp. Instructions:
+
+* Edit the 3 'SP' environment variables in docker-compose.yml to be equal to
+  what is set/shown in Drupal's "Service Provider" section.
+* In Drupal for the IdP, set (and change the ports to match docker-compose.yml)
+  - Entity ID: https://localhost:8080/simplesaml/saml2/idp/metadata.php
+  - Single Sign-On Service: http://localhost:8080/simplesaml/saml2/idp/SSOService.php
+  - Single Logout Service: http://localhost:8080/simplesaml/saml2/idp/SingleLogoutService.php
+  - X.509 certificate(s):
+    - Type: Configuration; paste the contents of config/simplesamlphp/server.crt
+    - Or: Type: file; copy config/simlesamlphp/server.crt somewhere appropriate.
+* `docker compose up`
+
+If the /saml/login flow is cached at the IdP and you want to see the login
+screen again: visit /saml/reauth instead.
+
+The only attribute sent in SAML messages is "email", so to test actual
+login to Drupal: configure "email" in 3 places for Unique ID, name and email
+attribute, per Stage 2.
 
 ## Stage 2: SAML attributes / Drupal Login
 
@@ -328,6 +312,10 @@ There are two possible sources for the ID value:
   unique user values as attributes to be sent as part of the SAML login
   response which cannot be configured as a standard NameID. (e.g. an employee
   number.)
+  - The "NameID" related settings in the "SAML" tab (that are also visible
+    when selecting "NameID" in the "Login/Users" tab) can likely be turned off.
+    They can be kept/turned on if they don't cause any trouble; they're just
+    unused.
 
 It is up to you and/or the administrator of the IdP, to work out which source
 should be used for the unique ID.

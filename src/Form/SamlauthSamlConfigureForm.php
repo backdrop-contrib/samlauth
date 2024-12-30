@@ -119,7 +119,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     $this->addElementsFromSchema($form['service_provider']['caching'], $schema_definition, $config, [
       'metadata_valid_secs' => [
         '#type' => 'textfield',
-        '#description' => $this->t('The maximum amount of time that the metadata (which is often cached by IdPs) should be considered valid, in readable format, e.g. "1 day 8 hours". As the XML expresses "validUntil" as a specific date, a HTTP cache will contain XML with slowly decreasing validity. The default (when left empty) is @default.', ['@default' => $default]),
+        '#description' => $this->t('The maximum amount of time that the metadata (which is often cached by IdPs) should be considered valid, in readable format, e.g. "1 day 8 hours". The XML expresses "validUntil" as a specific date, so a HTTP cache will contain XML with slowly decreasing validity. The default (when left empty) is @default.', ['@default' => $default]),
         '#default_value' => $value ? $this->makeReadableDuration($value) : NULL,
       ],
       'metadata_cache_http' => [

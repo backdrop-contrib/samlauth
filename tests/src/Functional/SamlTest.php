@@ -15,8 +15,6 @@ use OneLogin\Saml2\Utils as SamlUtils;
  * The most important part (login functionality) isn't tested yet.
  *
  * @group samlauth
- *
- * @todo fixtures/samlauth.authentication.yml is unused at the moment; delete?
  */
 class SamlTest extends BrowserTestBase {
 
