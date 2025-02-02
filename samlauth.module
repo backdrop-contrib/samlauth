@@ -211,6 +211,9 @@ function samlauth_user_presave(UserInterface $account) {
 
 /**
  * Implements hook_views_data_alter().
+ *
+ * @deprecated in samlauth:3.10 and is removed from samlauth:4.0. Use
+ *   "authmap_link_delete" field plugin instead.
  */
 function samlauth_views_data_alter(array &$data) {
   if (!isset($data['authmap']['uid'])) {

@@ -289,7 +289,7 @@ This is why the value for the "Unique ID source" should be configured once and
 never be changed. If it ever changes, that likely means that all existing
 links between earlier SAML logins and Drupal accounts are invalid, and should
 be deleted. (The links are stored in the authmap table, for which a UI screen
-exists at admin/config/people/saml/authmap, to delete 'wrong' links. There is
+exists at admin/people/authmap/samlauth, to delete 'wrong' links. There is
 explicitly no edit facility for these links, because they should only be added
 by SAML logins (or prepopulated by a system administrator to allow a specific
 set of users to use SAML login).
