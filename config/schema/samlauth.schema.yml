@@ -17,13 +17,13 @@ samlauth.authentication:
       type: boolean
       label: 'Auto redirect Drupal login screen to SAML'
     login_redirect_url:
-      type: string
+      type: label
       label: 'Login redirect URL'
     logout_redirect_url:
-      type: string
+      type: label
       label: 'Logout redirect URL'
     error_redirect_url:
-      type: string
+      type: label
       label: 'Error redirect URL'
     error_throw:
       type: boolean
@@ -47,7 +47,7 @@ samlauth.authentication:
       type: string
       label: 'Entity ID'
     sp_name_id_format:
-      type: string
+      type: label
       label: 'NameID format'
     sp_x509_certificate:
       type: string

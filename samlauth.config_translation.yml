@@ -1,5 +1,5 @@
 samlauth.authentication:
-  title: 'SAML link titles'
+  title: 'SAML Authentication'
   base_route_name: samlauth.samlauth_configure_form
   names:
     - samlauth.authentication
