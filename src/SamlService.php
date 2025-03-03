@@ -2,6 +2,7 @@
 
 namespace Drupal\samlauth;
 
+use Drupal\Component\Plugin\Discovery\DiscoveryInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -16,6 +17,7 @@ use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\key\KeyRepositoryInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
+use Drupal\samlauth\Event\SamlauthUserAllowedEvent;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
@@ -139,6 +141,11 @@ class SamlService {
   protected $keyRepository;
 
   /**
+   * @var \Drupal\Component\Plugin\Discovery\DiscoveryInterface
+   */
+  private DiscoveryInterface $discovery;
+
+  /**
    * Constructs a new SamlService.
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
@@ -165,8 +172,9 @@ class SamlService {
    *   The messenger service.
    * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
    *   The string translation service.
+   * @param \Drupal\Component\Plugin\Discovery\DiscoveryInterface $discovery
    */
-  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
+  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation, DiscoveryInterface $discovery) {
     $this->externalAuth = $external_auth;
     $this->authmap = $authmap;
     $this->configFactory = $config_factory;
@@ -190,6 +198,7 @@ class SamlService {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
       SamlUtils::setProxyVars(TRUE);
     }
+    $this->discovery = $discovery;
   }
 
   /**
@@ -351,8 +360,16 @@ class SamlService {
     }
     catch (\Exception $acs_exception) {
     }
+
     $account = $unique_id = NULL;
     if (!isset($acs_exception)) {
+
+      $allowed_event = new SamlauthUserAllowedEvent($this->getAttributes());
+      $this->eventDispatcher->dispatch($allowed_event, SamlauthEvents::USER_ALLOWED);
+      if (!$allowed_event->isAllowed()) {
+        throw new UserVisibleException($this->t('You are not allowed to login via this service.'));
+      }
+
       $unique_id = $this->getAttributeByConfig('unique_id_attribute');
       if (isset($unique_id)) {
         $account = $this->externalAuth->load($unique_id, 'samlauth') ?: NULL;
