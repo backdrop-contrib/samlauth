@@ -2,7 +2,6 @@
 
 namespace Drupal\samlauth;
 
-use Drupal\Component\Plugin\Discovery\DiscoveryInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -139,11 +138,6 @@ class SamlService {
    * @var \Drupal\key\KeyRepositoryInterface
    */
   protected $keyRepository;
-
-  /**
-   * @var \Drupal\Component\Plugin\Discovery\DiscoveryInterface
-   */
-  private DiscoveryInterface $discovery;
 
   /**
    * Constructs a new SamlService.
