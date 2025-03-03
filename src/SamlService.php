@@ -172,9 +172,8 @@ class SamlService {
    *   The messenger service.
    * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
    *   The string translation service.
-   * @param \Drupal\Component\Plugin\Discovery\DiscoveryInterface $discovery
    */
-  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation, DiscoveryInterface $discovery) {
+  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
     $this->externalAuth = $external_auth;
     $this->authmap = $authmap;
     $this->configFactory = $config_factory;
@@ -198,7 +197,6 @@ class SamlService {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
       SamlUtils::setProxyVars(TRUE);
     }
-    $this->discovery = $discovery;
   }
 
   /**
@@ -363,13 +361,6 @@ class SamlService {
 
     $account = $unique_id = NULL;
     if (!isset($acs_exception)) {
-
-      $allowed_event = new SamlauthUserAllowedEvent($this->getAttributes());
-      $this->eventDispatcher->dispatch($allowed_event, SamlauthEvents::USER_ALLOWED);
-      if (!$allowed_event->isAllowed()) {
-        throw new UserVisibleException($this->t('You are not allowed to login via this service.'));
-      }
-
       $unique_id = $this->getAttributeByConfig('unique_id_attribute');
       if (isset($unique_id)) {
         $account = $this->externalAuth->load($unique_id, 'samlauth') ?: NULL;
@@ -489,6 +480,12 @@ class SamlService {
    *   The existing user account derived from the unique ID, if any.
    */
   protected function doLogin($unique_id, ?AccountInterface $account = NULL) {
+    $allowed_event = new SamlauthUserAllowedEvent($this->getAttributes());
+    $this->eventDispatcher->dispatch($allowed_event, SamlauthEvents::USER_ALLOWED);
+    if (!$allowed_event->isAllowed()) {
+      throw new UserVisibleException('You are not allowed to login via this service.');
+    }
+
     $config = $this->configFactory->get('samlauth.authentication');
     $first_saml_login = FALSE;
     if (!$account) {
