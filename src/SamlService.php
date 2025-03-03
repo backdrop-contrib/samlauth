@@ -352,7 +352,6 @@ class SamlService {
     }
     catch (\Exception $acs_exception) {
     }
-
     $account = $unique_id = NULL;
     if (!isset($acs_exception)) {
       $unique_id = $this->getAttributeByConfig('unique_id_attribute');
