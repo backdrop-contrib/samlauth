@@ -363,6 +363,16 @@ class SamlController extends ControllerBase {
     $request_query_parameters = $this->requestStack->getCurrentRequest()->query;
     $destination = $request_query_parameters->get('destination');
     if ($destination) {
+      // After returning from this controller, Drupal immediately redirects to
+      // the path set in the 'destination' parameter (for the current URL being
+      // handled). Remove the paremater, because:
+      // - We want to always redirect to the IdP instead (and only use
+      //   $destination_url after the user gets redirected back here),
+      // - If an exception gets thrown while executing this code, the
+      //   'destination' may be invalid; we want to use the response as set by
+      //   our exception handler. See getShortenedRedirectResponse().
+      $request_query_parameters->remove('destination');
+
       // No need to check for external URL because Core >= 8.6.2 filters those;
       // see processParameterBag().
       // @todo in 4.x, remove this if() for simplicity?
@@ -384,13 +394,6 @@ class SamlController extends ControllerBase {
         $destination = '/' . $destination;
       }
       $destination_url = Url::fromUri('internal:' . $destination)->setAbsolute()->toString(TRUE)->getGeneratedUrl();
-
-      // After we return from this controller, Drupal immediately redirects to
-      // the path set in the 'destination' parameter (for the current URL being
-      // handled). We want to always redirect to the IdP instead (and only use
-      // $destination_url after the user gets redirected back here), so remove
-      // the parameter.
-      $request_query_parameters->remove('destination');
     }
 
     return $destination_url;
