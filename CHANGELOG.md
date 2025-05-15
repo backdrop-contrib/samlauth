@@ -2,6 +2,13 @@ These are selected quick notes for developers and administrators of the settings
 form. For all changes, see the
 [release notes on drupal.org](https://www.drupal.org/project/samlauth/releases).
 
+8.x-3.12:
+
+* Login / logout behavior:
+  - The $return_to parameter to SamlService::login() / ::logout() can be a
+    relative path. (This makes it more consistent with `login_redirect_url` /
+    `logout_redirect_url` values.)
+
 8.x-3.11:
 
 * Login behavior:

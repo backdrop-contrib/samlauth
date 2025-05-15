@@ -456,6 +456,9 @@ class SamlController extends ControllerBase {
    * a request from the /saml/login endpoint was intercepted and altered (e.g.
    * by forwarding it in an email).
    *
+   * Note safety !== existence. Nonexistent URLs / paths are deemed 'safe'
+   * if no other logic regards it unsafe.
+   *
    * While not 100% guaranteed, this protected method is likely to keep
    * existing over major versions. Systems which need nonstandard checks, can
    * modify the acs / sls routes to a child class that overrides this method.
@@ -476,18 +479,18 @@ class SamlController extends ControllerBase {
    */
   protected function ensureSafeRelayState(string $relay_state, bool $after_acs = FALSE): string {
     $safe_url = '';
-
-    if (!UrlHelper::isValid($relay_state, TRUE)) {
+    $absolute = UrlHelper::isExternal($relay_state);
+    if (!UrlHelper::isValid($relay_state, $absolute)) {
       $this->logger->warning('Invalid RelayState parameter found in request; ignoring: @relaystate', ['@relaystate' => $relay_state]);
     }
     else {
-      $safe = FALSE;
       // Only allow hostnames set as trusted hosts. If no trusted hosts are
       // set (which is unlikely because this prompts an error in the Core status
       // report), then only allow the hostname from the current request.
       // @todo remove the config option in v4.x (always check trusted_host_patterns).
       //   also: replace base_url by router.request_context everywhere in the module.
-      if (!$this->config(self::CONFIG_OBJECT_NAME)->get('bypass_relay_state_check')) {
+      $safe = !$absolute || $this->config(self::CONFIG_OBJECT_NAME)->get('bypass_relay_state_check');
+      if (!$safe) {
         $trusted_patterns = Settings::get('trusted_host_patterns');
         if ($trusted_patterns) {
           $redirect_host = parse_url($relay_state, PHP_URL_HOST);
@@ -499,7 +502,7 @@ class SamlController extends ControllerBase {
           }
         }
         else {
-          $safe = !UrlHelper::isExternal($relay_state) || UrlHelper::externalIsLocal($relay_state, $GLOBALS['base_url']);
+          $safe = UrlHelper::externalIsLocal($relay_state, $GLOBALS['base_url']);
         }
         if (!$safe) {
           $this->logger->warning('Untrusted external RelayState parameter found in request; ignoring: @relaystate', ['@relaystate' => $relay_state]);

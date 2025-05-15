@@ -275,7 +275,9 @@ class SamlService {
    *
    * @param string $return_to
    *   (optional) The path to return the user to after successful processing by
-   *   the IdP.
+   *   the IdP. Can be an absolute URL or a relative 'actual Drupal path';
+   *   should not be a Drupal menu path, because that can contain arbitrary
+   *   characters which can be seen as 'invalid'.
    * @param array $parameters
    *   (optional) Extra query parameters to add to the returned redirect URL.
    * @param bool $force_auth
@@ -286,6 +288,8 @@ class SamlService {
    * @return string
    *   The URL of the single sign-on service to redirect to, including query
    *   parameters.
+   *
+   * @see \Drupal\Component\Utility\UrlHelper::isValid()
    */
   public function login($return_to = NULL, array $parameters = [], $force_auth = FALSE) {
     $config = $this->configFactory->get('samlauth.authentication');
@@ -694,13 +698,17 @@ class SamlService {
    *
    * @param string $return_to
    *   (optional) The path to return the user to after successful processing by
-   *   the IdP.
+   *   the IdP. Can be an absolute URL or a relative 'actual Drupal path';
+   *   should not be a Drupal menu path, because that can contain arbitrary
+   *   characters which can be judged as 'invalid'.
    * @param array $parameters
    *   (optional) Extra query parameters to add to the returned redirect URL.
    *
    * @return string
    *   The URL of the single logout service to redirect to, including query
    *   parameters.
+   *
+   * @see \Drupal\Component\Utility\UrlHelper::isValid()
    */
   public function logout($return_to = NULL, array $parameters = []) {
     // Log the Drupal user out at the start of the process if they were still
