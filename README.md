@@ -497,3 +497,50 @@ There should be no need to have an event listener subscribed to
 ExternalAuthEvents::REGISTER (or, likely, ExternalAuthEvents::LOGIN). An
 advantage of SamlauthEvents::USER_SYNC is that an exception can be thrown
 during registration, before a (partly populated) user is saved.
+
+### Known-incomplete functionality
+
+#### Multi-value attributes are not synchronized correctly
+
+If an attribute is passed as an array of multiple values, the
+samlauth_user_fields module takes only the first value and ignores others.
+There's an open issue to fix this, but there's no plan to work on this:
+https://www.drupal.org/i/3522489
+
+#### The authentication context can only be specified as "password" (or nothing)
+
+The module has a setting _Specify authentication context (as "password")_. This
+is currently a checkbox in the configuration UI, which is enabled by default.
+
+This (likely) means: the module specifies to the IdP that all users will be
+logging into the IdP with username + password. This situation is likely to
+become more outdated over time, as IdPs with non-password authentication
+mechanisms become more common. Those IdPs will likely see an error message, e.g.
+_"Authentication method 'XXX' doesn't match requested authentication method 'Password, ProtectedTransport'"_.
+
+The error can likely be bypassed by disabling the setting/checkbox. This means
+that _no_ 'authentication context' is specified in requests to the IdP.
+
+While this is fine, and not known to have specific security consequences, some
+systems may want to explicitly request certain contexts. In this case, the
+module should be changed to have the `security_request_authn_context`
+configuration setting be an array instead of a boolean (or maybe better,
+introduce a new setting that overrides this one). There's no issue for this yet.\
+The reason this started off as a boolean, can be deduced from the
+[SAML PHP Toolkit README](https://github.com/SAML-Toolkits/php-saml):
+```php
+// Authentication context.
+// Set to false and no AuthContext will be sent in the AuthNRequest.
+// Set true or don't present this parameter and you will get an AuthContext 'exact' 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport'.
+// Set an array with the possible auth context values: array ('urn:oasis:names:tc:SAML:2.0:ac:classes:Password', 'urn:oasis:names:tc:SAML:2.0:ac:classes:X509').
+'requestedAuthnContext' => false,
+```
+
+#### Authentication is coupled strictly to user login
+
+It would be possible to, instead of immediately logging the user in, just
+give them a (PHP) user session. This could be useful for custom code that
+wants to give a user some elevated privileges which do not require having a
+dedicated Drupal user. While this is likely possible without a large amount
+of work, it is completely untested. See https://www.drupal.org/i/3519597
+for hints.

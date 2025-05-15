@@ -414,7 +414,8 @@ class SamlController extends ControllerBase {
     if (!$ignore_relay_state) {
       $relay_state = $this->requestStack->getCurrentRequest()->get('RelayState');
       if ($relay_state) {
-        // Check relay state URL; if it's unsafe then just fall back to the default.
+        // Check relay state URL; if it's unsafe (i.e. '' returned) then
+        // fall back to the default.
         $url = $this->ensureSafeRelayState($relay_state, $after_acs);
       }
     }
