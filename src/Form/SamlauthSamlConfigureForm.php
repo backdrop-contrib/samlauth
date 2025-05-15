@@ -839,7 +839,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       // no downside to that and it would enable us to always set TRUE / get rid
       // of this option in a future version of the SAML Toolkit library.
       // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028
-      'security_logout_reuse_sigs' => $this->t('Validation of logout requests/responses can fail on some IdPs (among others, ADFS) if this option is not set. This happens independently of the  "Strict validation" option.'),
+      'security_logout_reuse_sigs' => $this->t('Validation of logout requests/responses can fail on some IdPs (including Microsoft ADFS, Azure AD, Entra, among others) if this option is not set. This happens independently of the  "Strict validation" option.'),
       'strict' => $this->t('Validation failures (partly based on the next options) will cause the SAML conversation to be terminated. In production environments, this <em>must</em> be set.'),
       'security_messages_sign' => [
         '#description' => $this->t('Responses (and logout requests) from the IdP are expected to be signed.'),
