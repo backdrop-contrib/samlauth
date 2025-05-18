@@ -14,6 +14,7 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\Error;
 use Drupal\Core\Utility\Token;
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\samlauth\SamlService;
 use Drupal\samlauth\UserVisibleException;
 use OneLogin\Saml2\Metadata;
@@ -589,6 +590,13 @@ class SamlController extends ControllerBase {
       // and redirect anyway, unless we intercept it first in our own
       // AccessDeniedSubscriber.)
       throw $exception;
+    }
+
+    if ($exception instanceof EntityStorageException) {
+      // When creating a new user during login, the USER_SYNC event is
+      // dispatched during user save, and SqlContentEntityStorage::save()
+      // wraps any exception thrown in a EntityStorageException. Unwrap it.
+      $exception = $exception->getPrevious();
     }
 
     $config = $this->config(self::CONFIG_OBJECT_NAME);
