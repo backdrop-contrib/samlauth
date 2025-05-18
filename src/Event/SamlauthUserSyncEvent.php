@@ -41,7 +41,7 @@ class SamlauthUserSyncEvent extends Event {
    *
    * @var bool
    */
-  protected $accountChanged;
+  protected $accountChanged = FALSE;
 
   /**
    * Constructs a samlauth user sync event object.
