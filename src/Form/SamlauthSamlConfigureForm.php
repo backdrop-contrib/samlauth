@@ -1132,7 +1132,6 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     $this->setNameID($form_state, $config);
 
     foreach ([
-      'metadata_valid_secs',
       'metadata_cache_http',
       'security_metadata_sign',
       'sp_entity_id',
