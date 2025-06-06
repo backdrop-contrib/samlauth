@@ -139,6 +139,17 @@ class SamlService {
   protected $keyRepository;
 
   /**
+   * The allowed support types by the OneLogin SAML2 library.
+   */
+  public static $contact_types = [
+    'technical',
+    'support',
+    'administrative',
+    'billing',
+    'other',
+  ];
+
+  /**
    * Constructs a new SamlService.
    *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
@@ -1151,7 +1162,27 @@ class SamlService {
     if ($base_url) {
       $library_config['baseurl'] = $base_url;
     }
+    foreach (self::$contact_types as $type) {
+      $name = $config->get($type . '_givenName') ?? FALSE;
+      $email = $config->get($type . '_emailAddress') ?? FALSE;
+      if ($name && $email) {
+        $library_config['contactPerson'][$type] = [
+          'givenName' => $name,
+          'emailAddress' => 'mailto:' . $email,
+        ];
+      }
+    }
 
+    $organization_name = $config->get('organization_name') ?? FALSE;
+    $organization_url = $config->get('organization_url') ?? FALSE;
+    $organization_language = $config->get('organization_language') ?? FALSE;
+    if ($organization_name && $organization_url && $organization_language) {
+      $library_config['organization'][$organization_language] = [
+        'name' => $organization_name,
+        'displayname' => $organization_name,
+        'url' => $organization_url,
+      ];
+    }
     // We want to read cert/key values from whereever they are stored, only
     // when we actually need them. This may lead to us creating a custom
     // \OneLogin\Saml2\Settings child class that contains the logic of 'just in

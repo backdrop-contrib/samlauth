@@ -7,6 +7,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Drupal\key\Plugin\KeyPluginBase;
 use Drupal\samlauth\Controller\SamlController;
+use Drupal\samlauth\SamlService;
 use OneLogin\Saml2\Metadata;
 use OneLogin\Saml2\Utils as SamlUtils;
 use RobRichards\XMLSecLibs\XMLSecurityKey;
@@ -523,6 +524,46 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       ],
     ];
 
+    foreach (SamlService::$contact_types as $type) {
+      $form['service_provider'][$type] = [
+        '#type' => 'details',
+        '#open' => FALSE,
+        '#title' => $this->t('%type Contact', ['%type' => ucfirst($type)]),
+      ];
+      $form['service_provider'][$type][$type . '_givenName'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('%type given name', ['%type' => ucfirst($type)]),
+        '#default_value' => $config->get($type . '_givenName') ?? '',
+      ];
+      $form['service_provider'][$type][$type . '_emailAddress'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('%type email', ['%type' => ucfirst($type)]),
+        '#default_value' => $config->get($type . '_emailAddress') ?? '',
+      ];
+    }
+
+    $form['service_provider']['organization'] = [
+      '#type' => 'details',
+      '#open' => FALSE,
+      '#title' => $this->t('Organization'),
+    ];
+    $form['service_provider']['organization']['organization_name'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Organization Name'),
+      '#default_value' => $config->get('organization_name') ?? '',
+    ];
+    $form['service_provider']['organization']['organization_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Organization URL'),
+      '#default_value' => $config->get('organization_url') ?? '',
+    ];
+    $form['service_provider']['organization']['organization_language'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Organization Language'),
+      '#default_value' => $config->get('organization_language') ?? '',
+      '#description' => $this->t('e.g., "en" or "fr"'),
+    ];
+
     $form['identity_provider'] = [
       '#type' => 'details',
       '#open' => TRUE,
@@ -1004,6 +1045,23 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     if (!$idp_cert_type && (($keyname && $filename) || ($keyname && $full_cert) || ($filename && $full_cert))) {
       $form_state->setErrorByName("idp_cert_encryption", $this->t('IdP certificate and filename cannot both be set.'));
     }
+
+    foreach (SamlService::$contact_types as $type) {
+      $name = $form_state->getValue($type . '_givenName');
+      $email = $form_state->getValue($type . '_emailAddress');
+      // If one but not both are present, throw an error.
+      if ((!empty($name) || !empty($email)) && (empty($name) || empty($email))) {
+        $form_state->setErrorByName($type . '_emailAddress', $this->t('%type contact name and email must be provided.', ['%type' => ucfirst($type)]));
+      }
+    }
+
+    $organization_name = $form_state->getValue('organization_name');
+    $organization_url = $form_state->getValue('organization_url');
+    $organization_language = $form_state->getValue('organization_language');
+    // If one but not both are present, throw an error.
+    if ((!empty($organization_name) || !empty($organization_url) || !empty($organization_language)) && (empty($organization_name) || empty($organization_url) || empty($organization_language))) {
+      $form_state->setErrorByName('organization_url', $this->t('Organization name, URL, and language must be provided.'));
+    }
   }
 
   /**
@@ -1162,6 +1220,19 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       'debug_log_saml_in',
       'debug_log_in',
       'debug_phpsaml',
+      'technical_givenName',
+      'technical_emailAddress',
+      'support_givenName',
+      'support_emailAddress',
+      'administrative_givenName',
+      'administrative_emailAddress',
+      'billing_givenName',
+      'billing_emailAddress',
+      'other_givenName',
+      'other_emailAddress',
+      'organization_name',
+      'organization_url',
+      'organization_language',
     ] as $config_value) {
       $config->set($config_value, $form_state->getValue($config_value));
     }
