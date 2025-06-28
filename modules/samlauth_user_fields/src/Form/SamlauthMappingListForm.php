@@ -2,11 +2,8 @@
 
 namespace Drupal\samlauth_user_fields\Form;
 
-use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\TypedData\DataDefinition;
 use Drupal\Core\Url;
 use Drupal\samlauth\Controller\SamlController;
@@ -33,30 +30,15 @@ class SamlauthMappingListForm extends ConfigFormBase {
   protected $renderer;
 
   /**
-   * SamlauthMappingListForm constructor.
-   *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The config factory.
-   * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
-   *   The entity field manager service.
-   * @param \Drupal\Core\Render\RendererInterface $renderer
-   *   The Drupal Renderer service.
-   */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityFieldManagerInterface $entity_field_manager, RendererInterface $renderer) {
-    parent::__construct($config_factory);
-    $this->entityFieldManager = $entity_field_manager;
-    $this->renderer = $renderer;
-  }
-
-  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
-    return new static(
-      $container->get('config.factory'),
-      $container->get('entity_field.manager'),
-      $container->get('renderer')
-    );
+    $instance = parent::create($container);
+
+    $instance->entityFieldManager = $container->get('entity_field.manager');
+    $instance->renderer = $container->get('renderer');
+
+    return $instance;
   }
 
   /**

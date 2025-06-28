@@ -18,7 +18,10 @@ class SamlauthUserSyncEvent extends Event {
   protected $account;
 
   /**
-   * An indicator of whether the user account is newly registered/linked.
+   * An indicator of whether the user account is newly linked.
+   *
+   * This is badly named; it's not guaranteed to be set if the user is new.
+   * See isFirstLogin().
    *
    * @var bool
    */
@@ -38,7 +41,7 @@ class SamlauthUserSyncEvent extends Event {
    *
    * @var bool
    */
-  protected $accountChanged;
+  protected $accountChanged = FALSE;
 
   /**
    * Constructs a samlauth user sync event object.
@@ -77,12 +80,17 @@ class SamlauthUserSyncEvent extends Event {
   }
 
   /**
-   * Indicates if the SAML login is happening for the first time.
+   * Indicates if the Drupal user is newly created or newly linked.
    *
-   * This can mean that the user account is new, but also that an existing
-   * Drupal user (which may have logged in through other means) was just linked
-   * to the SAML provider. Note this is not an indicator of whether the Drupal
-   * user logged in for the first time.
+   * This method isn't named well. (Assuming the dispatching code is the
+   * standard samlauth module)
+   * - it returns TRUE if the user is not new and has logged in before through
+   *   other means, but is logging in through SAML for the first time (i.e. an
+   *   existing Drupal account was just linked to a new SAML login);
+   * - it returns FALSE if the Drupal user has never logged in before but the
+   *   link was already prepopulated. (In this case, the system that populates
+   *   links and perhaps Drupal user accounts that have never logged in before,
+   *   must set up their own way of recognizing new logins if they need this.)
    *
    * There is no guarantee that the user or the link is already saved.
    * (Specifically: if the user is being newly registered, it is not saved

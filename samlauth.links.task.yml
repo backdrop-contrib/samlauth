@@ -1,7 +1,13 @@
-# Has no effect by itself, but is necessary for facilitating other modules which
-# can now define tasks on the SAML Authentication configuration page.
+# Let's try this: first config task is on the left because it holds
+# setup basics / needs to be done first (except maybe some UI). But it's not
+# expected to need changes afterward, so it's not default/base.
+samlauth.configuration.saml:
+  title: 'SAML'
+  route_name: samlauth.saml_configure_form
+  base_route: samlauth.samlauth_configure_form
+  weight: -1
 samlauth.configuration:
-  title: 'Configuration'
+  title: 'Login / Users'
   route_name: samlauth.samlauth_configure_form
   base_route: samlauth.samlauth_configure_form
   weight: 0

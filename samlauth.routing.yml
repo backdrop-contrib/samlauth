@@ -10,6 +10,18 @@ samlauth.saml_controller_login:
     no_cache: TRUE
     default_url_options:
       path_processing: FALSE
+samlauth.saml_controller_reauth:
+  path: '/saml/reauth'
+  defaults:
+    _controller: '\Drupal\samlauth\Controller\SamlController::reauth'
+    _title: 'SAML force login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _maintenance_access: TRUE
+    no_cache: TRUE
+    default_url_options:
+      path_processing: FALSE
 samlauth.saml_controller_logout:
   path: '/saml/logout'
   defaults:
@@ -66,13 +78,26 @@ samlauth.saml_controller_changepw:
   options:
     default_url_options:
       path_processing: FALSE
+samlauth.saml_configure_form:
+  path: '/admin/config/people/saml/saml'
+  defaults:
+    _form: '\Drupal\samlauth\Form\SamlauthSamlConfigureForm'
+    _title: 'SAML communication setup'
+  requirements:
+    _permission: 'configure saml'
+  options:
+    _admin_route: TRUE
 samlauth.samlauth_configure_form:
   path: '/admin/config/people/saml'
   defaults:
     _form: '\Drupal\samlauth\Form\SamlauthConfigureForm'
-    _title: 'SAML authentication'
+    _title: 'SAML login / user configuration'
   requirements:
     _permission: 'configure saml'
+  options:
+    _admin_route: TRUE
+# Delete in 4.0 (along with hook_views_data). Only kept here (instead of
+# changing URL in DeleteLink) so people don't need to change permissions yet.
 samlauth.authmap_delete_form:
   path: '/admin/config/people/saml/authmap/{uid}/delete'
   defaults:

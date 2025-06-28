@@ -30,10 +30,19 @@ class SamlauthMappingEditForm extends FormBase {
     'list_float',
     'list_integer',
     'list_string',
+    'name',
     'string',
     'string_long',
     'telephone',
     'timestamp',
+  ];
+
+  /**
+   * The complex field types that support setting subfields.
+   */
+  const COMPLEX_FIELD_TYPES = [
+    'address',
+    'name',
   ];
 
   /**
@@ -256,11 +265,11 @@ class SamlauthMappingEditForm extends FormBase {
    *   just one mappable value column.
    */
   private function getSubFields(FieldDefinitionInterface $field) {
-    // Hardcode for address only. It is possible that the below code is general
-    // enough for all field types, but I don't know that for sure. I don't want
-    // field types that used to be treated as single-value to return an array
-    // here, thereby losing compatibility with previous module versions.
-    if ($field->getType() !== 'address') {
+    // It is possible that the below code is generic enough for all field types,
+    // but I don't know that for sure. I don't want field types that used to be
+    // treated as single-value to return an array here, thereby losing
+    // compatibility with previous module versions.
+    if (!in_array($field->getType(), static::COMPLEX_FIELD_TYPES)) {
       return [];
     }
 

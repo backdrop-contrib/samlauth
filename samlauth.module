@@ -5,11 +5,12 @@
  * Allows users to authenticate against an external SAML identity provider.
  */
 
-use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Url;
 use Drupal\Component\Utility\UrlHelper;
-use Drupal\samlauth\Controller\SamlController;
+use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Url;
+use Drupal\samlauth\Controller\SamlController;
 use Drupal\user\UserInterface;
 
 /**
@@ -61,12 +62,14 @@ function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
       $form['account']['current_pass']['#access'] = FALSE;
 
       $form['account']['saml_notice'] = [
-        '#markup' => t('<strong>NOTE:</strong> E-mail address and password are controlled via SAML.'),
+        '#markup' => t('<strong>NOTE:</strong> E-mail address and password are controlled through the SAML Identity Provider.'),
         '#weight' => -1,
       ];
       $url = \Drupal::config(SamlController::CONFIG_OBJECT_NAME)
         ->get('idp_change_password_service');
       if ($url && UrlHelper::isValid($url, TRUE)) {
+        // We could show this to all users in the authmap, not just those who
+        // are disallowed from logging in locally. Noone's made that case yet.
         $form['account']['saml_notice']['#markup'] .= ' '
           . t('Please visit <a href="@link">this link</a> to change.', ['@link' => $url]);
       }
@@ -79,23 +82,22 @@ function samlauth_form_user_form_alter(&$form, FormStateInterface $form_state) {
  */
 function samlauth_form_user_login_form_alter(&$form, FormStateInterface $form_state) {
   $config = \Drupal::config(SamlController::CONFIG_OBJECT_NAME);
-  // Make sure the form gets purged from cache when config changes.
-  \Drupal::service('renderer')->addCacheableDependency($form, $config);
 
-  if ($config->get('login_link_show')) {
-    $title = $config->get('login_link_title');
-    if ($title) {
-      $form['samlauth_auth_login_link'] = [
-        '#title' => $title,
-        '#type' => 'link',
-        '#url' => Url::fromRoute('samlauth.saml_controller_login'),
-        '#attributes' => [
-          'title' => $title,
-          'class' => ['samlauth-auth-login-link'],
-        ],
-      ];
-    }
+  $link_title = $config->get('login_link_title');
+  if ($link_title) {
+    $form['samlauth_auth_login_link'] = [
+      '#title' => $link_title,
+      '#type' => 'link',
+      '#url' => Url::fromRoute('samlauth.saml_controller_login'),
+      '#attributes' => [
+        'class' => ['samlauth-auth-login-link'],
+      ],
+    ];
   }
+
+  $metadata = CacheableMetadata::createFromObject($config);
+  $metadata = $metadata->merge(CacheableMetadata::createFromRenderArray($form));
+  $metadata->applyTo($form);
 
   $form['#validate'][] = 'samlauth_check_saml_user';
 }
@@ -149,18 +151,13 @@ function samlauth_check_saml_user(&$form, FormStateInterface $form_state) {
           \Drupal::logger('user')->notice('Local login attempt denied to SAML-only account %user.', ['%user' => $form_state->getValue('name')]);
         }
         else {
-          if (version_compare(\Drupal::VERSION, '9.2.0-dev') >= 0) {
-            \Drupal::messenger()->addStatus(t('If %identifier is a valid account, an email will be sent with instructions to reset your password.', [
-              '%identifier' => $form_state->getValue('name'),
-            ]));
-          }
-          else {
-            \Drupal::messenger()->addStatus(t('Further instructions have been sent to your email address.'));
-          }
-          \Drupal::logger('user')->notice('Prevented sending password reset instructions mailed to %name at %email.', ['%name' => $account->getAccountName(), '%email' => $account->getEmail()]);
+          \Drupal::messenger()->addStatus(t('If %identifier is a valid account, an email will be sent with instructions to reset your password.', [
+            '%identifier' => $form_state->getValue('name'),
+          ]));
           // Prevent executing the submit callback that sends the mail and
-          // prints the same message.
+          // prints the above message.
           $form['#submit'] = [];
+          \Drupal::logger('user')->notice('Prevented sending password reset instructions mailed to %name at %email.', ['%name' => $account->getAccountName(), '%email' => $account->getEmail()]);
         }
       }
     }
@@ -214,6 +211,9 @@ function samlauth_user_presave(UserInterface $account) {
 
 /**
  * Implements hook_views_data_alter().
+ *
+ * @deprecated in samlauth:3.10 and is removed from samlauth:4.0. Use
+ *   "authmap_link_delete" field plugin instead.
  */
 function samlauth_views_data_alter(array &$data) {
   if (!isset($data['authmap']['uid'])) {
