@@ -1,0 +1,74 @@
+samlauth.idp.*:
+  type: config_entity
+  label: IdP
+  mapping:
+    label:
+      type: string
+      label: 'Label'
+    id:
+      type: string
+      label: ID
+    entity_id:
+      type: string
+      label: Entity ID
+    idp_single_sign_on_service:
+      type: string
+      label: 'Single Sign-On Service'
+    idp_single_logout_service:
+      type: string
+      label: 'Single Logout Service'
+    public_key:
+      type: string
+      label: 'X.509 Public Key'
+    encryption_key:
+      type: string
+      label: 'Optional X.509 Encryption Key'
+    sign_authentication_requests:
+      type: boolean
+      label: 'Sign authentication requests'
+    sign_logout_requests:
+      type: boolean
+      label: 'Sign logout requests'
+    sign_logout_responses:
+      type: boolean
+      label: 'Sign logout responses'
+    signature_algorithm:
+      type: string
+      label: 'Signature algorithm'
+    nameid_encrypt:
+      type: boolean
+      label: 'Encrypt NameID'
+    encryption_algorithm:
+      type: string
+      label: 'Encryption algorithm'
+    specify_authentication_context:
+      type: boolean
+      label: 'Specify authentication context (as "password")'
+    specify_nameid_policy:
+      type: boolean
+      label: 'Specify NameID Policy'
+    name_id:
+      type: string
+      label: 'NameID'
+    require_nameid:
+      type: boolean
+      label: 'Require NameID'
+    allow_duplicates:
+      type: boolean
+      label: 'Allow duplicate attributes'
+    retrieve_signature:
+      type: boolean
+      label: "Retrieve logout signature parameters from $_SERVER['REQUEST']"
+    strict_validation:
+      type: boolean
+      label: 'Strict validation of responses'
+    require_signed_messages:
+      type: boolean
+      label: 'Require messages to be signed'
+    require_signed_assertions:
+      type: boolean
+      label: 'Require assertions to be signed'
+    require_encrypted_nameid:
+      type: boolean
+      label: 'Require NameID to be encrypted'
+

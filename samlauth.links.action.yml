@@ -1,5 +1,6 @@
-entity.samlauth_idp.add_form:
-  route_name: 'entity.samlauth_idp.add_form'
-  title: 'Add identity provider'
+
+entity.idp.add_form:
+  route_name: 'entity.idp.add_form'
+  title: 'Add Identity Provider'
   appears_on:
-    - entity.samlauth_idp.collection
+    - entity.idp.collection

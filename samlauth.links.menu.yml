@@ -9,8 +9,9 @@ samlauth.saml_controller_logout.logout:
   menu_name: account
   enabled: 0
   class: Drupal\samlauth\Plugin\Menu\LoginLogoutMenuLink
-entity.samlauth_idp.overview:
-  title: Identity Providers
+samlauth.identity_providers:
+  title: 'Identity Providers'
   parent: samlauth.samlauth_configure_form
-  description: 'List of identity providers'
-  route_name: entity.samlauth_idp.collection
+  description: 'Configure multiple identity providers'
+  weight: 0
+  route_name: entity.idp.collection
