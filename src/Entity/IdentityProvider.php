@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\samlauth\Entity;
 
-use Drupal\campt_milogin_integration\MiloginIdpInterface;
+use Drupal\samlauth\IdentityProviderInterface;
 use Drupal\Core\Config\Entity\ConfigEntityBase;
 
 /**
@@ -21,7 +21,7 @@ use Drupal\Core\Config\Entity\ConfigEntityBase;
  *     plural = "@count identity providers",
  *   ),
  *   handlers = {
- *     "list_builder" = "Drupal\samlauth\MiloginIdpListBuilder",
+ *     "list_builder" = "Drupal\samlauth\IdentityProviderListBuilder",
  *     "form" = {
  *       "add" = "Drupal\samlauth\Form\IdentityProviderForm",
  *       "edit" = "Drupal\samlauth\Form\IdentityProviderForm",
