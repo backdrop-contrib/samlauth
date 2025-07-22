@@ -471,7 +471,7 @@ class SamlService {
    * @param \Drupal\Core\Session\AccountInterface|null $account
    *   The existing user account derived from the unique ID, if any.
    */
-  protected function doLogin($unique_id, AccountInterface $account = NULL) {
+  protected function doLogin($unique_id, ?AccountInterface $account = NULL) {
     $config = $this->configFactory->get('samlauth.authentication');
     $first_saml_login = FALSE;
     if (!$account) {
@@ -1070,7 +1070,7 @@ class SamlService {
    * @return array
    *   The library configuration array.
    */
-  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
+  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', ?KeyRepositoryInterface $key_repository = NULL) {
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
