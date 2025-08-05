@@ -196,3 +196,6 @@ samlauth.authentication:
     bypass_relay_state_check:
       type: boolean
       label: 'Bypass safety check for dynamic redirect URLs'
+
+views.field.samlauth_link_delete:
+  type: views.field.authmap_link_delete
