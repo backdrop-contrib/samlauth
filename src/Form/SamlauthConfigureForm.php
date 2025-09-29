@@ -290,6 +290,8 @@ class SamlauthConfigureForm extends ConfigFormBase {
         '#description' => $this->t('Users who have previously logged in through the IdP can only use the standard Drupal login method if they have one of the roles selected here. Preexisting Drupal users who have never logged in through the IdP are not affected by this restriction.'),
         '#options' => $role_options,
       ],
+      'limit_local_login_to_roles' => $this->t(
+        'When enabled, <em>only</em> user accounts that have role(s) selected in "Roles allowed to use Drupal login", above, will be able to use Drupal login. When disabled, any account that is not associated with SAML login will be able to use Drupal login.'),
       'local_login_saml_error' => [
         '#description' => $this->t('When disabled, the generic "Unrecognized username or password" message is shown to users who cannot use the standard Drupal login method. This prevents disclosing information about whether the account name exists, but is untrue / potentially confusing.', [
           ':permission' => Url::fromUri('base:admin/people/permissions', ['fragment' => 'module-samlauth'])->toString(),
@@ -373,6 +375,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'sync_mail',
       'user_name_attribute',
       'user_mail_attribute',
+      'limit_local_login_to_roles',
       'local_login_saml_error',
       'idp_change_password_service',
       'login_redirect_url',
