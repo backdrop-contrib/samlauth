@@ -21,8 +21,11 @@ Drupal application". The SAML Authentication module
 
 For more information about SAML, see: https://en.wikipedia.org/wiki/SAML_2.0
 
-UPGRADING
-------------
+UPGRADING / MIGRATION
+---------------------
+
+### Upgrading from earlier module versions
+
 Upgrading from 8.x-2.x to 8.x-3.x is trivial; just make sure your composer
 dependencies are met. The only reason for the major version jump was a major
 version jump in the upstream php-saml dependency that was caused by a security
@@ -43,6 +46,12 @@ aspects:
   INSERT INTO authmap (uid, authname, provider, data)
   SELECT uid, value AS authname, 'samlauth' AS provider, 'N;' as data from users_data WHERE module='samlauth' and name='saml_id'
   ```
+
+### Migration from simpleSAMLphp systems / simplesamlphp_auth module
+
+A separate (sandbox) module exists to assist with migration. See
+* [https://www.drupal.org/sandbox/jrb/3531935](samlauth_simplesamlphp_auth_migration module)
+* [https://www.drupal.org/project/samlauth/issues/3532188](samlauth issue for possible news/updates)
 
 INSTALLATION
 ------------
@@ -544,3 +553,10 @@ wants to give a user some elevated privileges which do not require having a
 dedicated Drupal user. While this is likely possible without a large amount
 of work, it is completely untested. See https://www.drupal.org/i/3519597
 for hints.
+
+### Extension modules
+
+Work on multiple IDP support is ongoing in [https://www.drupal.org/project/samlauth/issues/3088092](issue #3088092).
+A separately maintained module exists implements a real-world use case: see
+https://drupal.org/project/samlauth_multi_idp. Feedback about this solution
+vs. any work needed in this module, are welcome in the issue queue.
