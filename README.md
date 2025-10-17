@@ -507,6 +507,13 @@ ExternalAuthEvents::REGISTER (or, likely, ExternalAuthEvents::LOGIN). An
 advantage of SamlauthEvents::USER_SYNC is that an exception can be thrown
 during registration, before a (partly populated) user is saved.
 
+Q: How can I handle login on different (test vs. live) environments?
+
+A: At the moment it is left up to the community to document this. See
+https://www.drupal.org/project/samlauth/issues/3509410 for strategies/examples
+of having different configurations on different environments, and feel free to
+add your own.
+
 ### Known-incomplete functionality
 
 #### Multi-value attributes are not synchronized correctly
