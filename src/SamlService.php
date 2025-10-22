@@ -946,7 +946,8 @@ class SamlService {
         // can try to extract it from e.g. Utils::getSelfRoutedURLNoQuery().)
         $base_url = $request->getSchemeAndHttpHost() . $request->getBaseUrl() . '/saml';
       }
-      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository));
+      $site_name = $this->configFactory->get('system.site')->get('name');
+      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository, $site_name));
     }
 
     return $this->samlAuth[$purpose] ?? NULL;
@@ -1070,7 +1071,7 @@ class SamlService {
    * @return array
    *   The library configuration array.
    */
-  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
+  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL, $site_name = '') {
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
@@ -1471,6 +1472,29 @@ class SamlService {
       }
       if (count($certs) > 1) {
         $library_config['idp']['x509certMulti']['signing'] = $certs;
+      }
+    }
+
+    if ('metadata' === $purpose) {
+      // AttributeConsumingService section.
+      $requested_attributes = [];
+      if ($user_name_attribute = $config->get('user_name_attribute')) {
+        $requested_attributes[] = [
+          'friendlyName' => 'User name',
+          'name' => $user_name_attribute,
+          'isRequired' => TRUE,
+        ];
+      }
+      if ($user_mail_attribute = $config->get('user_mail_attribute')) {
+        $requested_attributes[] = [
+          'friendlyName' => 'User email',
+          'name' => $user_mail_attribute,
+          'isRequired' => TRUE,
+        ];
+      }
+      if ($requested_attributes) {
+        $library_config['sp']['attributeConsumingService']['serviceName'] = $site_name ?? 'Drupal';
+        $library_config['sp']['attributeConsumingService']['requestedAttributes'] = $requested_attributes;
       }
     }
 
