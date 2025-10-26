@@ -11,3 +11,25 @@ samlauth.configuration:
   route_name: samlauth.samlauth_configure_form
   base_route: samlauth.samlauth_configure_form
   weight: 0
+entity.idp.settings:
+  title: 'Settings'
+  route_name: entity.idp.settings
+  base_route: entity.idp.settings
+entity.idp.view:
+  title: 'View'
+  route_name: entity.idp.canonical
+  base_route: entity.idp.canonical
+entity.idp.edit_form:
+  title: 'Edit'
+  route_name: entity.idp.edit_form
+  base_route: entity.idp.canonical
+entity.idp.delete_form:
+  title: 'Delete'
+  route_name: entity.idp.delete_form
+  base_route: entity.idp.canonical
+  weight: 10
+entity.idp.collection:
+  title: 'Identity Providers'
+  route_name: entity.idp.collection
+  base_route: samlauth.samlauth_configure_form
+  weight: 0

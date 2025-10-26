@@ -529,6 +529,11 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       '#title' => $this->t('Identity Provider'),
     ];
 
+    $form['identity_provider']['multiple_idps'] = [
+      '#type' => 'markup',
+      '#markup' => '<p>' . $this->t('The identity provider provided in this section will act as the default identity provider is multiple identity providers are configured, or if none are provided during login.') . '</p><p>' . $this->t('To configure multiple identity providers, visit the <a href=":link">identity providers</a> page.', [':link' => Url::fromRoute('entity.idp.collection')]) . '</p>',
+    ];
+
     // @todo Allow a user to automagically populate this by providing a
     //   metadata URL for the IdP. OneLogin's IdPMetadataParser can likely help.
     // $form['identity_provider']['idp_metadata_url'] = [

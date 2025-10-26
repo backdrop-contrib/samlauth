@@ -15,7 +15,9 @@ use Drupal\Core\Url;
 use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\key\KeyRepositoryInterface;
+use Drupal\samlauth\Entity\IdentityProvider;
 use Drupal\samlauth\Event\SamlauthEvents;
+use Drupal\samlauth\Event\SamlauthIdpSwitch;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
@@ -935,7 +937,7 @@ class SamlService {
    *
    * @return ?\OneLogin\Saml2\Auth
    */
-  protected function getSamlAuth($purpose = '', $initialize = TRUE) {
+  protected function getSamlAuth($purpose = '', $idp = NULL, $initialize = TRUE) {
     if ($initialize && !isset($this->samlAuth[$purpose])) {
       $base_url = '';
       $config = $this->configFactory->get('samlauth.authentication');
@@ -946,7 +948,7 @@ class SamlService {
         // can try to extract it from e.g. Utils::getSelfRoutedURLNoQuery().)
         $base_url = $request->getSchemeAndHttpHost() . $request->getBaseUrl() . '/saml';
       }
-      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository));
+      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository, $idp));
     }
 
     return $this->samlAuth[$purpose] ?? NULL;
@@ -1070,11 +1072,11 @@ class SamlService {
    * @return array
    *   The library configuration array.
    */
-  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
+  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL, IdentityProvider $idp) {
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
-        'entityId' => $config->get('sp_entity_id'),
+        'entityId' => $idp_config->get('sp_entity_id') ? $idp_config->get('sp_entity_id') : $config->get('sp_entity_id'),
         'assertionConsumerService' => [
           // See ExecuteInRenderContextTrait if curious why the long chained
           // call is necessary.
@@ -1086,12 +1088,12 @@ class SamlService {
         'NameIDFormat' => $config->get('sp_name_id_format') ?: NULL,
       ],
       'idp' => [
-        'entityId' => $config->get('idp_entity_id'),
+        'entityId' => $idp->getEntityID() ?? $config->get('idp_entity_id'),
         'singleSignOnService' => [
-          'url' => $config->get('idp_single_sign_on_service'),
+          'url' => $idp->getSSOService() ?? $config->get('idp_single_sign_on_service'),
         ],
         'singleLogoutService' => [
-          'url' => $config->get('idp_single_log_out_service'),
+          'url' => $idp->getSLOService() ?? $config->get('idp_single_log_out_service'),
         ],
       ],
       'security' => [
@@ -1099,51 +1101,52 @@ class SamlService {
         'signMetadata' => (bool) $config->get('security_metadata_sign'),
         // Used for metadata (value goes into attribute
         // AuthnRequestsSigned="true/false" of SPSSODescriptor) / login(*):
-        'authnRequestsSigned' => (bool) $config->get('security_authn_requests_sign'),
+        'authnRequestsSigned' => (bool) $idp->getSignAuthenticationRequests() ?? (bool) $config->get('security_authn_requests_sign'),
         // Used for logout(*):
-        'logoutRequestSigned' => (bool) $config->get('security_logout_requests_sign'),
+        'logoutRequestSigned' => (bool) $idp->getSignLogoutRequests() ?? (bool) $config->get('security_logout_requests_sign'),
         // Used for SLO response, sent after processing incoming SLO request(*):
-        'logoutResponseSigned' => (bool) $config->get('security_logout_responses_sign'),
+        'logoutResponseSigned' => (bool) $idp->getSignLogoutResponses() ?? (bool) $config->get('security_logout_responses_sign'),
         // Used for logout; also influences Settings:__construct() checks for
         // presence of IDP cert:
-        'nameIdEncrypted' => (bool) $config->get('security_nameid_encrypt'),
+        'nameIdEncrypted' => (bool) $idp->getNameIDEncrypt() ?? (bool) $config->get('security_nameid_encrypt'),
         // Used for acs:
         // TRUE by default AND must be TRUE on existing installations that
         // didn't have the setting before, so it's the first one to get a
         // default value. (If we didn't have the (bool) operator, we wouldn't
         // necessarily need the default - but leaving it out would just invite
         // a bug later on.)
-        'wantNameId' => (bool) ($config->get('security_want_name_id') ?? TRUE),
+        'wantNameId' => (bool)  $idp->getRequireNameID() ?? (bool) ($config->get('security_want_name_id') ?? TRUE),
         // Used for login / acs(*); indirectly influences metadata(**):
-        'wantNameIdEncrypted' => (bool) $config->get('security_nameid_encrypted'),
+        'wantNameIdEncrypted' => (bool) $idp->getNameIDEncrypt() ?? (bool) $config->get('security_nameid_encrypted'),
         // Used for acs(*); indirectly influences metadata(**):
-        'wantAssertionsEncrypted' => (bool) $config->get('security_assertions_encrypt'),
+        'wantAssertionsEncrypted' => (bool) $idp->getRequireEncryptedAssertions() ?? (bool) $config->get('security_assertions_encrypt'),
         // Used for metadata (value goes into attribute
         // WantAssertionsSigned="true/false" of SPSSODescriptor) / acs(*):
-        'wantAssertionsSigned' => (bool) $config->get('security_assertions_signed'),
+        'wantAssertionsSigned' => (bool) $idp->getRequireSignedAssertions() ?? (bool) $config->get('security_assertions_signed'),
         // Used for acs / sls (processing incoming SLO responses and requests):
-        'wantMessagesSigned' => (bool) $config->get('security_messages_sign'),
+        'wantMessagesSigned' => (bool) $idp->getRequireSignedMessages() ?? (bool) $config->get('security_messages_sign'),
         // Used for login:
-        'requestedAuthnContext' => (bool) $config->get('security_request_authn_context'),
+        'requestedAuthnContext' => (bool) $idp->getSpecifyAuthenticationContext() ?? (bool) $config->get('security_request_authn_context'),
         // Used for login / logout / SLO response, sent after processing
         // incoming SLO request; should be deprecated:
-        'lowercaseUrlencoding' => (bool) $config->get('security_lowercase_url_encoding'),
+        // @todo Need to add these values into the schema.
+        'lowercaseUrlencoding' => (bool) $idp->lowercaseURLEncoding() ?? (bool) $config->get('security_lowercase_url_encoding'),
         // Allow duplicated Attribute Names. Used for acs.
-        'allowRepeatAttributeName' => (bool) $config->get('security_allow_repeat_attribute_name'),
+        'allowRepeatAttributeName' => (bool) $idp->getAllowDuplicates() ?? (bool) $config->get('security_allow_repeat_attribute_name'),
         // (*): also influences Settings:__construct() checks for SP cert+key.
         // (**): if either of these properties is true, an extra 'encryption'
         // certificate is always included in the metadata. (With the same value
         // as the 'signing' certificate; we don't support different ones - only
         // support including two different 'signing' ccertificates.)
       ],
-      'strict' => (bool) $config->get('strict'),
+      'strict' => (bool) $idp->getStrictValidation() ?? (bool) $config->get('strict'),
     ];
     // Passing NULL for signatureAlgorithm would be OK, but not ''.
-    $sig_alg = $config->get('security_signature_algorithm');
+    $sig_alg = $idp->getSignatureAlgorithm() ?? (bool) $config->get('security_signature_algorithm');
     if ($sig_alg) {
       $library_config['security']['signatureAlgorithm'] = $sig_alg;
     }
-    $enc_alg = $config->get('security_encryption_algorithm');
+    $enc_alg = $idp->getEncryptionAlgorithm() ?? (bool) $config->get('security_encryption_algorithm');
     if ($enc_alg) {
       // Not a typo; this is snake_case in the library too.
       $library_config['security']['encryption_algorithm'] = $enc_alg;
@@ -1271,7 +1274,7 @@ class SamlService {
     // complicated validation like checking whether the cert/key files exist.
     // Initializing cert/key properties to '' (rather than not setting them at
     // all) should be fine, because the standard Settings also does that.
-    $cert_folder = $config->get('sp_cert_folder');
+    $cert_folder = $idp->getcertFolder() ?? $config->get('sp_cert_folder');
     if ($cert_folder) {
       // Set the folder so the SAML toolkit knows where to look. This is the
       // old method which only reads key/cert when we actually need it, because
@@ -1376,7 +1379,7 @@ class SamlService {
     $encryption_cert = '';
     $certs = [];
     if ($add_idp_encryption_cert) {
-      $encryption_cert = $config->get('idp_cert_encryption');
+      $encryption_cert = $idp->getEncryptionKey() ?? $config->get('idp_cert_encryption');
       if (isset($encryption_cert) && !is_string($encryption_cert)) {
         throw new SamlError('IdP encryption cert setting is not a string.', SamlError::SETTINGS_INVALID);
       }
@@ -1401,8 +1404,9 @@ class SamlService {
         }
       }
     }
+    // @todo Need to add this to the schema
     if ($add_idp_cert || ($add_idp_encryption_cert && !$encryption_cert)) {
-      $certs = $config->get('idp_certs') ?? [];
+      $certs = $idp->getCertificates() ?? $config->get('idp_certs') ?? [];
       if ($add_idp_encryption_cert && !$add_idp_cert) {
         $certs = array_slice($certs, 0, 1);
       }
@@ -1438,7 +1442,7 @@ class SamlService {
     // @todo remove in 4.x: not applicable after samlauth_update_8304().
     // @todo at the same time as removing this, uncomment samlauth_update_8400.
     if (!$certs && !$encryption_cert) {
-      $old_cert = $config->get('idp_x509_certificate');
+      $old_cert = $idp->getPublicKey() ?? $config->get('idp_x509_certificate');
       $old_cert_multi = $config->get('idp_x509_certificate_multi');
       if ($old_cert || $old_cert_multi) {
         $certs = $old_cert ? [$old_cert] : [];

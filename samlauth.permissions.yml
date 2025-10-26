@@ -3,3 +3,5 @@ view sp metadata:
 configure saml:
   title: 'Configure SAML authentication'
   restrict access: TRUE
+administer samlauth_idp:
+  title: 'Administer identity provider'

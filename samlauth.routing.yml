@@ -105,3 +105,34 @@ samlauth.authmap_delete_form:
     _title: 'Delete authmap entry'
   requirements:
     _permission: 'configure saml'
+# Added to support multiple IDPs
+# If this gets accepted as future work, should this get moved above
+# the route being deleted above?
+entity.idp.collection:
+  path: '/admin/configuration/people/saml/idp'
+  defaults:
+    _entity_list: 'idp'
+    _title: 'Identity Providers'
+  requirements:
+    _permission: 'manage identity providers'
+entity.idp.add_form:
+  path: '/admin/configuration/people/saml/idp/add'
+  defaults:
+    _entity_form: 'idp.add'
+    _title: 'Add an Identity Provider'
+  requirements:
+    _permission: 'administer identity providers'
+entity.idp.edit_form:
+  path: '/admin/configuration/people/saml/idp/{idp}'
+  defaults:
+    _entity_form: 'idp.edit'
+    _title: 'Edit a MiLogin IdP'
+  requirements:
+    _permission: 'administer identity providers'
+entity.idp.delete_form:
+  path: '/admin/configuration/people/saml/idp/{idp}/delete'
+  defaults:
+    _entity_form: 'idp.delete'
+    _title: 'Delete an Identity Provider'
+  requirements:
+    _permission: 'administer identity providers'
