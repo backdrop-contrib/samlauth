@@ -193,6 +193,12 @@ samlauth.authentication:
     use_base_url:
       type: boolean
       label: 'Use Drupal base URL in toolkit library'
+    custom_routing_enabled:
+      type: boolean
+      label: 'Enable Custom SAML Routing Path'
+    custom_routing_path:
+      type: string
+      label: 'Custom SAML Routing Path'
     bypass_relay_state_check:
       type: boolean
       label: 'Bypass safety check for dynamic redirect URLs'

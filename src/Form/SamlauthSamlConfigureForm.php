@@ -106,6 +106,30 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       '#list_type' => 'ul',
     ];
 
+    $form['service_provider']['advanced_settings'] = [
+      '#title' => $this->t('Advanced Settings'),
+      '#type' => 'details',
+      '#open' => TRUE,
+    ];
+
+    $this->addElementsFromSchema($form['service_provider']['advanced_settings'], $schema_definition, $config, [
+      'custom_routing_enabled' => [
+          '#type' => 'checkbox',
+          '#title' => $this->t('Enable Custom SAML Routing Path'),
+          '#description' => $this->t('If enabled, SAML routes will use a custom base path instead of the default /saml/.'),
+      ],
+      'custom_routing_path' => [
+          '#type' => 'textfield',
+          '#title' => $this->t('Custom SAML Routing Path'),
+          '#description' => $this->t('Specify the custom base path for SAML routes (e.g., /api/sso). Must start and end with a forward slash.'),
+          '#states' => [
+              'visible' => [
+                  ':input[name="custom_routing_enabled"]' => ['checked' => TRUE],
+              ],
+          ],
+      ]
+    ]);
+
     // Guessing: if caching < 10 minutes then it still needs to be adjusted.
     $form['service_provider']['caching'] = [
       '#type' => 'details',
@@ -1162,6 +1186,8 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       'debug_log_saml_in',
       'debug_log_in',
       'debug_phpsaml',
+      'custom_routing_enabled',
+      'custom_routing_path',
     ] as $config_value) {
       $config->set($config_value, $form_state->getValue($config_value));
     }
