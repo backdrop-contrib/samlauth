@@ -140,7 +140,7 @@ class SamlLoginTest extends KernelTestBase {
           $container->get('current_user'),
           $container->get('messenger'),
           $container->get('string_translation'),
-          $container->get('time'),
+          new NullLogger(),
           $container->get('module_handler'),
           $container->get('datetime.time')
         );
