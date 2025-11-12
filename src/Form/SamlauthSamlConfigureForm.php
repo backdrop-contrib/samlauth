@@ -27,12 +27,18 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
    *
    * This is used as an indicator whether we can show a 'Key' selector on
    * screen. This is when the key module is installed - not when the
-   * key_asymmetric module is installed. (The latter is necessary for entering
-   * public/private keys but reading them will work fine without it, it seems.)
+   * key_asymmetric module is installed.
    *
-   * @var \Drupal\key\KeyRepositoryInterface
+   * @var \Drupal\key\KeyRepositoryInterface|null
    */
   protected $keyRepository;
+
+  /**
+   * The typed config manager.
+   *
+   * @var \Drupal\Core\Config\TypedConfigManagerInterface
+   */
+  protected $typedConfigManager;
 
   /**
    * {@inheritdoc}
@@ -41,6 +47,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     $instance = parent::create($container);
 
     $instance->keyRepository = $container->get('key.repository', ContainerInterface::NULL_ON_INVALID_REFERENCE);
+    $instance->typedConfigManager = $container->get('config.typed');
 
     return $instance;
   }
@@ -68,9 +75,12 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     // A simple definition array without replacements should suffice for this
     // purpose; it doesn't seem to make sense to wrap it in some typed
     // DataDefinition class...
-    // @phpstan-ignore-next-line inorder to keep backward compatibility.
-    $schema_definition = \Drupal::service('config.typed')->getDefinition(SamlController::CONFIG_OBJECT_NAME);
-    assert(!empty($schema_definition['mapping']), 'Config schema of ' . SamlController::CONFIG_OBJECT_NAME . ' has unexpected value; ' . self::class . ' needs rework.');
+    $schema_definition = $this->typedConfigManager->getDefinition(SamlController::CONFIG_OBJECT_NAME);
+    assert(
+    !empty($schema_definition['mapping']),
+    'Config schema of ' . SamlController::CONFIG_OBJECT_NAME .
+    ' has unexpected value; ' . self::class . ' needs rework.'
+    );
     $schema_definition = $schema_definition['mapping'];
 
     $config = $this->config(SamlController::CONFIG_OBJECT_NAME);
@@ -124,7 +134,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       ],
       'metadata_cache_http' => [
         '#description' => $this->t("This affects just (Drupal's and external) response caches, whereas the above also affects caching by the IdP. Caching is only important if the metadata URL can be reached by anonymous visitors. The Max-Age value is derived from the validity."),
-        // TRUE on existing installations where the checkbox didn't exist before;
+        // TRUE on existing installations where the checkbox didn't exist before
         // FALSE on new installations.
         '#default_value' => $config->get('metadata_cache_http') ?? TRUE,
       ],
@@ -352,7 +362,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       // necessary for saving, can be good for the editing experience.
       $form['service_provider']['sp_key_key'] = [
         '#type' => 'select',
-        '#title' => $this->t($schema_definition['sp_private_key']['label']),
+        '#title' => $this->t('@label', ['@label' => $schema_definition['sp_private_key']['label']]),
         '#description' => $this->t('Add private keys in the <a href=":url">Keys</a> list.', [
           ':url' => Url::fromRoute('entity.key.collection')->toString(),
         ]),
@@ -390,7 +400,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     ];
     $form['service_provider']['sp_private_key'] = [
       '#type' => 'textarea',
-      '#title' => $this->t($schema_definition['sp_private_key']['label']),
+      '#title' => $this->t('@label', ['@label' => $schema_definition['sp_private_key']['label']]),
       '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
       '#default_value' => $sp_key_type === 'config' ? $this->formatKeyOrCert($sp_private_key, TRUE, TRUE) : '',
       '#states' => [
@@ -443,7 +453,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     ];
     $form['service_provider']['sp_x509_certificate'] = [
       '#type' => 'textarea',
-      '#title' => $this->t($schema_definition['sp_x509_certificate']['label']),
+      '#title' => $this->t('@label', ['@label' => $schema_definition['sp_x509_certificate']['label']]),
       '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
       '#default_value' => $sp_cert_type === 'config' ? $this->formatKeyOrCert($sp_cert, TRUE) : '',
       '#states' => [
@@ -468,7 +478,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       // private keys is likely beneficial for longer term maintenance.
       $form['service_provider']['sp_new_cert_key'] = [
         '#type' => 'select',
-        '#title' => $this->t($schema_definition['sp_new_certificate']['label']),
+        '#title' => $this->t('@label', ['@label' => $schema_definition['sp_new_certificate']['label']]),
         '#description' => $this->t("Optional; not used for login, only added to the metadata. If you plan to replace the above key/certificate, the future certificate can be added here so the IdP can plan for the switch. Add the certificate in the <a href=\":url\">Keys</a> list. It must reference a key (even though that won't be used yet), so this cert/key pair is ready to be moved into production.", [
           ':url' => Url::fromRoute('entity.key.collection')->toString(),
         ]),
@@ -505,7 +515,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     ];
     $form['service_provider']['sp_new_cert'] = [
       '#type' => 'textarea',
-      '#title' => $this->t($schema_definition['sp_new_certificate']['label']),
+      '#title' => $this->t('@label', ['@label' => $schema_definition['sp_new_certificate']['label']]),
       '#description' => $this->t("Optional; not used for login, only added to the metadata. If you plan to replace the above key/certificate, the future certificate can be added here so the IdP can plan for the switch. Line breaks and '-----BEGIN/END' lines are optional."),
       '#default_value' => $sp_new_cert_type === 'config' ? $this->formatKeyOrCert($sp_new_cert, TRUE) : '',
       '#states' => [
@@ -604,14 +614,14 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       //   time so we don't need the #description_suffix anymore.
       '#type' => 'samlmultivalue',
       '#add_empty' => FALSE,
-      '#title' => $this->t($schema_definition['idp_certs']['label']),
+      '#title' => $this->t('@label', ['@label' => $schema_definition['idp_certs']['label']]),
       '#description' => $this->t('Public X.509 certificate(s) of the IdP, used for validating signatures (and by default also for encryption).'),
       '#add_more_label' => $this->t('Add extra certificate'),
     ];
     if ($this->keyRepository) {
       $form['identity_provider']['idp_certs']['key'] = [
         '#type' => 'select',
-        '#title' => $this->t($schema_definition['idp_certs']['sequence']['label']),
+        '#title' => $this->t('@label', ['@label' => $schema_definition['idp_certs']['sequence']['label']]),
         '#description' => $this->t('Add certificates in the <a href=":url">Keys</a> list.', [
           ':url' => Url::fromRoute('entity.key.collection')->toString(),
         ]),
@@ -644,7 +654,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       ],
       'cert' => [
         '#type' => 'textarea',
-        '#title' => $this->t($schema_definition['idp_certs']['sequence']['label']),
+        '#title' => $this->t('@label', ['@label' => $schema_definition['idp_certs']['sequence']['label']]),
         '#description' => $this->t("Line breaks and '-----BEGIN/END' lines are optional."),
         '#states' => [
           'visible' => [
@@ -690,7 +700,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       // only very few installations use a separate encryption certificate.
       $form['identity_provider']['idp_certkey_encryption'] = [
         '#type' => 'select',
-        '#title' => $this->t($schema_definition['idp_cert_encryption']['label']),
+        '#title' => $this->t('@label', ['@label' => $schema_definition['idp_cert_encryption']['label']]),
         '#description' => $description,
         '#default_value' => $cert_types === 'key' && $encryption_cert ? substr($encryption_cert, 4) : '',
         '#options' => $selectable_public_certs,
@@ -729,7 +739,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     ];
     $form['identity_provider']['idp_cert_encryption'] = [
       '#type' => 'textarea',
-      '#title' => $this->t($schema_definition['idp_cert_encryption']['label']),
+      '#title' => $this->t('@label', ['@label' => $schema_definition['idp_cert_encryption']['label']]),
       '#description' => $description,
       '#default_value' => $cert_types === 'config' && $encryption_cert ? $this->formatKeyOrCert($encryption_cert, TRUE) : '',
       '#states' => [
@@ -756,18 +766,18 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
     ];
 
     $this->addElementsFromSchema($form['construction'], $schema_definition, $config, [
-      'security_authn_requests_sign' => $this->t('Requests sent to the Single Sign-On Service of the IdP will include a signature.'). '*',
+      'security_authn_requests_sign' => $this->t('Requests sent to the Single Sign-On Service of the IdP will include a signature.*'),
       'security_logout_requests_sign' => $this->t('Requests sent to the Single Logout Service of the IdP will include a signature.'),
       'security_logout_responses_sign' => $this->t('Responses sent back to the IdP will include a signature.'),
       'security_signature_algorithm' => [
         '#type' => 'select',
         '#options' => [
-          '' => $this->t('library default'),
-          XMLSecurityKey::RSA_SHA1 => 'RSA-SHA1',
-          XMLSecurityKey::HMAC_SHA1 => 'HMAC-SHA1',
-          XMLSecurityKey::RSA_SHA256 => 'SHA256',
-          XMLSecurityKey::RSA_SHA384 => 'SHA384',
-          XMLSecurityKey::RSA_SHA512 => 'SHA512',
+          '' => $this->t('Library default'),
+          XMLSecurityKey::RSA_SHA1 => $this->t('RSA-SHA1'),
+          XMLSecurityKey::HMAC_SHA1 => $this->t('HMAC-SHA1'),
+          XMLSecurityKey::RSA_SHA256 => $this->t('RSA-SHA256'),
+          XMLSecurityKey::RSA_SHA384 => $this->t('RSA-SHA384'),
+          XMLSecurityKey::RSA_SHA512 => $this->t('RSA-SHA512'),
         ],
         '#description' => $this->t('Algorithm used by the signing process.'),
         '#states' => [
@@ -785,10 +795,10 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
         // AESnnn/GCM and others here as well. The library default can be found
         // in the Utils::generateNameId() definition.
         '#options' => [
-          '' => $this->t('library default'),
-          XMLSecurityKey::AES128_CBC => 'AES128/CBC',
-          XMLSecurityKey::AES192_CBC => 'AES192/CBC',
-          XMLSecurityKey::AES256_CBC => 'AES256/CBC',
+          '' => $this->t('Library default'),
+          XMLSecurityKey::AES128_CBC => $this->t('AES128/CBC'),
+          XMLSecurityKey::AES192_CBC => $this->t('AES192/CBC'),
+          XMLSecurityKey::AES256_CBC => $this->t('AES256/CBC'),
         ],
         '#description' => $this->t('Algorithm used by the encryption process.'),
         '#states' => [
@@ -849,9 +859,9 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
           ],
         ],
       ],
-      'security_assertions_signed' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed.') . '*',
-      'security_assertions_encrypt' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.') . '*',
-      'security_nameid_encrypted' => $this->t('The NameID in login responses from the IdP is expected to be encrypted. This overrides the requested NameID Format and sets "Encrypted" in authentication requests\' NameIDPolicy element.') . '*',
+      'security_assertions_signed' => $this->t('Assertion elements in authentication responses from the IdP are expected to be signed.*'),
+      'security_assertions_encrypt' => $this->t('Assertion elements in responses from the IdP are expected to be encrypted.*'),
+      'security_nameid_encrypted' => $this->t('The NameID in login responses from the IdP is expected to be encrypted. This overrides the requested NameID Format and sets "Encrypted" in authentication requests\' NameIDPolicy element.*'),
     ]);
 
     // Untll #description_display works: (#314385)
@@ -880,7 +890,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       // a PR for the signature validation code for incoming messages, which was
       // then mentioned in https://github.com/onelogin/php-saml/issues/136.
       // However, the latter / this option is about signature generation for
-      // outgoing messages. Validation concerns different code, and is influenced
+      // outgoing messages. Validation concerns different code, and influenced
       // by the 'security_logout_reuse_sigs' option below, which has its own
       // issues.) This means that the default value should actually be TRUE.
       // @todo file PR against SAML toolkit; note it in https://www.drupal.org/project/samlauth/issues/3131028

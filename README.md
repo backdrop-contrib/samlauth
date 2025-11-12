@@ -44,7 +44,8 @@ aspects:
   migrated with this SQL query (to be modified for database prefixes):
   ```sql
   INSERT INTO authmap (uid, authname, provider, data)
-  SELECT uid, value AS authname, 'samlauth' AS provider, 'N;' as data from users_data WHERE module='samlauth' and name='saml_id'
+  SELECT uid, value AS authname, 'samlauth' AS provider, 'N;'
+  as data from users_data WHERE module='samlauth' and name='saml_id'
   ```
 
 ### Migration from simpleSAMLphp systems / simplesamlphp_auth module
@@ -491,7 +492,8 @@ If the regular login screen is redirected to SAML login, undo this with:
 
 If certain users/roles are restricted from logging in, undo this with:
 
-`drush config:set --input-format=yaml samlauth.authentication drupal_login_roles '["authenticated"]'`
+`drush config:set --input-format=yaml samlauth.authentication
+drupal_login_roles '["authenticated"]'`
 
 Note that this only applies if these users actually have a password to log in
 locally. `drush uli` still works when above restrictions are in place.
@@ -532,7 +534,8 @@ This (likely) means: the module specifies to the IdP that all users will be
 logging into the IdP with username + password. This situation is likely to
 become more outdated over time, as IdPs with non-password authentication
 mechanisms become more common. Those IdPs will likely see an error message, e.g.
-_"Authentication method 'XXX' doesn't match requested authentication method 'Password, ProtectedTransport'"_.
+_"Authentication method 'XXX' doesn't match requested authentication
+method 'Password, ProtectedTransport'"_.
 
 The error can likely be bypassed by disabling the setting/checkbox. This means
 that _no_ 'authentication context' is specified in requests to the IdP.
@@ -541,14 +544,17 @@ While this is fine, and not known to have specific security consequences, some
 systems may want to explicitly request certain contexts. In this case, the
 module should be changed to have the `security_request_authn_context`
 configuration setting be an array instead of a boolean (or maybe better,
-introduce a new setting that overrides this one). There's no issue for this yet.\
+introduce a new setting that overrides this one). There's no issue for this yet
 The reason this started off as a boolean, can be deduced from the
 [SAML PHP Toolkit README](https://github.com/SAML-Toolkits/php-saml):
 ```php
 // Authentication context.
 // Set to false and no AuthContext will be sent in the AuthNRequest.
-// Set true or don't present this parameter and you will get an AuthContext 'exact' 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport'.
-// Set an array with the possible auth context values: array ('urn:oasis:names:tc:SAML:2.0:ac:classes:Password', 'urn:oasis:names:tc:SAML:2.0:ac:classes:X509').
+// Set true or don't present this parameter and you will get
+// an AuthContext 'exact' 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport'.
+// Set an array with the possible auth context values:
+// array ('urn:oasis:names:tc:SAML:2.0:ac:classes:Password',
+// 'urn:oasis:names:tc:SAML:2.0:ac:classes:X509').
 'requestedAuthnContext' => false,
 ```
 

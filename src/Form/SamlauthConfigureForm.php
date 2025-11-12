@@ -44,6 +44,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
   protected $token;
 
   /**
+   * The typed config manager.
+   *
+   * @var \Drupal\Core\Config\TypedConfigManagerInterface
+   */
+  protected $typedConfigManager;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
@@ -52,6 +59,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     $instance->token = $container->get('token');
     $instance->pathValidator = $container->get('path.validator');
     $instance->entityTypeManager = $container->get('entity_type.manager');
+    $instance->typedConfigManager = $container->get('config.typed');
 
     return $instance;
   }
@@ -79,8 +87,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
     // A simple definition array without replacements should suffice for this
     // purpose; it doesn't seem to make sense to wrap it in some typed
     // DataDefinition class...
-    // @phpstan-ignore-next-line inorder to keep backward compatibility.
-    $schema_definition = \Drupal::service('config.typed')->getDefinition(SamlController::CONFIG_OBJECT_NAME);
+    $schema_definition = $this->typedConfigManager->getDefinition(SamlController::CONFIG_OBJECT_NAME);
     assert(!empty($schema_definition['mapping']), 'Config schema of ' . SamlController::CONFIG_OBJECT_NAME . ' has unexpected value; ' . self::class . ' needs rework.');
     $schema_definition = $schema_definition['mapping'];
 
@@ -177,15 +184,15 @@ class SamlauthConfigureForm extends ConfigFormBase {
         '#description' => $this->t('The authentication response from the IdP must contain a NameID attribute.'),
         '#default_value' => $config->get('security_want_name_id') ?? TRUE,
       ],
-      'security_nameid_encrypted' => $this->t('The NameID in login responses from the IdP is expected to be encrypted. This overrides the requested NameID Format and sets "Encrypted" in authentication requests\' NameIDPolicy element.') . '*',
+      'security_nameid_encrypted' => $this->t('The NameID in login responses from the IdP is expected to be encrypted. This overrides the requested NameID Format and sets "Encrypted" in authentication requests\' NameIDPolicy element.*'),
     ]);
 
     $form['user_info']['linking'] = [
       '#title' => $this->t('Attempt to link SAML data to existing Drupal users'),
       '#type' => 'details',
       '#open' => TRUE,
-      '#description' => t('If enabled, whenever the unique ID in the SAML assertion is not already associated with a Drupal user but the assertion data can be matched with an existing Drupal user without SAML association, that user will be linked and logged in. Matching is attempted in the order of below enabled checkboxes, until a user is found.')
-      . '<br><br><em>' . t('Warning: if the data used for matching can be changed by the IdP user, this has security implications; it enables a user to influence which Drupal user they take over.') . '</em>',
+      '#description' => $this->t('If enabled, whenever the unique ID in the SAML assertion is not already associated with a Drupal user but the assertion data can be matched with an existing Drupal user without SAML association, that user will be linked and logged in. Matching is attempted in the order of below enabled checkboxes, until a user is found.')
+      . '<br><br><em>' . $this->t('Warning: if the data used for matching can be changed by the IdP user, this has security implications; it enables a user to influence which Drupal user they take over.') . '</em>',
     ];
 
     $this->addElementsFromSchema($form['user_info']['linking'], $schema_definition, $config, [
@@ -214,10 +221,13 @@ class SamlauthConfigureForm extends ConfigFormBase {
     ];
     $element = [
       '#type' => 'checkboxes',
-      '#title' => $this->t($schema_definition['map_users_roles']['label']),
+      '#title' => $this->t('@label', ['@label' => $schema_definition['map_users_roles']['label']]),
       '#description' => $this->t('If a matched account has <em>any</em> role that is not explicitly allowed here, linking/login is denied.'),
       '#options' => $real_role_options,
-      '#default_value'  => $allow_all ? [] : array_diff($roles, [AccountInterface::ANONYMOUS_ROLE, AccountInterface::AUTHENTICATED_ROLE]),
+      '#default_value'  => $allow_all ? [] : array_diff($roles, [
+        AccountInterface::ANONYMOUS_ROLE,
+        AccountInterface::AUTHENTICATED_ROLE,
+      ]),
       '#states' => [
         'disabled' => [
           ':input[name="map_users"]' => ['checked' => FALSE],
@@ -383,7 +393,7 @@ class SamlauthConfigureForm extends ConfigFormBase {
       'logout_different_user',
       'bypass_relay_state_check',
     ];
-    // unique_id_source indexes is hardcoded: 0 == nameid
+    // unique_id_source indexes is hardcoded: 0 == nameid.
     if ($form_state->getValue('unique_id_source')) {
       $config_keys_to_save[] = 'unique_id_attribute';
     }

@@ -49,7 +49,7 @@ function samlauth_update_8302() {
     // though we can't really have both the permission and $config_value set.
     /** @var \Drupal\user\Entity\Role $role */
     if ($role->id() !== RoleInterface::ANONYMOUS_ID
-        && (isset($old_config_value) ? $old_config_value : $role->hasPermission('bypass saml login'))) {
+        && ($old_config_value ?? $role->hasPermission('bypass saml login'))) {
       $config_role_names[] = $role->id();
     }
     if ($role->hasPermission('bypass saml login')) {
@@ -119,14 +119,14 @@ function samlauth_update_8305() {
   }
 }
 
-// @todo - uncomment this at the moment I remove 3.2 compatibility code.
+// @todo uncomment this at the moment I remove 3.2 compatibility code.
 /**
  * Re-migrate old IdP cert configurations if necessary.
  */
-//function samlauth_update_8400() {
+// Function samlauth_update_8400() {
 //  // It's possible that provisioning script have kept writing the IdP cert to
 //  // 'idp_x509_certificate(_multi)' config, which has not given any errors
 //  // until now. Re-migrate old -> new config again if necessary, now 3.2
 //  // compatibility has been removed.
 //  samlauth_update_8305();
-//}
+// }.

@@ -103,7 +103,7 @@ class SamlauthAuthmapDeleteForm extends ConfirmFormBase {
     }
     if ($authname === FALSE) {
       // Display same error for either illegal UID or no record.
-      $this->messenger()->addError(t('No authmap record found for uid @uid.', ['@uid' => $uid]));
+      $this->messenger()->addError($this->t('No authmap record found for uid @uid.', ['@uid' => $uid]));
       return [];
     }
 

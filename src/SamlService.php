@@ -5,6 +5,7 @@ namespace Drupal\samlauth;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Flood\FloodInterface;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\Session\AccountInterface;
@@ -26,6 +27,8 @@ use OneLogin\Saml2\Utils as SamlUtils;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
@@ -139,34 +142,65 @@ class SamlService {
   protected $keyRepository;
 
   /**
+   * A logger instance for user operations.
+   *
+   * @var \Psr\Log\LoggerInterface
+   */
+  protected $userLogger;
+
+  /**
+   * The module handler service.
+   *
+   * @var \Drupal\Core\Extension\ModuleHandlerInterface
+   */
+  protected $moduleHandler;
+
+  /**
+   * The session service.
+   *
+   * @var \Symfony\Component\HttpFoundation\Session\SessionInterface
+   */
+  protected $session;
+
+  /**
    * Constructs a new SamlService.
    *
+   * Service responsible for managing SAML authentication flows and user account
+   * operations. Handles login, logout, attribute synchronization and account
+   * linking between SAML identity providers and Drupal user accounts.
+   *
    * @param \Drupal\externalauth\ExternalAuth $external_auth
-   *   The ExternalAuth service.
+   *   The ExternalAuth service for managing external authentication.
    * @param \Drupal\externalauth\Authmap $authmap
-   *   The Authmap service.
+   *   The Authmap service for managing authentication mappings.
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The config factory.
+   *   The config factory for accessing module configuration.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The EntityTypeManager service.
+   *   The EntityTypeManager service for loading/saving entities.
    * @param \Psr\Log\LoggerInterface $logger
-   *   A logger instance.
+   *   A logger instance for SAML-related operations.
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $event_dispatcher
-   *   The event dispatcher.
+   *   The event dispatcher for SAML events.
    * @param \Symfony\Component\HttpFoundation\RequestStack $request_stack
-   *   The request stack.
+   *   The request stack for accessing current request.
    * @param \Drupal\Core\TempStore\PrivateTempStoreFactory $temp_store_factory
-   *   A temp data store factory object.
+   *   A temp data store factory for SAML session data.
    * @param \Drupal\Core\Flood\FloodInterface $flood
-   *   The flood service.
+   *   The flood service for rate limiting.
    * @param \Drupal\Core\Session\AccountInterface $current_user
    *   The current user service.
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
-   *   The messenger service.
+   *   The messenger service for user notifications.
    * @param \Drupal\Core\StringTranslation\TranslationInterface $translation
    *   The string translation service.
+   * @param \Psr\Log\LoggerInterface $user_logger
+   *   A logger instance for user-related operations.
+   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
+   *   The module handler service for invoking hooks.
+   * @param \Symfony\Component\HttpFoundation\Session\SessionInterface $session
+   *   The session service for session management.
    */
-  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation) {
+  public function __construct(ExternalAuth $external_auth, Authmap $authmap, ConfigFactoryInterface $config_factory, EntityTypeManagerInterface $entity_type_manager, LoggerInterface $logger, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, PrivateTempStoreFactory $temp_store_factory, FloodInterface $flood, AccountInterface $current_user, MessengerInterface $messenger, TranslationInterface $translation, LoggerInterface $user_logger, ModuleHandlerInterface $module_handler, SessionInterface $session) {
     $this->externalAuth = $external_auth;
     $this->authmap = $authmap;
     $this->configFactory = $config_factory;
@@ -190,6 +224,10 @@ class SamlService {
       // Use 'X-Forwarded-*' HTTP headers for identifying the SP URL.
       SamlUtils::setProxyVars(TRUE);
     }
+
+    $this->userLogger = $user_logger;
+    $this->moduleHandler = $module_handler;
+    $this->session = $session;
   }
 
   /**
@@ -317,13 +355,16 @@ class SamlService {
   public function acs() {
     $config = $this->configFactory->get('samlauth.authentication');
     if ($config->get('debug_log_in')) {
-      if (isset($_POST['SAMLResponse'])) {
-        $response = base64_decode($_POST['SAMLResponse']);
+      $request = $this->requestStack->getCurrentRequest();
+
+      $saml_response = $request->request->get('SAMLResponse');
+      if ($saml_response) {
+        $response = base64_decode($saml_response);
         if ($response) {
           $this->logger->debug("ACS received 'SAMLResponse' in POST request (base64 decoded): <pre>@message</pre>", ['@message' => $response]);
         }
         else {
-          $this->logger->warning("ACS received 'SAMLResponse' in POST request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $_POST['SAMLResponse']]);
+          $this->logger->warning("ACS received 'SAMLResponse' in POST request which could not be base64 decoded: <pre>@message</pre>", ['@message' => $saml_response]);
         }
       }
       else {
@@ -408,7 +449,7 @@ class SamlService {
       throw new \RuntimeException('Configured unique ID is not present in SAML response.');
     }
 
-    try{
+    try {
       $this->doLogin($unique_id, $account);
     }
     catch (UserVisibleException $e) {
@@ -468,10 +509,10 @@ class SamlService {
    *
    * @param string $unique_id
    *   The unique ID (attribute value) contained in the SAML response.
-   * @param \Drupal\Core\Session\AccountInterface|null $account
+   * @param \Drupal\user\UserInterface|null $account
    *   The existing user account derived from the unique ID, if any.
    */
-  protected function doLogin($unique_id, AccountInterface $account = NULL) {
+  protected function doLogin(string $unique_id, ?UserInterface $account = NULL): void {
     $config = $this->configFactory->get('samlauth.authentication');
     $first_saml_login = FALSE;
     if (!$account) {
@@ -498,6 +539,7 @@ class SamlService {
       if (!$account) {
         $name = $this->getAttributeByConfig('user_name_attribute');
         if (isset($name) && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['name' => $name])) {
+          /** @var \Drupal\user\UserInterface $account */
           $account = current($account_search);
           if ($config->get('map_users_name')) {
             $this->logger->info('SAML login for name @name (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', [
@@ -535,6 +577,7 @@ class SamlService {
       if (!$account) {
         $mail = $this->getAttributeByConfig('user_mail_attribute');
         if (isset($mail) && $account_search = $this->entityTypeManager->getStorage('user')->loadByProperties(['mail' => $mail])) {
+          /** @var \Drupal\user\UserInterface $account */
           $account = current($account_search);
           if ($config->get('map_users_mail')) {
             $this->logger->info('SAML login for email @mail (as provided in a SAML attribute) matches existing Drupal account @uid; linking account and logging in.', [
@@ -605,14 +648,14 @@ class SamlService {
    * @throws \Drupal\samlauth\UserVisibleException
    *   If linking fails or is denied.
    */
-  protected function linkExistingAccount($unique_id, ?UserInterface $account) {
+  protected function linkExistingAccount(string $unique_id, ?UserInterface $account): void {
     $allowed_roles = $this->configFactory->get('samlauth.authentication')->get('map_users_roles') ?: [];
     // map_users_role special value ['anonymous'] means "Allow all roles".
     // Otherwise, 'anonymous' and 'authenticated' must not be / are assumed to
     // not be part of the map_users_role value; they're "reserved" for possible
     // future use.
     if ($allowed_roles !== [AccountInterface::ANONYMOUS_ROLE]) {
-      $disallowed_roles = array_diff($account->getRoles(), (array)$allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
+      $disallowed_roles = array_diff($account->getRoles(), (array) $allowed_roles, [AccountInterface::AUTHENTICATED_ROLE]);
       if ($disallowed_roles) {
         $this->logger->warning('Denying login: SAML login for unique ID @saml_id matches existing Drupal account @uid which we are not allowed to link because it has roles @roles.', [
           '@saml_id' => $unique_id,
@@ -649,8 +692,6 @@ class SamlService {
 
   /**
    * Stores the SAML session for later use (on logout).
-   *
-   * @return void
    */
   protected function saveSamlSession() {
     // Remember SAML session values that may be necessary for logout.
@@ -765,19 +806,36 @@ class SamlService {
   public function sls() {
     $config = $this->configFactory->get('samlauth.authentication');
     if ($config->get('debug_log_in')) {
-      if (!isset($_GET['SAMLResponse']) && !isset($_GET['SAMLRequest'])) {
+      $request = $this->requestStack->getCurrentRequest();
+      $saml_response = $request->query->get('SAMLResponse');
+      $saml_request = $request->query->get('SAMLRequest');
+
+      if (!$saml_response && !$saml_request) {
         // Continue and let Saml2\Auth throw the error after logging. Not sure
         // if we should be more detailed...
         $this->logger->warning("HTTP request to SLS is not a GET request, or contains no 'SAMLResponse'/'SAMLRequest' parameters.");
       }
       else {
-        $type = isset($_GET['SAMLResponse']) ? 'SAMLResponse' : 'SAMLRequest';
-        $response = base64_decode($_GET[$type]);
+        $type = $saml_response ? 'SAMLResponse' : 'SAMLRequest';
+        $value = $saml_response ?: $saml_request;
+        $response = base64_decode($value);
         if ($response) {
-          $this->logger->debug("SLS received '@type' in GET request (base64 decoded): <pre>@message</pre>", ['@type' => $type, '@message' => $response]);
+          $this->logger->debug(
+          "SLS received '@type' in GET request (base64 decoded): <pre>@message</pre>",
+          [
+            '@type' => $type,
+            '@message' => $response,
+          ]
+                );
         }
         else {
-          $this->logger->warning("SLS received '@type' in GET request which could not be base64 decoded: <pre>@message</pre>", ['@type' => $type, '@message' => $_GET[$type]]);
+          $this->logger->warning(
+          "SLS received '@type' in GET request which could not be base64 decoded: <pre>@message</pre>",
+          [
+            '@type' => $type,
+            '@message' => $value,
+          ]
+          );
         }
       }
     }
@@ -791,7 +849,8 @@ class SamlService {
       // This line means we're extracting logic previously encapsulated inside
       // the Auth class. That's slightly unfortunate but doesn't compare to all
       // other considerations still needing to be made re. refactoring logic.
-      $purpose = isset($_GET['SAMLResponse']) ? 'sls-response' : 'sls-request';
+      $request = $this->requestStack->getCurrentRequest();
+      $purpose = $request->query->get('SAMLResponse') ? 'sls-response' : 'sls-request';
       // Unlike the 'logout()' route, we only log the user out if we have a
       // valid request/response, so first have the SAML Toolkit check things.
       // Don't have it do any session actions, because nothing is needed
@@ -812,10 +871,13 @@ class SamlService {
     if ($config->get('debug_log_saml_in')) {
       // There should be no way we can get here if neither GET parameter is set;
       // if nothing gets logged, that's a bug.
-      if (isset($_GET['SAMLResponse'])) {
+      $request = $this->requestStack->getCurrentRequest();
+      $saml_response = $request->query->get('SAMLResponse');
+      $saml_request = $request->query->get('SAMLRequest');
+      if ($saml_response) {
         $this->logger->debug('SLS received SAML response: <pre>@message</pre>', ['@message' => $this->getSamlAuth($purpose)->getLastResponseXML()]);
       }
-      elseif (isset($_GET['SAMLRequest'])) {
+      elseif ($saml_request) {
         $this->logger->debug('SLS received SAML request: <pre>@message</pre>', ['@message' => $this->getSamlAuth($purpose)->getLastRequestXML()]);
       }
     }
@@ -846,11 +908,11 @@ class SamlService {
    * @param \Drupal\user\UserInterface $account
    *   The Drupal user to synchronize attributes into.
    * @param bool $skip_save
-   *   (optional) If TRUE, skip saving the user account.
+   *   If TRUE, skip saving the user account.
    * @param bool $first_saml_login
-   *   (optional) Indicator of whether the account is newly registered/linked.
+   *   Indicator of whether the account is newly registered/linked.
    */
-  public function synchronizeUserAttributes(UserInterface $account, $skip_save = FALSE, $first_saml_login = FALSE) {
+  public function synchronizeUserAttributes(UserInterface $account, bool $skip_save = FALSE, bool $first_saml_login = FALSE): void {
     // Dispatch a user_sync event.
     $event = new SamlauthUserSyncEvent($account, $this->getAttributes(), $first_saml_login);
     $this->eventDispatcher->dispatch($event, SamlauthEvents::USER_SYNC);
@@ -878,11 +940,11 @@ class SamlService {
    *   friendly name, knows the difference between NameID and attributes...
    *   See https://drupal.org/i/3211529
    */
-  public function getAttributes() {
+  public function getAttributes(): array {
     $auth = $this->getSamlAuth('acs', FALSE);
     if ($auth) {
       return [static::NAMEID_MOCK_ATTRIBUTE_NAME => [$auth->getNameId()]]
-        + $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
+      + $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
     }
     return [];
   }
@@ -909,7 +971,7 @@ class SamlService {
    *   mapping UI where people can select friendly names, which actually saves
    *   the regular names.
    */
-  public function getAttributeByConfig($config_key) {
+  public function getAttributeByConfig(string $config_key) {
     $attribute_name = $this->configFactory->get('samlauth.authentication')->get($config_key);
     // Protect situations which have no config yet (tests).
     if ($attribute_name) {
@@ -923,19 +985,20 @@ class SamlService {
    * Returns an initialized Auth class from the SAML Toolkit.
    *
    * @param string $purpose
-   *   (Optional) purpose for the config: 'metadata' / 'login' / 'acs' /
+   *   Purpose for the config: 'metadata' / 'login' / 'acs' /
    *   'logout' / 'sls-request' / 'sls-response'. Empty string means 'any', but
    *   likely shouldn't be used anywhere. (The way many callers hardcode this
    *   argument may seem strange, until you realize that _these callers_ only
    *   have one possible purpose too, in practice. This is almost sure to be
    *   refactored away in a future version.)
-   * @param $initialize
-   *   (optional) If False and if the Auth object was not initialized yet,
+   * @param bool $initialize
+   *   If False and if the Auth object was not initialized yet,
    *   return NULL.
    *
    * @return ?\OneLogin\Saml2\Auth
+   *   The initialized Auth object, or NULL if not initialized.
    */
-  protected function getSamlAuth($purpose = '', $initialize = TRUE) {
+  protected function getSamlAuth(string $purpose = '', bool $initialize = TRUE): ?Auth {
     if ($initialize && !isset($this->samlAuth[$purpose])) {
       $base_url = '';
       $config = $this->configFactory->get('samlauth.authentication');
@@ -946,7 +1009,7 @@ class SamlService {
         // can try to extract it from e.g. Utils::getSelfRoutedURLNoQuery().)
         $base_url = $request->getSchemeAndHttpHost() . $request->getBaseUrl() . '/saml';
       }
-      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository));
+      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository, $this->requestStack->getCurrentRequest()));
     }
 
     return $this->samlAuth[$purpose] ?? NULL;
@@ -1025,9 +1088,9 @@ class SamlService {
         // dependency injection after user_logout() itself is deprecated.
         $user = $this->currentUser;
 
-        \Drupal::logger('user')->info('Session closed for %name.', ['%name' => $user->getAccountName()]);
+        $this->userLogger->info('Session closed for %name.', ['%name' => $user->getAccountName()]);
 
-        \Drupal::moduleHandler()->invokeAll('user_logout', [$user]);
+        $this->moduleHandler->invokeAll('user_logout', [$user]);
 
         // Change: call Session::invalidate(), not SessionManager::destroy().
         // The comment in user_logout() about this leaving spurious records is
@@ -1038,9 +1101,9 @@ class SamlService {
         // - replace destroy() by invalidate() (has no side effects besides
         //   point 1, as far as I've seen so far)
         // and remove this code once committed.
-        \Drupal::service('session')->invalidate();
+        $this->session->invalidate();
 
-        $user->setAccount(new AnonymousUserSession());
+        $this->currentUser = new AnonymousUserSession();
       }
       else {
         // @todo properly inject this (and above) after #2012976 lands.
@@ -1060,17 +1123,19 @@ class SamlService {
    * @param \Drupal\Core\Config\ImmutableConfig $config
    *   The module configuration.
    * @param string $base_url
-   *   (Optional) base URL to set.
+   *   Base URL to set.
    * @param string $purpose
-   *   (Optional) purpose for the config: 'metadata' / 'login' / 'acs' /
+   *   Purpose for the config: 'metadata' / 'login' / 'acs' /
    *   'logout' / 'sls-request' / 'sls-response'.
-   * @param \Drupal\key\KeyRepositoryInterface $key_repository
-   *   (Optional) the service's Key repository.
+   * @param \Drupal\key\KeyRepositoryInterface|null $key_repository
+   *   The service's Key repository.
+   * @param \Symfony\Component\HttpFoundation\Request|null $request
+   *   The current HTTP request.
    *
    * @return array
    *   The library configuration array.
    */
-  protected static function reformatConfig(ImmutableConfig $config, $base_url = '', $purpose = '', KeyRepositoryInterface $key_repository = NULL) {
+  protected static function reformatConfig(ImmutableConfig $config, string $base_url = '', string $purpose = '', ?KeyRepositoryInterface $key_repository = NULL, ?Request $request = NULL): array {
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [
@@ -1219,14 +1284,14 @@ class SamlService {
       case 'sls-request':
         // We need to both interpret the incoming request and probably create a
         // new outgoing one, so we need key and cert.
-        $add_idp_cert = isset($_GET['Signature']);
+        $add_idp_cert = $request && $request->query->get('Signature');
         break;
 
       case 'sls-response':
         $add_key = $add_cert = FALSE;
         // We cannot prevent Settings::checkIdPSettings() from being called
         // while using the standard Auth class, so cannot do this:
-        $add_idp_cert = isset($_GET['Signature']);
+        $add_idp_cert = $request && $request->query->get('Signature');
     }
     if (!$add_key || !$add_cert) {
       // If below security settings are set, checkSPCerts() will get called,
@@ -1299,7 +1364,7 @@ class SamlService {
               throw new SamlError("SP private key '$key' not found.", SamlError::SETTINGS_INVALID);
             }
             $key = $key_entity->getKeyValue();
-            // @TODO it is possible for this to be NULL (if e.g. the file is not readable) (Do we also validate this in config screen?)
+            // @todo it is possible for this to be NULL (if e.g. the file is not readable) (Do we also validate this in config screen?)
           }
           else {
             throw new SamlError('SP private key setting is of type "key" but the Key module is not installed.', SamlError::SETTINGS_INVALID);

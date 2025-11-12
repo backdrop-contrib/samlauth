@@ -13,8 +13,10 @@ use Drupal\views\ResultRow;
  *
  * @ViewsField("samlauth_link_delete")
  *
- * @deprecated in samlauth:3.10 and is removed from samlauth:4.0. Use
+ * @deprecated in samlauth:3.x-3.10 and is removed from samlauth:4.x-4.0. Use
  *   "authmap_link_delete" field plugin instead.
+ *
+ * @see https://www.drupal.org/node/3000000
  */
 class AuthmapDeleteLink extends ExtAuthLink {
 
@@ -23,7 +25,7 @@ class AuthmapDeleteLink extends ExtAuthLink {
    */
   protected function getUrlInfo(ResultRow $row): ?Url {
     // Comatibility with externalauth 2.0.7.
-    $destinationService = $this->redirectDestination ?? \Drupal::service('redirect.destination');
+    $destinationService = $this->redirectDestination;
 
     // Keep using our delete form instead of externalauth's, only so
     // permissions don't need to be changed yet.

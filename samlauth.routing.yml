@@ -10,6 +10,8 @@ samlauth.saml_controller_login:
     no_cache: TRUE
     default_url_options:
       path_processing: FALSE
+
+# Public access required: IdP redirects users here for forced re-authentication
 samlauth.saml_controller_reauth:
   path: '/saml/reauth'
   defaults:
@@ -22,6 +24,8 @@ samlauth.saml_controller_reauth:
     no_cache: TRUE
     default_url_options:
       path_processing: FALSE
+
+# Public access required: SAML logout can be initiated by anonymous users during SSO flows
 samlauth.saml_controller_logout:
   path: '/saml/logout'
   defaults:
@@ -34,6 +38,7 @@ samlauth.saml_controller_logout:
     no_cache: TRUE
     default_url_options:
       path_processing: FALSE
+
 samlauth.saml_controller_metadata:
   path: '/saml/metadata'
   defaults:
@@ -44,6 +49,8 @@ samlauth.saml_controller_metadata:
   options:
     default_url_options:
       path_processing: FALSE
+
+# Public access required: IdP posts SAML assertions to this endpoint during authentication
 samlauth.saml_controller_acs:
   path: '/saml/acs'
   defaults:
@@ -56,6 +63,8 @@ samlauth.saml_controller_acs:
     no_cache: TRUE
     default_url_options:
       path_processing: FALSE
+
+# Public access required: IdP sends logout requests to this endpoint during Single Logout
 samlauth.saml_controller_sls:
   path: '/saml/sls'
   defaults:
@@ -68,6 +77,7 @@ samlauth.saml_controller_sls:
     no_cache: TRUE
     default_url_options:
       path_processing: FALSE
+
 samlauth.saml_controller_changepw:
   path: '/saml/changepw'
   defaults:
@@ -78,6 +88,7 @@ samlauth.saml_controller_changepw:
   options:
     default_url_options:
       path_processing: FALSE
+
 samlauth.saml_configure_form:
   path: '/admin/config/people/saml/saml'
   defaults:
@@ -87,6 +98,7 @@ samlauth.saml_configure_form:
     _permission: 'configure saml'
   options:
     _admin_route: TRUE
+
 samlauth.samlauth_configure_form:
   path: '/admin/config/people/saml'
   defaults:
@@ -96,6 +108,7 @@ samlauth.samlauth_configure_form:
     _permission: 'configure saml'
   options:
     _admin_route: TRUE
+
 # Delete in 4.0 (along with hook_views_data). Only kept here (instead of
 # changing URL in DeleteLink) so people don't need to change permissions yet.
 samlauth.authmap_delete_form:
