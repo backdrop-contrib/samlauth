@@ -15,7 +15,6 @@ use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\Url;
 use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
-use Drupal\key\KeyRepositoryInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
@@ -137,7 +136,7 @@ class SamlService {
    * module is installed. The latter is necessary for entering public/private
    * keys but reading them will work fine without it, it seems.)
    *
-   * @var \Drupal\key\KeyRepositoryInterface
+   * @var object|null
    */
   protected $keyRepository;
 
@@ -236,10 +235,10 @@ class SamlService {
    * This has a separate setter (unlike all other dependent objects mentioned
    * in the constructor) because it's an optional dependency.
    *
-   * @param \Drupal\key\KeyRepositoryInterface $key_repository
-   *   the Key repository service.
+   * @param object $key_repository
+   *   The Key repository service.
    */
-  public function setKeyRepository(KeyRepositoryInterface $key_repository) {
+  public function setKeyRepository($key_repository): void {
     $this->keyRepository = $key_repository;
   }
 
@@ -1127,7 +1126,7 @@ class SamlService {
    * @param string $purpose
    *   Purpose for the config: 'metadata' / 'login' / 'acs' /
    *   'logout' / 'sls-request' / 'sls-response'.
-   * @param \Drupal\key\KeyRepositoryInterface|null $key_repository
+   * @param object|null $key_repository
    *   The service's Key repository.
    * @param \Symfony\Component\HttpFoundation\Request|null $request
    *   The current HTTP request.
@@ -1135,7 +1134,7 @@ class SamlService {
    * @return array
    *   The library configuration array.
    */
-  protected static function reformatConfig(ImmutableConfig $config, string $base_url = '', string $purpose = '', ?KeyRepositoryInterface $key_repository = NULL, ?Request $request = NULL): array {
+  protected static function reformatConfig(ImmutableConfig $config, string $base_url = '', string $purpose = '', $key_repository = NULL, ?Request $request = NULL): array {
     $library_config = [
       'debug' => (bool) $config->get('debug_phpsaml'),
       'sp' => [

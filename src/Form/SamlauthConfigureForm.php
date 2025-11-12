@@ -44,13 +44,6 @@ class SamlauthConfigureForm extends ConfigFormBase {
   protected $token;
 
   /**
-   * The typed config manager.
-   *
-   * @var \Drupal\Core\Config\TypedConfigManagerInterface
-   */
-  protected $typedConfigManager;
-
-  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {

@@ -8,7 +8,7 @@ use Drupal\Component\Utility\SortArray;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Element;
-use Drupal\Core\Render\Element\FormElement;
+use Drupal\Core\Render\Element\FormElementBase;
 
 /**
  * Provides a multi-value form element.
@@ -132,7 +132,7 @@ use Drupal\Core\Render\Element\FormElement;
  *
  * @FormElement("samlmultivalue")
  */
-class MultiValue extends FormElement {
+class MultiValue extends FormElementBase {
 
   /**
    * Value indicating that an instance of this element accepts unlimited values.
