@@ -142,7 +142,7 @@ class SamlLoginTest extends KernelTestBase {
           $container->get('string_translation'),
           new NullLogger(),
           $container->get('module_handler'),
-          $container->get('datetime.time')
+          $container->get('session')
         );
 
         // Test data is defined as simple values but SAML attributes are arrays.
