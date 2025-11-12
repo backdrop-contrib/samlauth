@@ -177,7 +177,11 @@ class SamlLoginTest extends KernelTestBase {
     // inside acs() among the SAML assertion handling code.
     $account = NULL;
     $unique_id = $saml->getAttributeByConfig('unique_id_attribute');
-    if (isset($unique_id)) {
+
+    // Garantizar que siempre sea un string.
+    $unique_id = $unique_id ?? '';
+
+    if ($unique_id !== '') {
       /** @var \Drupal\externalauth\ExternalAuth $ea */
       $ea = $this->container->get('externalauth.externalauth');
       $account = $ea->load($unique_id, 'samlauth') ?: NULL;
