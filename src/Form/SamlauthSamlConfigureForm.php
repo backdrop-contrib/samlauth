@@ -165,6 +165,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       foreach ($keys as $public_key_id => $key) {
         $selectable_public_certs[$public_key_id] = $key->label();
         $key_type = $key->getKeyType();
+        // @phpstan-ignore-next-line
         assert($key_type instanceof KeyPluginBase);
         $key_type_settings = $key_type->getConfiguration();
         if (!empty($key_type_settings['private_key'])) {
@@ -962,6 +963,7 @@ class SamlauthSamlConfigureForm extends ConfigFormBase {
       $key = $this->keyRepository->getKey($cert_keyname);
       if ($key) {
         $key_type = $key->getKeyType();
+        // @phpstan-ignore-next-line
         assert($key_type instanceof KeyPluginBase);
         $key_type_settings = $key_type->getConfiguration();
         if (!empty($key_type_settings['private_key'])) {
