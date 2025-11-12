@@ -213,7 +213,7 @@ class SamlLoginTest extends KernelTestBase {
    * @return array
    *   Test cases with config values, attributes, and expected results.
    */
-  public function providerUserLogin(): array {
+  public static function providerUserLogin(): array {
     // To repeat: if no 'USERS' specified: user1 exists and is pre-linked,
     // user2 exists and is not linked.
     return [
