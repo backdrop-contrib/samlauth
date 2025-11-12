@@ -44,6 +44,8 @@ class SamlLoginTest extends KernelTestBase {
    * Tests user linking/creation, separately from interpreting SAML assertions.
    *
    * This does not test linking.
+   *
+   * @dataProvider providerUserLogin
    */
   public function testUserLogin(array $config_values, array $attributes, mixed $expected): void {
     // Add base config and precreate users.
