@@ -4,7 +4,24 @@ services:
     arguments: ['samlauth']
   samlauth.saml:
     class: Drupal\samlauth\SamlService
-    arguments: ['@externalauth.externalauth', '@externalauth.authmap', '@config.factory', '@entity_type.manager', '@logger.channel.samlauth', '@event_dispatcher', '@request_stack', '@tempstore.private', '@flood', '@current_user', '@messenger', '@string_translation']
+    arguments:
+      [
+        '@externalauth.externalauth',
+        '@externalauth.authmap',
+        '@config.factory',
+        '@entity_type.manager',
+        '@logger.channel.samlauth',
+        '@event_dispatcher',
+        '@request_stack',
+        '@tempstore.private',
+        '@flood',
+        '@current_user',
+        '@messenger',
+        '@string_translation',
+        '@logger.channel.user',
+        '@module_handler',
+        '@session'
+      ]
     calls:
       - [setKeyRepository, ['@?key.repository']]
   samlauth.event_subscriber.user_sync:

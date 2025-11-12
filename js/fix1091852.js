@@ -3,11 +3,13 @@
     attach(context, settings) {
       // Copy states.js but reprocess only the AJAX additions. It can make all
       // of them invisible.
-      const $states = $(context).find("[id^=edit-idp-certs-]");
+      const $states = $(context).find('[id^=edit-idp-certs-]');
       const il = $states.length;
 
       const _loop = (i) => {
-        const config = JSON.parse($states[i].getAttribute("data-drupal-states"));
+        const config = JSON.parse(
+          $states[i].getAttribute('data-drupal-states'),
+        );
         Object.keys(config || {}).forEach((state) => {
           const d = new Drupal.states.Dependent({
             element: $($states[i]),
