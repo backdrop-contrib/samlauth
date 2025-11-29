@@ -17,6 +17,7 @@ samlauth.saml_controller_logout:
     _title: 'SAML logout'
   requirements:
     _access: 'TRUE'
+    _csrf_token: 'TRUE'
   options:
     _maintenance_access: TRUE
     no_cache: TRUE
