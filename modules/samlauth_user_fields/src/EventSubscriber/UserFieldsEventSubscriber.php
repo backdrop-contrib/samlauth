@@ -320,7 +320,9 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
               // for address subfields; get($sub_field_name)->getValue()
               // returns the string. Both would be good for our current purpose
               // provided that isInputValueEqual() could handle classes.
-              // if (!$this->isInputValueEqual($value, $account_field->get($sub_field_name)->getValue(), $mapping['field_name'])) {
+              // if (!$this->isInputValueEqual($value,
+              // $account_field->get($sub_field_name)->getValue(),
+              // $mapping['field_name'])) {
               // $account_field->setValue($sub_field_name, $value);
               // $compound_field_values[$account_field_name] = $account_field;.
             }
@@ -335,7 +337,7 @@ class UserFieldsEventSubscriber implements EventSubscriberInterface {
             $event->markAccountChanged();
           }
           else {
-            $validation_errors[] = implode(' + ', $changed_compound_field_values)
+            $validation_errors[] = implode(' + ', $changed_compound_field_values[$field_name] ?? [])
               . " > $field_name";
           }
         }

@@ -44,11 +44,12 @@ class UserVisibleException extends \RuntimeException {
    *
    * @see \Drupal\Component\Render\FormattableMarkup::placeholderFormat()
    */
-  public function __construct($message = '', array $args = [], $code = 0, \Throwable $previous = NULL) {
+  public function __construct($message = '', array $args = [], $code = 0, ?\Throwable $previous = NULL) {
     $this->originalMessage = $message;
     $this->replacements = $args;
     // The getMessage() method must return the translation and is 'final', so
     // we must set the already-translated message.
+    // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
     $markup = new TranslatableMarkup($message, $args);
     parent::__construct($markup->render(), $code, $previous);
   }
@@ -80,6 +81,7 @@ class UserVisibleException extends \RuntimeException {
    *   The language code to translate the message into.
    */
   public function retranslate($langcode) {
+    // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
     $markup = new TranslatableMarkup($this->originalMessage, $this->replacements, ['langcode' => $langcode]);
     $this->message = $markup->render();
   }

@@ -29,6 +29,8 @@ class TestSamlauthEventSubscriber implements EventSubscriberInterface {
    *   The event.
    */
   public function onUserSync(SamlauthUserSyncEvent $event) {
+  // phpcs:ignore
+  // @phpstan-ignore-next-line
     if (\Drupal::state()->get('samlauth_test_urltostring_mask', 0) & 8) {
       Url::fromRoute('<front>')->toString();
     }
@@ -41,6 +43,8 @@ class TestSamlauthEventSubscriber implements EventSubscriberInterface {
    *   The event.
    */
   public function onUserLink(SamlauthUserLinkEvent $event) {
+  // phpcs:ignore
+  // @phpstan-ignore-next-line
     if (\Drupal::state()->get('samlauth_test_urltostring_mask', 0) & 16) {
       Url::fromRoute('<front>')->toString();
     }

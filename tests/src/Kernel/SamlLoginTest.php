@@ -31,7 +31,9 @@ class SamlLoginTest extends KernelTestBase {
     'samlauth',
   ];
 
-
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('user');
@@ -41,11 +43,11 @@ class SamlLoginTest extends KernelTestBase {
   /**
    * Tests user linking/creation, separately from interpreting SAML assertions.
    *
-   * This does not test linking
+   * This does not test linking.
    *
    * @dataProvider providerUserLogin
    */
-  public function testUserLogin(array $config_values, array $attributes, mixed $expected) {
+  public function testUserLogin(array $config_values, array $attributes, mixed $expected): void {
     // Add base config and precreate users.
     // 1: [user1, user1@example.com].
     // 1*: Same, already linked in authmap.
@@ -99,11 +101,17 @@ class SamlLoginTest extends KernelTestBase {
       $this->container->get('event_dispatcher'),
     ) extends ExternalAuth {
 
-      public ?UserInterface $_loggedinUser = NULL;
+      /**
+       * Stores the logged-in user for testing purposes.
+       */
+      public ?UserInterface $loggedinUser = NULL;
 
+      /**
+       * {@inheritdoc}
+       */
       public function userLoginFinalize(UserInterface $account, string $authname, string $provider): UserInterface {
         // Don't actually log in. Keep the account for later.
-        $this->_loggedinUser = $account;
+        $this->loggedinUser = $account;
         return $account;
       }
 
@@ -111,7 +119,12 @@ class SamlLoginTest extends KernelTestBase {
 
     $saml = new class($this->container, $externalauth, $attributes) extends SamlService {
 
-      protected array $_attributes;
+      /**
+       * Test SAML attributes.
+       *
+       * @var array<string, array<string>>
+       */
+      protected array $testAttributes;
 
       public function __construct($container, $externalauth, array $attributes) {
         parent::__construct(
@@ -126,20 +139,31 @@ class SamlLoginTest extends KernelTestBase {
           $container->get('flood'),
           $container->get('current_user'),
           $container->get('messenger'),
-          $container->get('string_translation')
+          $container->get('string_translation'),
+          new NullLogger(),
+          $container->get('module_handler'),
+          $container->get('session')
         );
 
         // Test data is defined as simple values but SAML attributes are arrays.
-        $this->_attributes = array_map(fn($v) => [$v], $attributes);
+        $this->testAttributes = array_map(fn($v) => [$v], $attributes);
       }
 
-      // Override attributes to always get the ones passed in.
-      public function getAttributes() {
-        return $this->_attributes;
+      /**
+       * Override attributes to always get the ones passed in.
+       *
+       * @return array<string, array<string>>
+       *   The test SAML attributes.
+       */
+      public function getAttributes(): array {
+        return $this->testAttributes;
       }
 
-      // Make dologin() public, for testing.
-      public function doLogin($unique_id, AccountInterface $account = NULL) {
+      /**
+       * Make doLogin() public for testing.
+       */
+       // phpcs:ignore
+      public function doLogin($unique_id, ?AccountInterface $account = NULL): void {
         parent::doLogin($unique_id, $account);
       }
 
@@ -153,7 +177,11 @@ class SamlLoginTest extends KernelTestBase {
     // inside acs() among the SAML assertion handling code.
     $account = NULL;
     $unique_id = $saml->getAttributeByConfig('unique_id_attribute');
-    if (isset($unique_id)) {
+
+    // Garantizar que siempre sea un string.
+    $unique_id = $unique_id ?? '';
+
+    if ($unique_id !== '') {
       /** @var \Drupal\externalauth\ExternalAuth $ea */
       $ea = $this->container->get('externalauth.externalauth');
       $account = $ea->load($unique_id, 'samlauth') ?: NULL;
@@ -177,9 +205,9 @@ class SamlLoginTest extends KernelTestBase {
     else {
       // doLogin() always results in a logged-in account or an exception, but
       // the logged-in account isn't necessarily in $account.
-      $this->assertNotEmpty($externalauth->_loggedinUser, 'A user must be logged in at this point.');
-      $this->assertSame($expected[0], $externalauth->_loggedinUser->getAccountName(), "User name must be $expected[0].");
-      $this->assertSame($expected[1], $externalauth->_loggedinUser->getEmail(), "User e-mail must be $expected[1].");
+      $this->assertNotEmpty($externalauth->loggedinUser, 'A user must be logged in at this point.');
+      $this->assertSame($expected[0], $externalauth->loggedinUser->getAccountName(), "User name must be $expected[0].");
+      $this->assertSame($expected[1], $externalauth->loggedinUser->getEmail(), "User e-mail must be $expected[1].");
     }
   }
 
@@ -187,12 +215,9 @@ class SamlLoginTest extends KernelTestBase {
    * Data provider for testUserLogin().
    *
    * @return array
-   *   - Array with samlauth config values;
-   *   - Array with attributes
-   *   - Two element array with expected name + email of the user, or string:
-   *     expected exception message.
+   *   Test cases with config values, attributes, and expected results.
    */
-  public function providerUserLogin() {
+  public static function providerUserLogin(): array {
     // To repeat: if no 'USERS' specified: user1 exists and is pre-linked,
     // user2 exists and is not linked.
     return [
@@ -488,12 +513,12 @@ class SamlLoginTest extends KernelTestBase {
       ],
       [
         ['map_users_name' => TRUE, 'USERS' => '0'],
-        ['U' => '0', 'n' => 'user0',],
+        ['U' => '0', 'n' => 'user0'],
         ['user0', 'user0@example.com'],
       ],
       [
         ['map_users_name' => TRUE, 'USERS' => '0:blocked'],
-        ['U' => '0', 'n' => 'user0',],
+        ['U' => '0', 'n' => 'user0'],
         'Requested account is blocked.',
       ],
     ];

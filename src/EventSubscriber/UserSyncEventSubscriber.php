@@ -139,7 +139,7 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
         $data = $this->typedDataManager->create($definition);
         $data->setValue($name);
         $violations = $data->validate();
-        if ($violations) {
+        if (count($violations)) {
           foreach ($violations as $violation) {
             $fatal_errors[] = $violation->getMessage();
           }
@@ -157,14 +157,14 @@ class UserSyncEventSubscriber implements EventSubscriberInterface {
           else {
             $error = 'An account with the username @username already exists.';
             if ($account->isNew()) {
-              $fatal_errors[] = $this->t($error, ['@username' => $name]);
+              $fatal_errors[] = $this->t('An account with the username @username already exists.', ['@username' => $name]);
             }
             else {
               // We continue and keep the old name. A DSM should be OK here
               // since login only happens interactively.
               $error = "Error updating user name from SAML attribute: $error";
               $this->logger->error($error, ['@username' => $name]);
-              $this->messenger->addError($this->t($error, ['@username' => $name]));
+              $this->messenger->addError($this->t('Error updating user name from SAML attribute: An account with the username @username already exists.', ['@username' => $name]));
             }
           }
         }

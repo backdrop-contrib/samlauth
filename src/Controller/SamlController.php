@@ -473,7 +473,7 @@ class SamlController extends ControllerBase {
    * handled.
    *
    * @param string $relay_state
-   *   The relay state to check
+   *   The relay state to check.
    * @param bool $after_acs
    *   (Optional) TRUE if an ACS request was just processed.
    *
@@ -492,7 +492,7 @@ class SamlController extends ControllerBase {
       // set (which is unlikely because this prompts an error in the Core status
       // report), then only allow the hostname from the current request.
       // @todo remove the config option in v4.x (always check trusted_host_patterns).
-      //   also: replace base_url by router.request_context everywhere in the module.
+      // replace base_url by router.request_context everywhere in the module.
       $safe = !$absolute || $this->config(self::CONFIG_OBJECT_NAME)->get('bypass_relay_state_check');
       if (!$safe) {
         $trusted_patterns = Settings::get('trusted_host_patterns');

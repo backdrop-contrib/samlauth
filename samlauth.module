@@ -157,7 +157,10 @@ function samlauth_check_saml_user(&$form, FormStateInterface $form_state) {
           // Prevent executing the submit callback that sends the mail and
           // prints the above message.
           $form['#submit'] = [];
-          \Drupal::logger('user')->notice('Prevented sending password reset instructions mailed to %name at %email.', ['%name' => $account->getAccountName(), '%email' => $account->getEmail()]);
+          \Drupal::logger('user')->notice('Prevented sending password reset instructions mailed to %name at %email.', [
+            '%name' => $account->getAccountName(),
+            '%email' => $account->getEmail(),
+          ]);
         }
       }
     }
@@ -211,9 +214,6 @@ function samlauth_user_presave(UserInterface $account) {
 
 /**
  * Implements hook_views_data_alter().
- *
- * @deprecated in samlauth:3.10 and is removed from samlauth:4.0. Use
- *   "authmap_link_delete" field plugin instead.
  */
 function samlauth_views_data_alter(array &$data) {
   if (!isset($data['authmap']['uid'])) {

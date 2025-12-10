@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\samlauth\Functional;
 
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\samlauth\Controller\SamlController;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Core\Test\AssertMailTrait;
@@ -21,11 +22,12 @@ class SamlTest extends BrowserTestBase {
   use AssertMailTrait {
     getMails as drupalGetMails;
   }
+  use StringTranslationTrait;
 
   /**
    * Modules to Enable.
    *
-   * @var array
+   * @var array<string>
    */
   protected static $modules = ['samlauth'];
 
@@ -37,7 +39,7 @@ class SamlTest extends BrowserTestBase {
   /**
    * Tests the Admin Pages.
    */
-  public function testAdminPages() {
+  public function testAdminPages(): void {
     // The form and config systems are already tested well, so only
     // rudimentary testing is done here. This should probably have some tests
     // for the interactive parts (e.g. adding a second certificate) added.
@@ -46,7 +48,7 @@ class SamlTest extends BrowserTestBase {
     $this->drupalGet('admin/config/people/saml');
     // These (sub)section titles are referenced in the README.
     // Apparently tab text is not in 'pageTextContains':
-    // $this->assertSession()->pageTextContains('Login / Users');
+    // $this->assertSession()->pageTextContains('Login / Users');.
     $this->assertSession()->pageTextContains('User Interface');
     $this->assertSession()->pageTextContains('Drupal Login Using SAML Data');
     $this->assertSession()->pageTextContains('Login / Logout');
@@ -61,7 +63,7 @@ class SamlTest extends BrowserTestBase {
   /**
    * Tests metadata retrieval.
    */
-  public function testMetadata() {
+  public function testMetadata(): void {
     // Adding just minimal configuration enables getting valid metadata. (This
     // is not evident because of checks/code structure of the SAML PHP Toolkit.)
     $minimal_sp_config = [
@@ -103,41 +105,44 @@ class SamlTest extends BrowserTestBase {
     $this->assertSession()->responseHeaderEquals('X-Drupal-Dynamic-Cache', 'MISS');
 
     // Error (invalid_xml in this case)
-    // @todo we likely want to make this a 500 (or so) retunr code with a short
+    // @todo we likely want to make this a 500 (or so) return code with a short
     //   plaintext or XML body, instead. Adjust this test if we do.
     $config->setData(['sp_x509_certificate' => "#Let'st"] + $minimal_sp_config)->save();
     $this->drupalGet('saml/metadata');
     $webassert = $this->assertSession();
     $webassert->statusCodeEquals(200);
     $webassert->responseHeaderExists('Content-Type');
-    $webassert->responseHeaderNotMatches('Content-Type', '[^text/xml;]');
+    $webassert->responseHeaderNotMatches('Content-Type', '~text/xml~');
 
     // When explicitly not validating XML, it does get returned.
     $this->drupalGet('saml/metadata', ['query' => ['check' => '0']]);
     $webassert = $this->assertSession();
     $webassert->statusCodeEquals(200);
     $webassert->responseHeaderExists('Content-Type');
-    $webassert->responseHeaderMatches('Content-Type', '[^text/xml;]');
+    $webassert->responseHeaderMatches('Content-Type', '~text/xml~');
   }
 
   /**
    * Validates that metadata is valid XML and returns it as DomDocument.
    *
    * @return \DOMDocument
+   *   The validated XML document.
    */
-  protected function validateXml() {
+  protected function validateXml(): \DOMDocument {
     $webassert = $this->assertSession();
     $webassert->statusCodeEquals(200);
     $webassert->responseHeaderExists('Content-Type');
-    $webassert->responseHeaderMatches('Content-Type', '[^text/xml;]');
+    $webassert->responseHeaderMatches('Content-Type', '~text/xml~');
     // Looks like all the session objects can only interpret HTML (elements
-    // have '//html' hardcoded in getXpath())? Load XML ourxelves, using a
+    // have '//html' hardcoded in getXpath())? Load XML ourselves, using a
     // helper method that also validates against the SAML schema.
     $dom = SamlUtils::validateXML($this->getSession()->getPage()->getContent(), 'saml-schema-metadata-2.0.xsd');
     $this->assertTrue($dom instanceof \DOMDocument, 'XML not valid; validator method returned: ' . var_export($dom, TRUE));
     // Assume a single entity descriptor, for the SP.
     $root_node_attr = SamlUtils::query($dom, '//md:EntityDescriptor')->item(0)->attributes;
-    $this->assertEquals('samlauthEntityId', $root_node_attr->getNamedItem('entityID')->value);
+    $entity_id_attr = $root_node_attr->getNamedItem('entityID');
+    $this->assertNotNull($entity_id_attr);
+    $this->assertEquals('samlauthEntityId', $entity_id_attr->value);
 
     return $dom;
   }
@@ -145,7 +150,7 @@ class SamlTest extends BrowserTestBase {
   /**
    * Tests UI changes to login screen, excluding login-failure behavior.
    */
-  public function testLoginUI() {
+  public function testLoginUi(): void {
     // Assumption: our imported config has no values for title. Default
     // is to show no link.
     $config = \Drupal::configFactory()->getEditable(SamlController::CONFIG_OBJECT_NAME);
@@ -161,7 +166,7 @@ class SamlTest extends BrowserTestBase {
   /**
    * Tests behavior of password reset / login screen.
    */
-  public function testPasswordReset() {
+  public function testPasswordReset(): void {
     $core_msg_mail_sent = 'an email will be sent with instructions to reset your password.';
     $mails = $this->drupalGetMails();
     $initial_count_mails = count($mails);
@@ -220,7 +225,7 @@ class SamlTest extends BrowserTestBase {
     $this->submitForm([
       'name' => $web_user->getAccountName(),
       'pass' => $web_user->passRaw,
-    ], t('Log in'));
+    ], $this->t('Log in'));
     $this->assertSession()->responseContains('This user is only allowed to log in through an external authentication provider.');
     // The user sees the general (untrue) "Unrecognized" error if the
     // appropriate config value is not set.
@@ -229,7 +234,7 @@ class SamlTest extends BrowserTestBase {
     $this->submitForm([
       'name' => $web_user->getAccountName(),
       'pass' => $web_user->passRaw,
-    ], t('Log in'));
+    ], $this->t('Log in'));
     $this->assertSession()->responseNotContains('This user is only allowed to log in through an external authentication provider.');
     $this->assertSession()->responseContains('Unrecognized username or password.');
   }

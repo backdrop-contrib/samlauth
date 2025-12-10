@@ -11,21 +11,23 @@ use OneLogin\Saml2\Constants as SamlConstants;
  */
 trait SamlauthConfigureTrait {
 
-  // @todo Start using when minimum PHP version is >= 8.2.
-  /**
-   * Value used for "other" option - never gets saved; must not clash with
-   * possible options.
-   */
-  //private const UNSAVED_OTHER_OPTION = '*';
-
   /**
    * Adds form elements using the type and title found in the config schema.
    *
    * This way we don't need to define these in two places. (If we don't define
    * them in the schema, configuration translation/inspector forms look strange;
    * at least the translation form is important.)
+   *
+   * @param array $build
+   *   The form build array to add elements to.
+   * @param array $schema_definition
+   *   The schema definition array.
+   * @param \Drupal\Core\Config\Config $config
+   *   The configuration object.
+   * @param array $elements
+   *   Array of elements to add.
    */
-  protected function addElementsFromSchema(array &$build, array $schema_definition, Config $config, array $elements) {
+  protected function addElementsFromSchema(array &$build, array $schema_definition, Config $config, array $elements): void {
     foreach ($elements as $key => $data) {
       assert(!empty($schema_definition[$key]['type']), "'$key.type' not found in schema definition for samlauth.authentication.");
 
@@ -66,7 +68,7 @@ trait SamlauthConfigureTrait {
         '#type' => $type,
         // A label of any config element (as defined in the schema.yml) is
         // translatable through 'UI translation'.
-        '#title' => $this->t($label),
+        '#title' => $this->t('@label', ['@label' => $label]),
         '#default_value' => $config->get($key),
       ];
       if (isset($default_default) && !isset($build[$key]['#default_value'])) {
@@ -85,10 +87,17 @@ trait SamlauthConfigureTrait {
    * Adds a 'select or other' style NameID selector.
    *
    * The NameID format value isn't required; only when "Other" is selected.
+   *
+   * @param array $build
+   *   The form build array to add elements to.
+   * @param array $schema_definition
+   *   The schema definition array.
+   * @param \Drupal\Core\Config\Config $config
+   *   The configuration object.
    */
-  protected function addNameID(array &$build, array $schema_definition, Config $config) {
+  protected function addNameId(array &$build, array $schema_definition, Config $config): void {
     $this->addElementsFromSchema($build, $schema_definition, $config, [
-      'sp_name_id_format' => $this->t('The format for the NameID attribute to request from the IdP / to send in logout requests.*'),
+      'sp_name_id_format' => 'The format for the NameID attribute to request from the IdP / to send in logout requests.*',
     ]);
     // Keep default_value and title.
     $build['sp_name_id_format']['#type'] = 'select';
@@ -134,8 +143,13 @@ trait SamlauthConfigureTrait {
 
   /**
    * Saves the form state from NameID selector(s) in config.
+   *
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state object.
+   * @param \Drupal\Core\Config\Config $config
+   *   The configuration object to save to.
    */
-  protected function setNameID(FormStateInterface $form_state, Config $config) {
+  protected function setNameId(FormStateInterface $form_state, Config $config): void {
     $value = $form_state->getValue('sp_name_id_format');
     if ($value === '*') {
       $value = $form_state->getValue('sp_name_id_format_');
@@ -149,4 +163,3 @@ trait SamlauthConfigureTrait {
   }
 
 }
-
