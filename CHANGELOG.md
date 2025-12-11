@@ -9,6 +9,10 @@ form. For all changes, see the
     relative path. (This makes it more consistent with `login_redirect_url` /
     `logout_redirect_url` values.)
 
+* Logging: the samlauth_user_roles now logs a warning if a 'role value'
+  received from the IdP cannot mapped to a Drupal role. (This was -probably-
+  always intended, but never done before.)
+
 8.x-3.11:
 
 * Login behavior:

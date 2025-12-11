@@ -2,18 +2,18 @@
 
 namespace Drupal\Tests\samlauth\Kernel;
 
+use ColinODell\PsrTestLogger\TestLogger;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\samlauth\SamlService;
 use Drupal\user\UserInterface;
-use Psr\Log\NullLogger;
 
 /**
  * Tests login.
  *
- * @group custom_elements
+ * Contains a single test function, that is changed in child classes.
  */
 class SamlLoginTest extends KernelTestBase {
 
@@ -31,7 +31,14 @@ class SamlLoginTest extends KernelTestBase {
     'samlauth',
   ];
 
+  /**
+   * Test logger.
+   */
+  protected TestLogger $testLogger;
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('user');
@@ -39,160 +46,15 @@ class SamlLoginTest extends KernelTestBase {
   }
 
   /**
-   * Tests user linking/creation, separately from interpreting SAML assertions.
-   *
-   * This does not test linking
-   *
-   * @dataProvider providerUserLogin
-   */
-  public function testUserLogin(array $config_values, array $attributes, mixed $expected) {
-    // Add base config and precreate users.
-    // 1: [user1, user1@example.com].
-    // 1*: Same, already linked in authmap.
-    // 1*:blocked: linked in authmap and blocked.
-    // Default: user1 prelinked, user2 not linked.
-    $precreate_users = isset($config_values['USERS'])
-      ? is_array($config_values['USERS']) ? $config_values['USERS'] : [$config_values['USERS']]
-      : ['1*', '2'];
-    unset($config_values['USERS']);
-
-    foreach ($precreate_users as $id) {
-      $data = [];
-      $block = str_ends_with((string) $id, ':blocked');
-      if ($block) {
-        $id = substr($id, 0, strlen($id) - 8);
-        $data['status'] = 0;
-      }
-      $prelink = str_ends_with((string) $id, '*');
-      if ($prelink) {
-        $id = substr($id, 0, strlen($id) - 1);
-      }
-      $data['mail'] = "user$id@example.com";
-      $user = $this->createUser([], "user$id", FALSE, $data);
-      if ($prelink) {
-        $this->container->get('externalauth.authmap')->save($user, 'samlauth', $id);
-      }
-    }
-
-    /** @var \Drupal\Core\Config\Config $config */
-    $config = $this->container->get('config.factory')->getEditable('samlauth.authentication');
-    foreach ($config_values + [
-      'create_users' => FALSE,
-      'map_users' => FALSE,
-      'map_users_mail' => FALSE,
-      'map_users_name' => FALSE,
-      'user_mail_attribute' => 'm',
-      'user_name_attribute' => 'n',
-      'unique_id_attribute' => 'U',
-      'sync_mail' => FALSE,
-      'sync_name' => FALSE,
-    ] as $key => $value) {
-      $config->set($key, $value);
-    }
-    $config->save();
-
-    // Create mock Externalauth and SamlService.
-    $externalauth = new class(
-      $this->container->get('entity_type.manager'),
-      $this->container->get('externalauth.authmap'),
-      new NullLogger(),
-      $this->container->get('event_dispatcher'),
-    ) extends ExternalAuth {
-
-      public ?UserInterface $_loggedinUser = NULL;
-
-      public function userLoginFinalize(UserInterface $account, string $authname, string $provider): UserInterface {
-        // Don't actually log in. Keep the account for later.
-        $this->_loggedinUser = $account;
-        return $account;
-      }
-
-    };
-
-    $saml = new class($this->container, $externalauth, $attributes) extends SamlService {
-
-      protected array $_attributes;
-
-      public function __construct($container, $externalauth, array $attributes) {
-        parent::__construct(
-          $externalauth,
-          $container->get('externalauth.authmap'),
-          $container->get('config.factory'),
-          $container->get('entity_type.manager'),
-          new NullLogger(),
-          $container->get('event_dispatcher'),
-          $container->get('request_stack'),
-          $container->get('tempstore.private'),
-          $container->get('flood'),
-          $container->get('current_user'),
-          $container->get('messenger'),
-          $container->get('string_translation')
-        );
-
-        // Test data is defined as simple values but SAML attributes are arrays.
-        $this->_attributes = array_map(fn($v) => [$v], $attributes);
-      }
-
-      // Override attributes to always get the ones passed in.
-      public function getAttributes() {
-        return $this->_attributes;
-      }
-
-      // Make dologin() public, for testing.
-      public function doLogin($unique_id, AccountInterface $account = NULL) {
-        parent::doLogin($unique_id, $account);
-      }
-
-    };
-
-    // This is needed because samlauth_user_presave calls \Drupal::service().
-    $this->container->set('samlauth.saml', $saml);
-
-    // Exercise the tested code. This first block is pretty much copied from
-    // SamlService, instead of the original code being tested, because it's
-    // inside acs() among the SAML assertion handling code.
-    $account = NULL;
-    $unique_id = $saml->getAttributeByConfig('unique_id_attribute');
-    if (isset($unique_id)) {
-      /** @var \Drupal\externalauth\ExternalAuth $ea */
-      $ea = $this->container->get('externalauth.externalauth');
-      $account = $ea->load($unique_id, 'samlauth') ?: NULL;
-    }
-
-    $exception_message = '';
-    try {
-      $saml->doLogin($unique_id, $account);
-    }
-    catch (\Exception $e) {
-      if (!is_string($expected)) {
-        throw $e;
-      }
-      $exception_message = $e->getMessage();
-    }
-    if (is_string($expected)) {
-      // Expect a specific exception to be thrown, i.e. fail if there is no
-      // exception or if the message differs. ($expected must not be empty.)
-      $this->assertSame($expected, $exception_message);
-    }
-    else {
-      // doLogin() always results in a logged-in account or an exception, but
-      // the logged-in account isn't necessarily in $account.
-      $this->assertNotEmpty($externalauth->_loggedinUser, 'A user must be logged in at this point.');
-      $this->assertSame($expected[0], $externalauth->_loggedinUser->getAccountName(), "User name must be $expected[0].");
-      $this->assertSame($expected[1], $externalauth->_loggedinUser->getEmail(), "User e-mail must be $expected[1].");
-    }
-  }
-
-  /**
    * Data provider for testUserLogin().
    *
    * @return array
    *   - Array with samlauth config values;
-   *   - Array with attributes
+   *   - Array with attributes (simulating part of a received SAML message)
    *   - Two element array with expected name + email of the user, or string:
    *     expected exception message.
    */
-  public function providerUserLogin() {
+  public static function providerUserLogin() {
     // To repeat: if no 'USERS' specified: user1 exists and is pre-linked,
     // user2 exists and is not linked.
     return [
@@ -497,6 +359,190 @@ class SamlLoginTest extends KernelTestBase {
         'Requested account is blocked.',
       ],
     ];
+  }
+
+  /**
+   * Tests user linking/creation, separately from interpreting SAML assertions.
+   *
+   * @dataProvider providerUserLogin
+   */
+  public function testUserLogin(array $config_values, mixed $saml_attributes, mixed $expected) {
+    // Not in function definition because of child class(es).
+    assert(is_array($saml_attributes));
+
+    // Default: user1 prelinked, user2 not linked.
+    $precreate_users = isset($config_values['USERS'])
+      ? is_array($config_values['USERS']) ? $config_values['USERS'] : [$config_values['USERS']]
+      : ['1*', '2'];
+    unset($config_values['USERS']);
+
+    $this->setupUsers($precreate_users);
+    $this->setupConfig($config_values);
+
+    // Test data is defined as simple values but SAML attributes are arrays.
+    $saml_attributes = array_map(fn($v) => [$v], $saml_attributes);
+    $logged_in_account_or_exception = $this->doTestLogin($saml_attributes, is_string($expected));
+
+    if (is_string($expected)) {
+      // Expect a specific exception to be thrown, i.e. fail if there is no
+      // exception or if the message differs. ($expected must not be empty.)
+      $this->assertSame($expected, $logged_in_account_or_exception);
+    }
+    else {
+
+      $this->assertTrue($logged_in_account_or_exception instanceof UserInterface);
+      $this->assertNotEmpty($logged_in_account_or_exception, 'A user must be logged in at this point.');
+      $this->assertSame($expected[0], $logged_in_account_or_exception->getAccountName(), "User name must be $expected[0].");
+      $this->assertSame($expected[1], $logged_in_account_or_exception->getEmail(), "User e-mail must be $expected[1].");
+    }
+  }
+
+  /**
+   * Set up users that exist before login.
+   */
+  protected function setupUsers(array $user_ids): void {
+    foreach ($user_ids as $id) {
+      $this->setupUser($id);
+    }
+  }
+
+  /**
+   * Set up user that exists before login.
+   *
+   * @param string $id
+   *   Specifications for user to create.
+   *   1: [user1, user1@example.com].
+   *   1*: Same, already linked in authmap.
+   *   1*:blocked: linked in authmap and blocked.
+   * @param array $properties
+   *   Additional user properties.
+   */
+  protected function setupUser(string $id, array $properties = []): void {
+    $block = str_ends_with($id, ':blocked');
+    if ($block) {
+      $id = substr($id, 0, strlen($id) - 8);
+      $properties['status'] = 0;
+    }
+    $prelink = str_ends_with($id, '*');
+    if ($prelink) {
+      $id = substr($id, 0, strlen($id) - 1);
+    }
+    $properties['mail'] = "user$id@example.com";
+    $user = $this->createUser([], "user$id", FALSE, $properties);
+    if ($prelink) {
+      $this->container->get('externalauth.authmap')->save($user, 'samlauth', $id);
+    }
+  }
+
+  /**
+   * Set up module config.
+   */
+  protected function setupConfig(array $config_values): void {
+    /** @var \Drupal\Core\Config\Config $config */
+    $config = $this->container->get('config.factory')->getEditable('samlauth.authentication');
+    foreach ($config_values + [
+      'create_users' => FALSE,
+      'map_users' => FALSE,
+      'map_users_mail' => FALSE,
+      'map_users_name' => FALSE,
+      'user_mail_attribute' => 'm',
+      'user_name_attribute' => 'n',
+      'unique_id_attribute' => 'U',
+      'sync_mail' => FALSE,
+      'sync_name' => FALSE,
+    ] as $key => $value) {
+      $config->set($key, $value);
+    }
+    $config->save();
+  }
+
+  /**
+   * Perform actual login.
+   */
+  protected function doTestLogin(array $saml_attributes, bool $return_exception_message) {
+    $this->testLogger = new TestLogger();
+    $this->container->get('logger.factory')->addLogger($this->testLogger);
+
+    // Create mock Externalauth and SamlService.
+    $externalauth = new class(
+      $this->container->get('entity_type.manager'),
+      $this->container->get('externalauth.authmap'),
+      $this->container->get('logger.channel.samlauth'),
+      $this->container->get('event_dispatcher'),
+    ) extends ExternalAuth {
+
+      public ?UserInterface $_loggedinUser = NULL;
+
+      public function userLoginFinalize(UserInterface $account, string $authname, string $provider): UserInterface {
+        // Don't actually log in. Keep the account for later.
+        $this->_loggedinUser = $account;
+        return $account;
+      }
+
+    };
+
+    $saml = new class($this->container, $externalauth, $saml_attributes) extends SamlService {
+
+      protected array $_attributes;
+
+      public function __construct($container, $externalauth, array $saml_attributes) {
+        parent::__construct(
+          $externalauth,
+          $container->get('externalauth.authmap'),
+          $container->get('config.factory'),
+          $container->get('entity_type.manager'),
+          $container->get('logger.channel.samlauth'),
+          $container->get('event_dispatcher'),
+          $container->get('request_stack'),
+          $container->get('tempstore.private'),
+          $container->get('flood'),
+          $container->get('current_user'),
+          $container->get('messenger'),
+          $container->get('string_translation')
+        );
+
+        $this->_attributes = $saml_attributes;
+      }
+
+      // Override attributes to always get the ones passed in.
+      public function getAttributes() {
+        return $this->_attributes;
+      }
+
+      // Make dologin() public, for testing.
+      public function doLogin($unique_id, AccountInterface $account = NULL) {
+        parent::doLogin($unique_id, $account);
+      }
+
+    };
+
+    // This is needed because samlauth_user_presave calls \Drupal::service().
+    $this->container->set('samlauth.saml', $saml);
+
+    // Exercise the tested code. This first block is pretty much copied from
+    // SamlService, instead of the original code being tested, because it's
+    // inside acs() among the SAML assertion handling code.
+    $account = NULL;
+    $unique_id = $saml->getAttributeByConfig('unique_id_attribute');
+    if (isset($unique_id)) {
+      /** @var \Drupal\externalauth\ExternalAuth $ea */
+      $ea = $this->container->get('externalauth.externalauth');
+      $account = $ea->load($unique_id, 'samlauth') ?: NULL;
+    }
+
+    try {
+      $saml->doLogin($unique_id, $account);
+    }
+    catch (\Exception $e) {
+      if (!$return_exception_message) {
+        throw $e;
+      }
+      return $e->getMessage();
+    }
+
+    // doLogin() always results in a logged-in account or an exception, but
+    // the logged-in account isn't necessarily in $account.
+    return $externalauth->_loggedinUser;
   }
 
 }

@@ -541,7 +541,7 @@ While this is fine, and not known to have specific security consequences, some
 systems may want to explicitly request certain contexts. In this case, the
 module should be changed to have the `security_request_authn_context`
 configuration setting be an array instead of a boolean (or maybe better,
-introduce a new setting that overrides this one). There's no issue for this yet.\
+introduce a new setting that overrides this one). There's no issue for this yet.
 The reason this started off as a boolean, can be deduced from the
 [SAML PHP Toolkit README](https://github.com/SAML-Toolkits/php-saml):
 ```php
