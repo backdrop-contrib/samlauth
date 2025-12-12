@@ -1,6 +1,10 @@
 These are selected quick notes for developers and administrators of the settings
-form. For all changes, see the
-[release notes on drupal.org](https://www.drupal.org/project/samlauth/releases).
+form.
+
+They are considered too small for a change record. See:
+* The [list of change records](https://www.drupal.org/list-changes/samlauth)
+  for (more info about) larger changes.
+* The [release notes on drupal.org](https://www.drupal.org/project/samlauth/releases).
 
 8.x-3.12:
 
@@ -8,6 +12,9 @@ form. For all changes, see the
   - The $return_to parameter to SamlService::login() / ::logout() can be a
     relative path. (This makes it more consistent with `login_redirect_url` /
     `logout_redirect_url` values.)
+  - Valid RelayState parameter from IdP is always honored / cannot be
+    overridden by setting a 'destination' parameter in hook_login() anymore.
+    ([Change Record](https://www.drupal.org/node/3562907))
 
 * Logging: the samlauth_user_roles now logs a warning if a 'role value'
   received from the IdP cannot mapped to a Drupal role. (This was -probably-
@@ -74,7 +81,7 @@ form. For all changes, see the
   version. If your IDP sets the RelayState to an 'external' URL in their
   login / logout responses:
   * revert the behavior using the config option / setting only if you must;
-  * longer term: either sure that the corresponding hostnames are mentioned
+  * longer term: either be sure that the corresponding hostnames are mentioned
     in the 'trusted_host_patterns' setting (see settings.php), or code your
     own solution if that's really impossible (see
     SamlController::ensureSafeRelayState()).

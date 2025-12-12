@@ -421,6 +421,15 @@ class SamlController extends ControllerBase {
         // Check relay state URL; if it's unsafe (i.e. '' returned) then
         // fall back to the default.
         $url = $this->ensureSafeRelayState($relay_state, $after_acs);
+        if ($url) {
+          // If a destination parameter was set by other code in e.g. a login /
+          // logout hook, cancel it.
+          $request_query_parameters = $this->requestStack->getCurrentRequest()->query;
+          $destination = $request_query_parameters->get('destination');
+          if ($destination) {
+            $request_query_parameters->remove('destination');
+          }
+        }
       }
     }
 
