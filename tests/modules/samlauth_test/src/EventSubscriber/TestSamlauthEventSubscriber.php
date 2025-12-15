@@ -4,6 +4,7 @@ namespace Drupal\samlauth_test\EventSubscriber;
 
 use Drupal\Core\Url;
 use Drupal\samlauth\Event\SamlauthEvents;
+use Drupal\samlauth\Event\SamlauthUserAllowedEvent;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -19,6 +20,7 @@ class TestSamlauthEventSubscriber implements EventSubscriberInterface {
   public static function getSubscribedEvents(): array {
     $events[SamlauthEvents::USER_LINK][] = ['onUserLink'];
     $events[SamlauthEvents::USER_SYNC][] = ['onUserSync'];
+    $events[SamlauthEvents::USER_ALLOWED][] = ['onUserAllowed'];
     return $events;
   }
 
@@ -43,6 +45,13 @@ class TestSamlauthEventSubscriber implements EventSubscriberInterface {
   public function onUserLink(SamlauthUserLinkEvent $event) {
     if (\Drupal::state()->get('samlauth_test_urltostring_mask', 0) & 16) {
       Url::fromRoute('<front>')->toString();
+    }
+  }
+
+  public function onUserAllowed(SamlauthUserAllowedEvent $event) {
+    $attributes = $event->getAttributes();
+    if (isset($attributes['n'][0]) && $attributes['n'][0] == 'forbidden') {
+      $event->disallow();;
     }
   }
 

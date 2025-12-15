@@ -16,6 +16,7 @@ use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\key\KeyRepositoryInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
+use Drupal\samlauth\Event\SamlauthUserAllowedEvent;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
@@ -472,6 +473,12 @@ class SamlService {
    *   The existing user account derived from the unique ID, if any.
    */
   protected function doLogin($unique_id, ?AccountInterface $account = NULL) {
+    $allowed_event = new SamlauthUserAllowedEvent($this->getAttributes());
+    $this->eventDispatcher->dispatch($allowed_event, SamlauthEvents::USER_ALLOWED);
+    if (!$allowed_event->isAllowed()) {
+      throw new UserVisibleException('You are not allowed to login via this service.');
+    }
+
     $config = $this->configFactory->get('samlauth.authentication');
     $first_saml_login = FALSE;
     if (!$account) {

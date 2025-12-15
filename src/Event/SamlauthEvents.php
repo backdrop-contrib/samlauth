@@ -58,4 +58,14 @@ final class SamlauthEvents {
    */
   const USER_SYNC = 'samlauth.user_sync';
 
+  /**
+   * Allows to prevent login for the given SAML attributes.
+   *
+   * For example, this can be used to limit logins to users that have a given
+   * attribute or role membership.
+   *
+   * @see \Drupal\samlauth\Event\SamlauthUserAllowedEvent
+   */
+  const USER_ALLOWED = 'samlauth.user_allowed';
+
 }

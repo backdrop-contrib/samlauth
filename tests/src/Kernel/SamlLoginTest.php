@@ -29,6 +29,7 @@ class SamlLoginTest extends KernelTestBase {
     'user',
     'externalauth',
     'samlauth',
+    'samlauth_test',
   ];
 
   /**
@@ -132,7 +133,13 @@ class SamlLoginTest extends KernelTestBase {
         ['U' => 3, 'n' => 'newname', 'm' => 'new@example.com'],
         ['newname', 'new@example.com'],
       ],
-      // If no email adress is given and mail_attribute is set: error.
+      // Check with a user that isn't allowed based on the event.
+      [
+        [],
+        ['n' => 'forbidden'],
+        'You are not allowed to login via this service.',
+      ],
+      // Check a user that is not allowed
       [
         ['create_users' => TRUE],
         ['U' => 3, 'n' => 'newname'],
