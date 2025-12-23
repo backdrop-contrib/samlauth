@@ -97,12 +97,12 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
     //     - If yes: make a note in the changelog?
     //     - If no: change this some time (wait until v4?)
     // Remove 'unassign' roles, then add 'default' roles to $changed_role_ids.
-    $role_names = $config->get('unassign_roles');
-    if ($role_names) {
-      if (is_array($role_names)) {
+    $role_ids = $config->get('unassign_roles');
+    if ($role_ids) {
+      if (is_array($role_ids)) {
         $changed_role_ids = array_diff(
           $changed_role_ids,
-          $this->getRoleIds($role_names, $valid_roles, 'unassign_roles')
+          $this->getRoleIds($role_ids, $valid_roles, 'unassign_roles')
         );
       }
       else {
@@ -111,12 +111,12 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
       }
     }
 
-    $role_names = $config->get('default_roles');
-    if ($role_names) {
-      if (is_array($role_names)) {
+    $role_ids = $config->get('default_roles');
+    if ($role_ids) {
+      if (is_array($role_ids)) {
         $changed_role_ids = array_unique(array_merge(
           $changed_role_ids,
-          $this->getRoleIds($role_names, $valid_roles, 'default_roles')
+          $this->getRoleIds($role_ids, $valid_roles, 'default_roles')
         ));
       }
       else {
@@ -135,7 +135,9 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
         // We expect both config values or neither to be set. Spam logs if not.
         $this->logger->warning('%name is not configured; skipping role mapping.', ['%name' => 'saml_attribute']);
       }
-      else {
+    }
+    if ($idp_role_values) {
+      if ($value_map) {
         // Skip incomplete mapping config silently; it can be found by config
         // inspector.
         $value_map = array_filter(
@@ -143,21 +145,19 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
           fn($v) => isset($v['attribute_value']) && isset($v['role_machine_name']),
         );
       }
-    }
-    // Process role mapping (add to $changed_role_ids). Spam logs about
-    // anything strange in the attribute values or value_map configuration.
-    // (The logs don't mention the associated account, because it's possible
-    // that the account has no ID or name yet. Maybe the log messages should be
-    // doublechecked to make sure it's clear that they come from this class.)
-    if ($idp_role_values) {
-      if (!$value_map) {
+      else {
         // Treat attribute values as Drupal role machine names.
         $value_map = array_map(
           fn($role) => ['attribute_value' => $role->id(), 'role_machine_name' => $role->id()],
           $valid_roles
         );
       }
-      // Process values (add IDs of mapped roles); skip unknown values.
+      $log_unknown_idp_values = $config->get('log_unknown');
+      // Process role mapping (add to $changed_role_ids). Spam logs about
+      // unknown roles in the attribute values or value_map configuration.
+      // (The logs don't mention the associated account, because it's possible
+      // that the account has no ID/name yet. Maybe the log messages should be
+      // doublechecked to make sure it's clear that they come from this class.)
       foreach (array_map('trim', $idp_role_values) as $idp_role_value) {
         // The same IdP value can be mapped to multiple roles, so loop through
         // all defined mappings. If we find any illegal configuration, that
@@ -179,8 +179,8 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
             }
           }
         }
-        if (!$mapped) {
-          $this->logger->warning('Role %idprole from IdP is not present in %name configuration value; role assignment was partially skipped.', [
+        if (!$mapped && $log_unknown_idp_values) {
+            $this->logger->warning('Role %idprole from IdP is not present in %name configuration value; role assignment was partially skipped.', [
             '%idprole' => $idp_role_value,
             '%name' => 'value_map',
           ]);
@@ -258,35 +258,30 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Converts role machine names into role IDs; logs unknown names.
+   * Filters and logs unknown role IDs from first parameter.
    *
    * @param array $role_names
-   *   The role machine names to convert.
+   *   Role IDs (coming from a config value, not guaranteed to exist).
    * @param \Drupal\user\Entity\Role[] $valid_roles_by_name
    *   Array with all roles valid for this purpose.
    * @param string $config_log_name
    *   Name to use for warning log if applicable.
    *
-   * @todo Likely, refactor this strange code. The role "name" == the role ID,
-   *   so $valid_roles_by_name[$role_name]->id() == $role_name. We likely can
-   *   just do something with array_keys($valid_roles_by_name) and don't need
-   *   this separate function. (Though we still want to log unknown roles.)
+   * @todo Remove in v4, and move the logs to the caller? I clearly did not
+   *   know / check that a "Role name", as used here, is in fact a role ID so
+   *   this whole foreach loop is unnecessary. (This code is still here, only
+   *   because maybe some extending class uses / implements it.)
    */
   protected function getRoleIds(array $role_names, array $valid_roles_by_name, $config_log_name) {
-    $role_ids = [];
-    foreach ($role_names as $role_name) {
-      if (isset($valid_roles_by_name[$role_name])) {
-        $role_ids[] = $valid_roles_by_name[$role_name]->id();
-      }
-      else {
-        $this->logger->warning('Unknown/invalid role %role in %name configuration value; skipping part of role (un)assignment.', [
-          '%name' => $config_log_name,
-          '%role' => $role_name,
-        ]);
-      }
+    // Rewritten to use 'id' where I used 'name' before:
+    $valid_role_ids = array_keys($valid_roles_by_name);
+    foreach (array_diff($role_names, $valid_role_ids) as $invalid_id) {
+      $this->logger->warning('Unknown/invalid role %role in %name configuration value; skipping part of role (un)assignment.', [
+        '%name' => $config_log_name,
+        '%role' => $invalid_id,
+      ]);
     }
-
-    return $role_ids;
+    return array_intersect($role_names, $valid_role_ids);
   }
 
 }

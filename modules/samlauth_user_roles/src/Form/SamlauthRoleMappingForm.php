@@ -58,9 +58,6 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       '#description' => $this->t("Use the below settings once to set up the roles, but (unlike the default behavior) ignore them on subsequent logins."),
       '#default_value' => $config->get('only_first_login'),
     ];
-    $state_disable_if_never = [
-      'disabled' => [':input[name="role_actions"]' => ['value' => 0]],
-    ];
 
     $form['unassign_roles'] = [
       '#type' => 'checkboxes',
@@ -68,7 +65,6 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       '#options' => $roles,
       '#description' => $this->t("Unassign these roles when applicable, before doing any assignments. Note that if we stop assigning a role to a certain user on login, that doesn't remove their (previously assigned) Drupal role unless it is selected here."),
       '#default_value' => $config->get('unassign_roles') ?: [],
-      '#states' => $state_disable_if_never,
     ];
 
     $form['default_roles'] = [
@@ -77,7 +73,6 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       '#options' => $roles,
       '#description' => $this->t('Selected roles will be assigned regardless of attribute values.'),
       '#default_value' => array_values($config->get('default_roles') ?: []),
-      '#states' => $state_disable_if_never,
     ];
 
     $form['saml_attribute'] = [
@@ -85,7 +80,6 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       '#title' => $this->t('SAML attribute'),
       '#description' => $this->t('Name of the attribute whose value will be converted to Drupal user roles to be assigned.'),
       '#default_value' => $config->get('saml_attribute'),
-      '#states' => $state_disable_if_never,
     ];
 
     $form['saml_attribute_separator'] = [
@@ -94,7 +88,6 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       '#description' => $this->t("If the IdP passes all role values concatenated into one attribute value rather than each in a separate attribute value, we'll use this string as the separator, to split the attribute back into individual 'IdP roles'."),
       '#default_value' => $config->get('saml_attribute_separator'),
       '#size' => 5,
-      '#states' => $state_disable_if_never,
     ];
 
     // We store role machine names but use display names in the input. (If
@@ -125,7 +118,13 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       '#title' => $this->t('Value conversions'),
       '#description' => $this->t('One line of form [IdP role value]|[Drupal role name] for each possible value (case sensitive) that the IdP passes on. Values can be converted to multiple roles by copying them on multiple lines. If this is left empty, the values from the IdP will be interpreted as machine names for Drupal roles.'),
       '#default_value' => implode("\n", $display_values),
-      '#states' => $state_disable_if_never,
+    ];
+
+    $form['log_unknown'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Log unknown roles'),
+      '#description' => $this->t("Log a warning for each unknown role values passed in the above SAML attribute."),
+      '#default_value' => $config->get('log_unknown'),
     ];
 
     return parent::buildForm($form, $form_state);
@@ -246,6 +245,7 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       ->set('saml_attribute', $form_state->getValue('saml_attribute'))
       ->set('saml_attribute_separator', $form_state->getValue('saml_attribute_separator'))
       ->set('value_map', $storable_value_map)
+      ->set('log_unknown', $form_state->getValue('log_unknown'))
       ->save();
 
     parent::submitForm($form, $form_state);

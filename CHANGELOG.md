@@ -6,6 +6,14 @@ They are considered too small for a change record. See:
   for (more info about) larger changes.
 * The [release notes on drupal.org](https://www.drupal.org/project/samlauth/releases).
 
+8.x-3.13:
+
+* Logging: partial revert of 3.12: samlauth_user_roles now does not log unknown
+  IdP role values anymore for existing installations. This logging is now
+  configurable, and enabled on new installations. To be warned when your IdP
+  sends unknown roles on exising installations: configure
+  `samlauth_user_roles.mapping:log_unknown` to be true.
+
 8.x-3.12:
 
 * Login / logout behavior:
@@ -16,7 +24,7 @@ They are considered too small for a change record. See:
     overridden by setting a 'destination' parameter in hook_login() anymore.
     ([Change Record](https://www.drupal.org/node/3562907))
 
-* Logging: the samlauth_user_roles now logs a warning if a 'role value'
+* Logging: samlauth_user_roles now logs a warning if a 'role value'
   received from the IdP cannot mapped to a Drupal role. (This was -probably-
   always intended, but never done before.)
 

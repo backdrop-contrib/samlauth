@@ -397,6 +397,11 @@ that can assist here. (Any known links to documentation that gives an overview
 Using the migrate system to populate data is documented at e.g.
 https://www.drupal.org/node/2574707, but that is not a quick example/overview.)
 
+If authmap entries are prepopulated, the concept of "First login" does not
+apply; the actual first time a user logs into Drupal is not recognized as such.
+This means e.g. the included 'User Role Assignment' module will not do anything
+when its "Only take action on first login" setting is enabled.
+
 ### Login through the IdP vs locally; local password / email change
 
 After users have logged in through the SAML IdP, the association between that

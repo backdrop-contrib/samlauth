@@ -9,6 +9,8 @@ samlauth_user_roles.value_mapping:
 samlauth_user_roles.mapping:
   type: config_object
   mapping:
+    log_unknown:
+      type: boolean
     only_first_login:
       type: boolean
     unassign_roles:
