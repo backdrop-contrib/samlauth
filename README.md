@@ -512,6 +512,22 @@ ExternalAuthEvents::REGISTER (or, likely, ExternalAuthEvents::LOGIN). An
 advantage of SamlauthEvents::USER_SYNC is that an exception can be thrown
 during registration, before a (partly populated) user is saved.
 
+Q: How can I customize the SAML PHP Toolkit configuration beyond what's available in the UI?
+
+A: Subscribe to the SamlauthEvents::LIBRARY_CONFIG_ALTER event. This event is
+dispatched before the OneLogin\Saml2\Auth object is instantiated for each SAML
+operation, allowing you to modify the configuration array. The event provides
+both the configuration array and the "purpose" (e.g., 'login', 'acs', 'logout')
+so you can apply different alterations based on the context.
+
+Example use cases:
+- Setting advanced security options not exposed in the UI
+- Environment-specific IdP endpoint configuration
+
+See SamlauthLibraryConfigAlterEvent for available methods and the OneLogin SAML
+PHP Toolkit documentation for the full configuration structure:
+https://github.com/SAML-Toolkits/php-saml#settings
+
 Q: How can I handle login on different (test vs. live) environments?
 
 A: At the moment it is left up to the community to document this. See
@@ -546,7 +562,10 @@ While this is fine, and not known to have specific security consequences, some
 systems may want to explicitly request certain contexts. In this case, the
 module should be changed to have the `security_request_authn_context`
 configuration setting be an array instead of a boolean (or maybe better,
-introduce a new setting that overrides this one). There's no issue for this yet.
+introduce a new setting that overrides this one). In the meantime, you can
+subscribe to the SamlauthEvents::LIBRARY_CONFIG_ALTER event and change the
+security settings `requestedAuthnContext` and `requestedAuthnContextComparison`.
+
 The reason this started off as a boolean, can be deduced from the
 [SAML PHP Toolkit README](https://github.com/SAML-Toolkits/php-saml):
 ```php

@@ -16,6 +16,7 @@ use Drupal\externalauth\Authmap;
 use Drupal\externalauth\ExternalAuth;
 use Drupal\key\KeyRepositoryInterface;
 use Drupal\samlauth\Event\SamlauthEvents;
+use Drupal\samlauth\Event\SamlauthLibraryConfigAlterEvent;
 use Drupal\samlauth\Event\SamlauthUserLinkEvent;
 use Drupal\samlauth\Event\SamlauthUserSyncEvent;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
@@ -946,7 +947,14 @@ class SamlService {
         // can try to extract it from e.g. Utils::getSelfRoutedURLNoQuery().)
         $base_url = $request->getSchemeAndHttpHost() . $request->getBaseUrl() . '/saml';
       }
-      $this->samlAuth[$purpose] = new Auth(static::reformatConfig($config, $base_url, $purpose, $this->keyRepository));
+      $library_config = static::reformatConfig($config, $base_url, $purpose, $this->keyRepository);
+
+      // Dispatch event to allow alteration of the OneLogin SAML configuration.
+      $event = new SamlauthLibraryConfigAlterEvent($library_config, $purpose);
+      $this->eventDispatcher->dispatch($event, SamlauthEvents::LIBRARY_CONFIG_ALTER);
+      $library_config = $event->getConfig();
+
+      $this->samlAuth[$purpose] = new Auth($library_config);
     }
 
     return $this->samlAuth[$purpose] ?? NULL;

@@ -58,4 +58,29 @@ final class SamlauthEvents {
    */
   const USER_SYNC = 'samlauth.user_sync';
 
+  /**
+   * Name of the event fired to allow alteration of OneLogin SAML
+   * library configuration.
+   *
+   * This event is dispatched before the OneLogin\Saml2\Auth object is
+   * instantiated, allowing subscribers to modify the configuration array
+   * passed to it. This enables customization of advanced SAML settings
+   * not exposed in the module's configuration UI.
+   *
+   * The event listener method receives a
+   * \Drupal\samlauth\Event\SamlauthLibraryConfigAlterEvent instance which
+   * provides:
+   * - getConfig(): The current configuration array
+   * - setConfig(): Method to update the configuration
+   * - getPurpose(): The operation context (e.g., 'login', 'acs', 'logout')
+   *
+   * @Event
+   *
+   * @see \Drupal\samlauth\Event\SamlauthLibraryConfigAlterEvent
+   * @see https://github.com/SAML-Toolkits/php-saml#settings
+   *
+   * @var string
+   */
+  const LIBRARY_CONFIG_ALTER = 'samlauth.library_config_alter';
+
 }

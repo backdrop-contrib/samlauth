@@ -510,7 +510,7 @@ class SamlLoginTest extends KernelTestBase {
       }
 
       // Make dologin() public, for testing.
-      public function doLogin($unique_id, AccountInterface $account = NULL) {
+      public function doLogin($unique_id, ?AccountInterface $account = NULL) {
         parent::doLogin($unique_id, $account);
       }
 
