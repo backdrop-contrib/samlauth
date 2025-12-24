@@ -88,15 +88,12 @@ class UserRolesEventSubscriber implements EventSubscriberInterface {
     $account = $event->getAccount();
     $changed_role_ids = $account_role_ids = $account->getRoles();
 
-    // @todo better formalize what the 2 config values contain.
-    //   - It should be an array of role IDs. (Use 'ids' not 'names' in
-    //     below variable names, for clarity.)
-    //   - In the form, we set an array of ID => ID, so it looks like we also
-    //     keep the keys. Maybe this is already being converted into numeric
-    //     keys by the newer config schema, or maybe not.
-    //     - If yes: make a note in the changelog?
-    //     - If no: change this some time (wait until v4?)
     // Remove 'unassign' roles, then add 'default' roles to $changed_role_ids.
+    // NOTE: the array keys of *_roles settings are equal to the role names,
+    // which currently means nothing / is inconsistent with the config schema.
+    // @todo make it numeric in the form, and in an update hook if config
+    //   inspector starts complaining about it. Then note this in changelog.txt.
+    //   (It currently doesn't, so postponing until it does / v4.)
     $role_ids = $config->get('unassign_roles');
     if ($role_ids) {
       if (is_array($role_ids)) {

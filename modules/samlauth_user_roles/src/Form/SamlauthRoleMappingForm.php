@@ -238,6 +238,11 @@ class SamlauthRoleMappingForm extends ConfigFormBase {
       }
     }
 
+    // @todo use array_values() for unasssign_roles, default_roles. to make
+    //   clearer that the array keys have no meaning. (Delayed until when it's
+    //   necessary, either v4 or when config inspector complains about a
+    //   sequence with non-numeric keys; it currently doesn't.) Then remove any
+    //   applicable "NOTE" in the event subscriber, if still there.
     $this->config(UserRolesEventSubscriber::CONFIG_OBJECT_NAME)
       ->set('only_first_login', $form_state->getValue('only_first_login'))
       ->set('unassign_roles', array_filter($form_state->getValue('unassign_roles')))

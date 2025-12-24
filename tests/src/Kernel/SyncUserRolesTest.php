@@ -90,22 +90,33 @@ class SyncUserRolesTest extends SamlLoginTest {
         ],
         ['My Role, My Role2'],
         [],
+      ],
+      [
+        [
+          'value_map' => [
+            ['attribute_value' => 'My Role', 'role_machine_name' => 'role1'],
+            ['attribute_value' => 'My Role2', 'role_machine_name' => 'role2'],
+          ],
+          'log_unknown' => TRUE,
+        ],
+        ['My Role, My Role2'],
+        [],
         TRUE,
         'Role <em class="placeholder">My Role, My Role2</em> from IdP is not present in <em class="placeholder">value_map</em> configuration value; role assignment was partially skipped.',
       ],
-    [
       [
-        'saml_attribute_separator' => ',',
-        'value_map' => [
-          ['attribute_value' => 'My Role', 'role_machine_name' => 'role1'],
-          ['attribute_value' => 'My Role2', 'role_machine_name' => 'roleUNK'],
-        ]
+        [
+          'saml_attribute_separator' => ',',
+          'value_map' => [
+            ['attribute_value' => 'My Role', 'role_machine_name' => 'role1'],
+            ['attribute_value' => 'My Role2', 'role_machine_name' => 'roleUNK'],
+          ]
+        ],
+        ['My Role, My Role2'],
+        ['role1'],
+        TRUE,
+        'Unknown/invalid role <em class="placeholder">roleUNK</em> in <em class="placeholder">value_map</em> configuration value; (partially?) skipping role assignment.',
       ],
-      ['My Role, My Role2'],
-      ['role1'],
-      TRUE,
-      'Unknown/invalid role <em class="placeholder">roleUNK</em> in <em class="placeholder">value_map</em> configuration value; (partially?) skipping role assignment.',
-    ],
       // Roles are not added to existing users, depending on config.
       [
         ['only_first_login' => TRUE],
