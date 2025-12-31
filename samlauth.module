@@ -127,6 +127,7 @@ function samlauth_check_saml_user(&$form, FormStateInterface $form_state) {
     if (!$account) {
       $account = user_load_by_mail($form_state->getValue('name'));
     }
+    print_r($account->id());
     if (!$account) {
       $form_state->setErrorByName('name', t('Could not load user to do a validation check.'));
     }
@@ -136,7 +137,7 @@ function samlauth_check_saml_user(&$form, FormStateInterface $form_state) {
     )) {
       /** @var \Drupal\externalauth\AuthmapInterface $authmap */
       $authmap = \Drupal::service('externalauth.authmap');
-      if ($authmap->get($account->id(), 'samlauth')) {
+      if (($authmap->get($account->id(), 'samlauth') || \Drupal::config(SamlController::CONFIG_OBJECT_NAME)->get('limit_local_login_to_roles')) && (int) $account->id() !== 1) {
         // Are we allowed to tell the user why they cannot use this form, or
         // should we use the exact same messages as when a user does not exist
         // (to prevent disclosing info about which accounts exist)?

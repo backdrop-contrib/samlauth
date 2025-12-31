@@ -43,6 +43,9 @@ samlauth.authentication:
       sequence:
         type: string
         label: 'Role'
+    limit_local_login_to_roles:
+      type: boolean
+      label: 'Disallow Drupal login unless a user has specified role(s)'
     sp_entity_id:
       type: string
       label: 'Entity ID'
