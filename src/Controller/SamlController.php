@@ -650,8 +650,10 @@ class SamlController extends ControllerBase {
       // So instead, $while (the argument to getTrustedRedirectResponse() calls)
       // is pre-translated. Mostly equal to the default site language, but
       // might be the logged-in user language for logout/sls.
-      $this->messenger->addError($this->t('Error encountered during @while; details have been logged.', ['@while' => $while]));
       $error = Error::decodeException($exception);
+      if (error_displayable($error)) {
+        $this->messenger->addError($this->t('Error encountered during @while; details have been logged.', ['@while' => $while]));
+      }
       unset($error['severity_level']);
       // Pre-translated string stored as context parameter. There's no good way
       // to handle this.
