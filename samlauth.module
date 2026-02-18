@@ -122,7 +122,7 @@ function samlauth_login_form_alter(&$form, $form_state) {
     '#weight' => -99,
   );
   
-  
+   
   $form['manual_fs'] = array(
     '#type' => 'fieldset',
     '#collapsible' => TRUE,
@@ -388,12 +388,14 @@ function samlauth_acs() {
   $account = FALSE;  
   
   if (!isset($_POST['SAMLResponse'])) {
-    backdrop_add_message('There was an issue attempting to log in. If this problem persists, contact your IT administrator or department. The following information on this page may help debug the issue.
-                    <br><br>HTTP_POST SAMLResponse not found. Only HTTP_POST binding is supported.');
     watchdog('samlauth', 'Attempted to access /saml/acs, but SAMLResponse was not found in POST.
                         Value of POST:<pre>' . print_r($_POST, TRUE) . '</pre>', array(), WATCHDOG_DEBUG);
-    backdrop_access_denied();
-    return "<br>";
+    backdrop_set_title(t('Single Sign-On Unsuccessful'));
+    return t("<p>Sorry, there has been an error attempting to sign on. The following information on this page may help debug the issue:
+                 <br>HTTP_POST SAMLResponse not found. Only HTTP_POST binding is supported.</p>
+                 <p>If you continue to see this message, contact your IT or system administrator.</p>");     
+
+
   }
   
   
@@ -417,14 +419,18 @@ function samlauth_acs() {
     $saml_data['response__NameID'] = array($auth->getNameID());  // Always add the nameID to the response, in case another module needs it.
     
     
-    //watchdog('samlauth', "Got saml response:" . print_r($saml_data, TRUE), array(), WATCHDOG_DEBUG);
-        
+    $bool_log = (bool) config_get('samlauth.settings','samlauth_watchdog_requests');
+    
+    if ($bool_log) {
+      watchdog('samlauth', "Received SAML response: " . print_r($saml_data, TRUE), array(), WATCHDOG_DEBUG);
+    }
 
   }
   catch (Exception $e) {
     watchdog_exception('samlauth', $e);
-    backdrop_access_denied();
-    return '<br>';
+    backdrop_set_title(t('Single Sign-On Unsuccessful'));
+    return t("<p>Sorry, there has been an error attempting to sign on. If you continue to see this message, contact your IT or system administrator.</p>");     
+   
   }
 
   ////////////////////////
@@ -452,10 +458,9 @@ function samlauth_acs() {
     $account = user_load_by_mail($user_email);
     if (!$account || intval($account->status ?? 0) != 1) {
       watchdog("samlauth", "User with email: $user_email not found in users table. Login failed.", array(), WATCHDOG_ALERT);
-      backdrop_set_message("Sorry, but a user with your email address ($user_email) was not found in this system.
-                            If you believe you need access, contact your IT or system administrator.", 'error');
-      backdrop_access_denied();
-      return;      
+      backdrop_set_title(t('Single Sign-On Unsuccessful'));
+      return t("<p>Sorry, but a user with your email address ($user_email) was not found in this system.
+                            If you believe you need access, contact your IT or system administrator.</p>");     
     }
     
   } // if user_email
