@@ -5,42 +5,63 @@
  * Install, uninstall, and update functions for the SAML authentication module.
  */
 
+
+
+/**
+ * Implements hook_install().
+ */
+function samlauth_install() {
+  
+  $config = config('samlauth.settings');
+  
+  $config->set('samlauth_backdrop_saml_login', FALSE);
+  $config->set('samlauth_sp_entity_id', '');
+  $config->set('samlauth_sp_x509_certificate', '');
+  $config->set('samlauth_sp_name_id_format', '');
+  $config->set('samlauth_sp_private_key', '');
+  $config->set('samlauth_idp_entity_id', '');
+  $config->set('samlauth_idp_single_sign_on_service', '');
+  $config->set('samlauth_idp_single_log_out_service', '');
+  $config->set('samlauth_idp_change_password_service', '');
+  $config->set('samlauth_idp_x509_certificate', '');
+  $config->set('samlauth_unique_id_attribute', 'emailaddress');
+  $config->set('samlauth_map_users_email', TRUE);
+  $config->set('samlauth_create_users', FALSE);
+  $config->set('samlauth_user_name_attribute', 'cn');
+  $config->set('samlauth_user_mail_attribute', 'email');
+  $config->set('samlauth_security_authn_requests_sign', FALSE);
+  $config->set('samlauth_security_messages_sign', FALSE);
+  $config->set('samlauth_security_name_id_sign', FALSE);
+  $config->set('samlauth_security_request_authn_context', FALSE);
+  $config->set('samlauth_security_security_signature_algorithm', '');
+  $config->set('samlauth_set_nameidpolicy', TRUE);
+  $config->set('samlauth_want_name_id', FALSE);
+  $config->set('samlauth_logout_reuse_sigs', FALSE);
+  $config->set('samlauth_security_strict', FALSE);
+  $config->set('samlauth_security_assertions_signed', FALSE);
+  $config->set('samlauth_security_assertions_encrypted', FALSE);
+  $config->set('samlauth_lowercase_url_encoding', TRUE);
+  $config->set('samlauth_admin_comments', '');
+  
+  $config->save();
+}
+
+
+
+
+
+
+
 /**
  * Implements hook_uninstall().
  */
 function samlauth_uninstall() {
-  // Remove samlauth variables.
-  $variables = array(
-    'samlauth_drupal_saml_login',
-    'samlauth_config_info',
-    'samlauth_sp_entity_id',
-    'samlauth_sp_name_id_format',
-    'samlauth_sp_x509_certificate',
-    'samlauth_sp_private_key',
-    'samlauth_idp_metadata_url',
-    'samlauth_idp_entity_id',
-    'samlauth_idp_single_sign_on_service',
-    'samlauth_idp_single_log_out_service',
-    'samlauth_idp_change_password_service',
-    'samlauth_idp_x509_certificate',
-    'samlauth_unique_id_attribute',
-    'samlauth_map_users_email',
-    'samlauth_create_users',
-    'samlauth_user_name_attribute',
-    'samlauth_user_mail_attribute',
-    'samlauth_security_authn_requests_sign',
-    'samlauth_security_messages_sign',
-    'samlauth_security_name_id_sign',
-    'samlauth_security_request_authn_context',
-    // Was used by (at least saved by the UI of) previous versions:
-    'samlauth_map_users',
-  );
-  foreach ($variables as $variable) {
-    variable_del($variable);
-  }
 
+  // TODO: Delete the samlauth.settings file?
+  
   // Remove authmap data.
   db_delete('authmap')
     ->condition('module', 'samlauth')
     ->execute();
+    
 }

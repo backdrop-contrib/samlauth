@@ -1,0 +1,19 @@
+####
+# Prevent nosy snoops from viewing our private files.
+####
+
+
+# Deny access to .htaccess
+<Files .htaccess>
+Order allow,deny
+Deny from all
+</Files>
+
+
+# Deny certain filetypes we want to keep private
+
+<FilesMatch "\.(crt|key|txt|pem)$">
+Order allow,deny
+Deny from all
+
+</FilesMatch> 

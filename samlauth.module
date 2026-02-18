@@ -14,7 +14,7 @@ function samlauth_menu() {
   $items['admin/config/people/saml'] = array(
     'title' => 'SAML Authentication',
     'description' => 'Configure SAML authentication behaviors.',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('samlauth_configure_form'),
     'access arguments' => array('configure saml'),
     'type' => MENU_NORMAL_ITEM,
@@ -24,7 +24,7 @@ function samlauth_menu() {
   $items['saml/metadata'] = array(
     'title' => 'SAML Metadata',
     'page callback' => 'samlauth_metadata',
-    'access arguments' => array('view sp metadata'),
+    'access callback' => TRUE,
     'type' => MENU_CALLBACK,
   );
 
@@ -71,11 +71,7 @@ function samlauth_menu() {
  * Implements hook_permission().
  */
 function samlauth_permission() {
-  return array(
-    'view sp metadata' => array(
-      'title' => t('View SP metadata'),
-      'description' => t('View the SP metadata XML at /saml/metadata'),
-    ),
+  return array(    
     'configure saml' => array(
       'title' => t('Configure SAML'),
       'description' => t('Configure SAML authentication behaviors'),
@@ -117,6 +113,38 @@ function samlauth_form_user_pass_alter(&$form, $form_state) {
  * Common callback for user_login_block / user_login / user_pass.
  */
 function samlauth_login_form_alter(&$form, $form_state) {
+  
+  //dpm($form);
+  
+  $config = config('jet_admin.settings');
+  $jetname = $config->get('jetstream_name') ?? 'Jetstream';
+  
+  $form['mark_saml_button'] = array(
+    '#markup' => "<div class='samlauth-access-button-wrapper'>
+                            <a href='" . url("saml/login") . "' class='button-link jet_samauth-login-button'>Access $jetname</a>
+                     <p class='access-desc'>Access $jetname using your school's campus-wide authentication system.</p>
+                  </div>",
+    '#weight' => -99,
+  );
+  
+  
+  $form['manual_fs'] = array(
+    '#type' => 'fieldset',
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#title' => "Log in manually to $jetname",
+  );
+  
+  
+  $form['manual_fs']['name'] = $form['name'];
+  $form['manual_fs']['pass'] = $form['pass'];
+  $form['manual_fs']['actions'] = $form['actions'];
+
+  unset($form['name']);
+  unset($form['pass']);
+  unset($form['actions']);
+  
+  
   $form['#validate'][] = 'samlauth_check_saml_user';
 }
 
@@ -124,7 +152,7 @@ function samlauth_login_form_alter(&$form, $form_state) {
  * Validation callback for SAML users logging in through the normal login form.
  */
 function samlauth_check_saml_user($form, $form_state) {
-  if (!variable_get('samlauth_drupal_saml_login', FALSE)) {
+  if (!config_get('samlauth.settings', 'samlauth_backdrop_saml_login', FALSE)) {
     if (form_get_errors()) {
       // If previous validation functions have already failed (name/pw incorrect
       // or blocked), bail out so we don't disclose any details about a user that
@@ -142,7 +170,7 @@ function samlauth_check_saml_user($form, $form_state) {
     else {
       $saml_id = samlauth_find_unique_id_by_user_id($account->uid);
       if ($saml_id !== FALSE) {
-        form_set_error('name', t('SAML users must sign in with SSO.'));
+        form_set_error('name', t('Single-Sign On users must sign in with SSO.'));
       }
     }
   }
@@ -156,43 +184,43 @@ function samlauth_check_saml_user($form, $form_state) {
 function samlauth_get_config() {
   $config = array(
     'baseurl' => url('saml', array('absolute' => TRUE)) . '/',
-    'strict' => (bool) variable_get('samlauth_security_strict'),
+    'strict' => (bool) config_get('samlauth.settings', 'samlauth_security_strict'),
     'sp' => array(
-      'entityId' => variable_get('samlauth_sp_entity_id'),
+      'entityId' => config_get('samlauth.settings', 'samlauth_sp_entity_id'),
       'assertionConsumerService' => array(
         'url' => url('saml/acs', array('absolute' => TRUE)),
       ),
       'singleLogoutService' => array(
         'url' => url('saml/sls', array('absolute' => TRUE)),
       ),
-      'NameIDFormat' => variable_get('samlauth_sp_name_id_format'),
-      'x509cert' => variable_get('samlauth_sp_x509_certificate'),
-      'privateKey' => variable_get('samlauth_sp_private_key'),
+      'NameIDFormat' => config_get('samlauth.settings', 'samlauth_sp_name_id_format'),
+      'x509cert' => config_get('samlauth.settings', 'samlauth_sp_x509_certificate'),
+      'privateKey' => config_get('samlauth.settings', 'samlauth_sp_private_key'),
     ),
     'idp' => array(
-      'entityId' => variable_get('samlauth_idp_entity_id'),
+      'entityId' => config_get('samlauth.settings', 'samlauth_idp_entity_id'),
       'singleSignOnService' => array(
-        'url' => variable_get('samlauth_idp_single_sign_on_service'),
+        'url' => config_get('samlauth.settings', 'samlauth_idp_single_sign_on_service'),
       ),
       'singleLogoutService' => array(
-        'url' => variable_get('samlauth_idp_single_log_out_service'),
+        'url' => config_get('samlauth.settings', 'samlauth_idp_single_log_out_service'),
       ),
-      'x509cert' => variable_get('samlauth_idp_x509_certificate'),
+      'x509cert' => config_get('samlauth.settings', 'samlauth_idp_x509_certificate'),
     ),
     'security' => array(
-      'authnRequestsSigned' => (bool) variable_get('samlauth_security_authn_requests_sign'),
-      'logoutRequestSigned' => (bool) variable_get('samlauth_logout_requests_sign'),
-      'logoutResponseSigned' => (bool) variable_get('samlauth_logout_responses_sign'),
-      'wantMessagesSigned' => (bool) variable_get('samlauth_security_messages_sign'),
-      'wantAssertionsSigned' => (bool) variable_get('samlauth_security_assertions_signed'),
-      'wantAssertionsEncrypted' => (bool) variable_get('samlauth_security_assertions_encrypted'),
-      'wantNameId' => (bool) variable_get('samlauth_want_name_id', TRUE),
-      'requestedAuthnContext' => (bool) variable_get('samlauth_security_request_authn_context'),
-      'lowercaseUrlencoding' => (bool) variable_get('samlauth_lowercase_url_encoding'),
+      'authnRequestsSigned' => (bool) config_get('samlauth.settings', 'samlauth_security_authn_requests_sign'),
+      'logoutRequestSigned' => (bool) config_get('samlauth.settings', 'samlauth_logout_requests_sign'),
+      'logoutResponseSigned' => (bool) config_get('samlauth.settings', 'samlauth_logout_responses_sign'),
+      'wantMessagesSigned' => (bool) config_get('samlauth.settings', 'samlauth_security_messages_sign'),
+      'wantAssertionsSigned' => (bool) config_get('samlauth.settings', 'samlauth_security_assertions_signed'),
+      'wantAssertionsEncrypted' => (bool) config_get('samlauth.settings', 'samlauth_security_assertions_encrypted'),
+      'wantNameId' => (bool) config_get('samlauth.settings', 'samlauth_want_name_id'),
+      'requestedAuthnContext' => (bool) config_get('samlauth.settings', 'samlauth_security_request_authn_context'),
+      'lowercaseUrlencoding' => (bool) config_get('samlauth.settings', 'samlauth_lowercase_url_encoding'),
     ),
   );
   // Passing NULL for signatureAlgorithm would be OK, but not ''.
-  $sig_alg = variable_get('samlauth_security_security_signature_algorithm');
+  $sig_alg = config_get('samlauth.settings', 'samlauth_security_security_signature_algorithm');
   if ($sig_alg) {
     $config['security']['signatureAlgorithm'] = $sig_alg;
   }
@@ -207,8 +235,24 @@ function samlauth_get_config() {
  *   The SAML Auth library object.
  */
 function samlauth_get_saml2_auth() {
+  samlauth_init_onelogin_library();
   return new OneLogin\Saml2\Auth(samlauth_get_config());
 }
+
+
+
+
+/**
+ * This function will include the onelogin php-saml library that we need for this
+ * module to function.
+ */
+function samlauth_init_onelogin_library() {
+  require_once(backdrop_get_path('module', 'samlauth') . '/lib/onelogin/vendor/autoload.php');
+}
+
+
+
+
 
 /**
  * Menu callback for /saml/metadata.
@@ -223,11 +267,11 @@ function samlauth_metadata() {
     throw new Exception('Invalid SP metadata: ' . implode(', ', $errors));
   }
 
-  drupal_add_http_header('Content-Type', 'text/xml');
+  backdrop_add_http_header('Content-Type', 'text/xml');
 
   // @TODO: This is gross. Investigate using a delivery callback instead.
   print $metadata;
-  drupal_exit();
+  backdrop_exit();
 }
 
 /**
@@ -235,7 +279,7 @@ function samlauth_metadata() {
  */
 function samlauth_login() {
   $auth = samlauth_get_saml2_auth();
-  $auth->login(_samlauth_pre_destination_url(), array(), FALSE, FALSE, FALSE, variable_get('samlauth_set_nameidpolicy', TRUE));
+  $auth->login(_samlauth_pre_destination_url(), array(), FALSE, FALSE, FALSE, config_get('samlauth.settings', 'samlauth_set_nameidpolicy'));
 }
 
 /**
@@ -257,7 +301,7 @@ function samlauth_logout() {
   // responses and processSlo() only looks at GET parameters.
   if (isset($_POST['SAMLResponse'])) {
     // Just assume everything went well and go to the frontpage.
-    drupal_goto();
+    backdrop_goto();
   }
   else {
     // Redirect to the auth server for logout.
@@ -291,7 +335,7 @@ function _samlauth_destination_url($processing_error = FALSE) {
   // We should be able to trust the RelayState parameter at this point
   // because the response from the IDP was verified - but check protocol.
   return isset($_REQUEST['RelayState']) && !$processing_error
-    ? drupal_strip_dangerous_protocols($_REQUEST['RelayState']) : '<front>';
+    ? backdrop_strip_dangerous_protocols($_REQUEST['RelayState']) : '<front>';
 }
 
 /**
@@ -307,7 +351,7 @@ function samlauth_sls() {
     // - We're processing a LogoutResponse, which will return NULL; the
     //   RelayState is meant for us to process.
     $auth = samlauth_get_saml2_auth();
-    $url = $auth->processSLO(FALSE, NULL, (bool) variable_get('samlauth_logout_reuse_sigs'), NULL, TRUE);
+    $url = $auth->processSLO(FALSE, NULL, (bool) config_get('samlauth.settings', 'samlauth_logout_reuse_sigs'), NULL, TRUE);
     $errors = $auth->getErrors();
 
     if (empty($errors)) {
@@ -317,110 +361,114 @@ function samlauth_sls() {
         user_logout_current_user();
       }
     } else {
-      drupal_set_message('SLS error: ' . implode(', ', $errors), 'error');
+      backdrop_set_message('SLS error: ' . implode(', ', $errors), 'error');
     }
   } catch (Exception $e) {
-    drupal_set_message('SLS error: ' . $e->getMessage(), 'error');
+    backdrop_set_message('SLS error: ' . $e->getMessage(), 'error');
     $errors = TRUE;
   }
 
-  drupal_goto($url ?: _samlauth_destination_url(!empty($errors)));
+  backdrop_goto($url ?: _samlauth_destination_url(!empty($errors)));
 }
 
 /**
  * Menu callback for /saml/changepw.
  */
 function samlauth_changepw() {
-  $changepw_service = variable_get('samlauth_changepw_service', FALSE);
+  $changepw_service = config_get('samlauth.settings', 'samlauth_change_password_service');
 
   if ($changepw_service === FALSE) {
-    drupal_set_message('The site administrator has not configured a password change service. Please change your password according to the normal processes in your organization.', 'error');
-    drupal_goto();
+    backdrop_set_message('The site administrator has not configured a password change service. Please change your password according to the normal processes in your organization.', 'error');
+    backdrop_goto();
   }
 
-  drupal_goto(variable_get('samlauth_changepw_service'), array('external' => TRUE));
+  backdrop_goto(config_get('samlauth.settings', 'samlauth_change_password_service'), array('external' => TRUE));
 }
 
 /**
  * Menu callback for /saml/acs.
  */
 function samlauth_acs() {
-  $account = FALSE;
-
+  
+  $account = FALSE;  
+  
+  if (!isset($_POST['SAMLResponse'])) {
+    backdrop_add_message('There was an issue attempting to log in. If this problem persists, contact your IT administrator or department. The following information on this page may help debug the issue.
+                    <br><br>HTTP_POST SAMLResponse not found. Only HTTP_POST binding is supported.');
+    watchdog('samlauth', 'Attempted to access /saml/acs, but SAMLResponse was not found in POST.
+                        Value of POST:<pre>' . print_r($_POST, TRUE) . '</pre>', array(), WATCHDOG_DEBUG);
+    backdrop_access_denied();
+    return "<br>";
+  }
+  
+  
   try {
     $auth = samlauth_get_saml2_auth();
     $auth->processResponse();
     $errors = $auth->getErrors();
 
     if (!empty($errors)) {
-      $reason = $auth->getLastErrorReason();
-      // Special handling for passive authentication requests: if they fail it
-      // means the user is not logged in, so redirect them to our login form.
-      if ($reason == 'The status code of the Response was not Success, was Responder -> Cannot authenticate Subject in Passive Mode') {
-        watchdog('samlauth', 'Passive authentication failed, redirecting to login form. @reason', [
-          '@reason' => $reason,
-        ], WATCHDOG_INFO);
-        drupal_goto('user/login', array('query' => array('saml' => 'anonymous')));
-      }
-      else {
-        throw new Exception('ACS error: ' . implode(', ', $errors) . " Reason: $reason");
-      }
+      throw new Exception('ACS error: ' . implode(', ', $errors));
     }
 
     if (!$auth->isAuthenticated()) {
       throw new Exception('SAML user is not authenticated.');
     }
 
-    // Get the attributes returned by the IdP. Having them keyed by botn name
+    // Get the attributes returned by the IdP. Having them keyed by both name
     // and friendly name is likely easier for code, but means that this cannot
     // be treated as a single set of unique attributes; values are duplicated.
     $saml_data = $auth->getAttributes() + $auth->getAttributesWithFriendlyName();
+    $saml_data['response__NameID'] = array($auth->getNameID());  // Always add the nameID to the response, in case another module needs it.
+    
+    
+    //watchdog('samlauth', "Got saml response:" . print_r($saml_data, TRUE), array(), WATCHDOG_DEBUG);
+        
 
-    // First, let's see if we have a user.
-    $unique_id_attribute = variable_get('samlauth_unique_id_attribute', 'eduPersonTargetedID');
-
-    // If the configured unique id attribute is not present, then bail out early.
-    if (!isset($saml_data[$unique_id_attribute][0])) {
-      watchdog('samlauth', 'Configured unique ID is not present in the SAML response: <pre>@response</pre>', array(
-        '@response' => print_r($saml_data, TRUE),
-      ), WATCHDOG_ERROR);
-      throw new Exception('Configured unique ID is not present in the SAML response.');
-    }
-
-    // Try to find the user using the ID that we are given.
-    $unique_id = $saml_data[$unique_id_attribute][0];
-    $uid = samlauth_find_uid_by_unique_id($unique_id);
-
-    if ($uid) {
-      // Load the user that was found.
-      $account = user_load($uid);
-
-      // If the account is blocked, bail out.
-      if ($account->status != 1) {
-        throw new Exception("User account is blocked.");
-      }
-
-    }
-    else {
-      $mail_attribute = variable_get('samlauth_user_mail_attribute', 'email');
-      if (variable_get('samlauth_map_users_email', FALSE) && $account = user_load_by_mail($saml_data[$mail_attribute])) {
-        samlauth_associate_saml_id_with_account($unique_id, $account);
-      }
-      elseif (variable_get('samlauth_create_users', FALSE)) {
-        $account = samlauth_create_user_from_saml_data($saml_data);
-      }
-      else {
-        throw new Exception('No existing user account matches the SAML ID provided. This authentication service is not configured to create new accounts.');
-      }
-    }
   }
   catch (Exception $e) {
-    drupal_set_message($e->getMessage(), 'error');
     watchdog_exception('samlauth', $e);
-    drupal_goto();
+    backdrop_access_denied();
+    return '<br>';
   }
 
-  // If we're good to continue, log the user in.
+  ////////////////////////
+  // If we made it here, we can continue trying to find the user.  
+  $email_attr = config_get('samlauth.settings', 'samlauth_unique_id_attribute');
+    
+
+  // Go through all our results, looking for the one that *ends* with the unique attribute (AKA the email attribute).
+  $bool_found_it = FALSE;
+  $user_email = '';
+  if ($email_attr) {
+    foreach ($saml_data as $key => $val) {
+      if (str_ends_with($key, $email_attr)) {
+        $bool_found_it = TRUE;
+        $user_email = trim($val[0]);
+      }
+    }
+  }
+  
+  
+    
+  if ($user_email) {
+    // Meaning, we found a value for email.  Does this user exist in Backdrop?
+    
+    $account = user_load_by_mail($user_email);
+    if (!$account || intval($account->status ?? 0) != 1) {
+      watchdog("samlauth", "User with email: $user_email not found in users table. Login failed.", array(), WATCHDOG_ALERT);
+      backdrop_set_message("Sorry, but a user with your email address ($user_email) was not found in this system.
+                            If you believe you need access, contact your IT or system administrator.", 'error');
+      backdrop_access_denied();
+      return;      
+    }
+    
+  } // if user_email
+  
+  
+  ////////////////////////////////////////
+  
+  // If we are here, then we are good to continue and actually log the user in!    
   global $user;
   $user = $account;
 
@@ -428,12 +476,18 @@ function samlauth_acs() {
 
   // Store the authentication details in the user's session, we need it later
   // when logging out.
+  
+  // TODO: not sure I need any of this with the session vars...  
   $_SESSION['samlauth']['nameId'] = $auth->getNameId();
   $_SESSION['samlauth']['nameIdFormat'] = $auth->getNameIdFormat();
   $_SESSION['samlauth']['nameIdNameQualifier'] = $auth->getNameIdNameQualifier();
   $_SESSION['samlauth']['sessionIndex'] = $auth->getSessionIndex();
 
-  drupal_goto(_samlauth_destination_url());
+  //backdrop_goto(_samlauth_destination_url());
+  
+  backdrop_goto("<front>");
+  
+  
 }
 
 /**
@@ -469,7 +523,7 @@ function samlauth_find_unique_id_by_user_id($uid) {
  * Ensure that a SAML ID is associated with a given user account.
  *
  * @param $saml_id
- * @param \Drupal\Core\Session\AccountInterface $account
+ * @param \Backdrop\Core\Session\AccountInterface $account
  */
 function samlauth_associate_saml_id_with_account($saml_id, $account) {
   $uid = samlauth_find_uid_by_unique_id($saml_id);
@@ -501,9 +555,9 @@ function samlauth_associate_saml_id_with_account($saml_id, $account) {
  * @param $saml_data
  */
 function samlauth_create_user_from_saml_data($saml_data) {
-  $user_unique_attribute = variable_get('samlauth_unique_id_attribute');
-  $user_name_attribute = variable_get('samlauth_user_name_attribute');
-  $user_mail_attribute = variable_get('samlauth_user_mail_attribute');
+  $user_unique_attribute = config_get('samlauth.settings', 'samlauth_unique_id_attribute');
+  $user_name_attribute = config_get('samlauth.settings', 'samlauth_user_name_attribute');
+  $user_mail_attribute = config_get('samlauth.settings', 'samlauth_user_mail_attribute');
   if (!isset($saml_data[$user_name_attribute][0])) {
     throw new Exception('Missing name attribute in SAML response.');
   }
@@ -518,10 +572,11 @@ function samlauth_create_user_from_saml_data($saml_data) {
   $account->status = 1;
 
   // Fix timezone warning when creating new user.
-  $account->timezone = variable_get('date_default_timezone', 0);
+  //$account->timezone = variable_get('date_default_timezone', 0);
+  $account->timezone = config_get('system.date', 'default_timezone');
 
   // Allow other modules to change/set user properties before saving.
-  drupal_alter('samlauth_new_user', $account, $saml_data);
+  backdrop_alter('samlauth_new_user', $account, $saml_data);
 
   user_save($account);
 
