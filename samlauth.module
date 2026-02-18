@@ -116,7 +116,7 @@ function samlauth_login_form_alter(&$form, $form_state) {
   
   $form['mark_saml_button'] = array(
     '#markup' => "<div class='samlauth-access-button-wrapper'>
-                            <a href='" . url("saml/login") . "' class='button-link samauth-login-button'>" . t("Log in with SSO") . "</a>
+                            <a href='" . url("saml/login") . "' class='button-link samlauth-login-button'>" . t("Log in with SSO") . "</a>
                      <p class='access-desc'>" . t("Access using your organization's Single Sign-On authentication system.") . "</p>
                   </div>",
     '#weight' => -99,
