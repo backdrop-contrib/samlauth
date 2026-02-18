@@ -114,15 +114,10 @@ function samlauth_form_user_pass_alter(&$form, $form_state) {
  */
 function samlauth_login_form_alter(&$form, $form_state) {
   
-  //dpm($form);
-  
-  $config = config('jet_admin.settings');
-  $jetname = $config->get('jetstream_name') ?? 'Jetstream';
-  
   $form['mark_saml_button'] = array(
     '#markup' => "<div class='samlauth-access-button-wrapper'>
-                            <a href='" . url("saml/login") . "' class='button-link jet_samauth-login-button'>Access $jetname</a>
-                     <p class='access-desc'>Access $jetname using your school's campus-wide authentication system.</p>
+                            <a href='" . url("saml/login") . "' class='button-link samauth-login-button'>" . t("Log in with SSO") . "</a>
+                     <p class='access-desc'>" . t("Access using your organization's Single Sign-On authentication system.") . "</p>
                   </div>",
     '#weight' => -99,
   );
@@ -132,7 +127,7 @@ function samlauth_login_form_alter(&$form, $form_state) {
     '#type' => 'fieldset',
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
-    '#title' => "Log in manually to $jetname",
+    '#title' => t("Log in manually (non-SSO)"),
   );
   
   
