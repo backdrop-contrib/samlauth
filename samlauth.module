@@ -79,6 +79,20 @@ function samlauth_permission() {
   );
 }
 
+
+/**
+ * Implements hook_config_info().
+ */
+function samlauth_config_info() {
+  $prefixes['samlauth.settings'] = array(
+    'label' => t('SAML Authentication'),
+    'group' => t('Configuration'),
+  );
+  return $prefixes;
+}
+
+
+
 /**
  * Implements hook_form_FORM_ID_alter for user_login.
  *
@@ -387,13 +401,15 @@ function samlauth_acs() {
   
   $account = FALSE;  
   
+  $logout_link = l("[SSO Log out]", "saml/logout");
+  
   if (!isset($_POST['SAMLResponse'])) {
     watchdog('samlauth', 'Attempted to access /saml/acs, but SAMLResponse was not found in POST.
                         Value of POST:<pre>' . print_r($_POST, TRUE) . '</pre>', array(), WATCHDOG_DEBUG);
     backdrop_set_title(t('Single Sign-On Unsuccessful'));
     return t("<p>Sorry, there has been an error attempting to sign on. The following information on this page may help debug the issue:
                  <br>HTTP_POST SAMLResponse not found. Only HTTP_POST binding is supported.</p>
-                 <p>If you continue to see this message, contact your IT or system administrator.</p>");     
+                 <p>If you continue to see this message, contact your IT or system administrator.</p>") . $logout_link;     
 
 
   }
@@ -429,7 +445,7 @@ function samlauth_acs() {
   catch (Exception $e) {
     watchdog_exception('samlauth', $e);
     backdrop_set_title(t('Single Sign-On Unsuccessful'));
-    return t("<p>Sorry, there has been an error attempting to sign on. If you continue to see this message, contact your IT or system administrator.</p>");     
+    return t("<p>Sorry, there has been an error attempting to sign on. If you continue to see this message, contact your IT or system administrator.</p>") . $logout_link;     
    
   }
 
@@ -460,7 +476,7 @@ function samlauth_acs() {
       watchdog("samlauth", "User with email: $user_email not found in users table. Login failed.", array(), WATCHDOG_ALERT);
       backdrop_set_title(t('Single Sign-On Unsuccessful'));
       return t("<p>Sorry, but a user with your email address ($user_email) was not found in this system.
-                            If you believe you need access, contact your IT or system administrator.</p>");     
+                            If you believe you need access, contact your IT or system administrator.</p>") . $logout_link;     
     }
     
   } // if user_email

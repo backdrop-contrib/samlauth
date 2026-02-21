@@ -345,11 +345,19 @@ function samlauth_configure_form() {
     ),
   );
   
+
+  $form['other']['samlauth_watchdog_requests'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Log SAML requests to watchdog?'),
+    '#default_value' => $config->get('samlauth_watchdog_requests') ?? FALSE,
+    '#description' => t('If checked, when someone uses SAML to log in, the information received from the IdP will be saved to the watchdog table as a Debug message, and may be viewed at Reports->Recent log messages. This is a useful tool when debugging.'),
+  );
   
+    
   
   $form['other']['samlauth_admin_comments'] = array(
     '#type' => 'textarea',
-    '#title' => 'Admin comments (only visible to admin of SAML module)',
+    '#title' => t('Admin comments (only visible to admin of SAML module)'),
     '#rows' => 5,
     '#default_value' => $config->get('samlauth_admin_comments'),
   );
