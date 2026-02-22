@@ -307,6 +307,24 @@ function samlauth_configure_form() {
     '#default_value' => $config->get('samlauth_security_assertions_encrypted'),
   );
   
+  
+  
+  $form['allow_fs'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Restrict SAML Users'),
+    '#description' => t('This setting allows you to set an allowlist, based on email address, of whom is allowed to log in via SAML.<br>This is most helpeful when you have configured new account creation on SAML login, or, if you need to temporarily halt all but a few logins while performing administrative or debugging tasks.') . '<br><br>',
+  );
+  
+  $form['allow_fs']['samlauth_allowlist_emails'] = array(
+    '#title' => t('Allow <em>only</em> the following users to log in via SAML:'),
+    '#type' => 'textarea',
+    '#default_value' => $config->get('samlauth_allowlist_emails') ?? '',
+    '#description' => t('Enter email addresses, one per line, of <strong>the only users</strong> you wish to log in via SAML. Other users will not be allowed to log in, even if they have a valid account.<br>Leave blank if you do not wish to restrict logins to specific users.'),
+  );
+  
+  
+  
+  
   $form['other'] = array(
     '#title' => t('Other'),
     '#type' => 'fieldset',
@@ -373,3 +391,38 @@ function samlauth_configure_form() {
   
   return system_settings_form($form);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

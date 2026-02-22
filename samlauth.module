@@ -20,6 +20,10 @@ function samlauth_menu() {
     'type' => MENU_NORMAL_ITEM,
     'file' => 'samlauth.admin.inc',
   );
+  
+  
+  
+  
 
   $items['saml/metadata'] = array(
     'title' => 'SAML Metadata',
@@ -470,6 +474,34 @@ function samlauth_acs() {
     
   if ($user_email) {
     // Meaning, we found a value for email.  Does this user exist in Backdrop?
+    
+    // Do we have an allowlist set up, and is this user in it?
+    $allowlist = trim(config_get('samlauth.settings', 'samlauth_allowlist_emails') ?? '');    
+    if ($allowlist) {
+      $bool_is_allowed = FALSE;
+      $lines = explode("\n", $allowlist);
+      foreach ($lines as $line) {
+        $line = trim(strtolower($line));
+        if ($line == trim(strtolower($user_email))) {
+          $bool_is_allowed = TRUE;
+          break;
+        }
+      }
+      
+      if (!$bool_is_allowed) {
+        watchdog("samlauth", "User with email: $user_email not specified in allowlist. Login rejected.", array(), WATCHDOG_ALERT);
+        backdrop_set_title(t('Single Sign-On Unsuccessful'));
+        return t("<p>Sorry, but this system is currently only allowing certain users. Your email address ($user_email) was not found in the allowlist.
+                            If you believe you need access, contact your IT or system administrator.</p>") . $logout_link;
+        
+      }
+      
+    }
+    
+    
+    
+    // TODO: Shouldn't we check to see if the user can be created upon first login? That is a setting: samlauth_create_users (boolean or 1/0)
+    
     
     $account = user_load_by_mail($user_email);
     if (!$account || intval($account->status ?? 0) != 1) {
