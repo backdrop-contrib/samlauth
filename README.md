@@ -42,7 +42,7 @@ the SAML library in order to function.
 
 ## Current Maintainers
 
-* [Richard Peacock](https://github.com/swampopus) - Originally ported to Backdrop CMS.
+* [Richard Peacock (swampopus)](https://github.com/swampopus) - Originally ported to Backdrop CMS.
 * Seeking additional maintainers.
 
 
