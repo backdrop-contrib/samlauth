@@ -42,12 +42,14 @@ the SAML library in order to function.
 
 ## Current Maintainers
 
-* [Richard Peacock](https://github.com/swampopus) - Originally ported to Backdrop CMS.
+* [Richard Peacock](https://github.com/swampopus)
 * Seeking additional maintainers.
 
 
 
 ## Credits
+
+- Ported to Backdrop CMS by [Richard Peacock](https://github.com/swampopus)
 
 This module is based on the Drupal module samlauth-7.x-1.1
 
