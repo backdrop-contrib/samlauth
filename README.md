@@ -45,8 +45,6 @@ the SAML library in order to function.
 * [Richard Peacock](https://github.com/swampopus)
 * Seeking additional maintainers.
 
-
-
 ## Credits
 
 - Ported to Backdrop CMS by [Richard Peacock](https://github.com/swampopus)
